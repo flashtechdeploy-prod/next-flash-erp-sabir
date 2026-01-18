@@ -6,8 +6,6 @@ import {
   DeleteObjectCommand,
 } from '@aws-sdk/client-s3';
 
-let uuidv4: (namespace?: any, name?: any, buffer?: any, offset?: any) => string;
-
 @Injectable()
 export class CloudStorageService {
   private s3Client: S3Client;
@@ -16,10 +14,6 @@ export class CloudStorageService {
   private readonly logger = new Logger(CloudStorageService.name);
 
   constructor(private configService: ConfigService) {
-    // Lazy-load uuidv4 from ESM module
-    import('uuid').then(mod => {
-      uuidv4 = mod.v4;
-    });
 
     const accessKeyId = this.configService.get<string>('B2_KEY_ID');
     const secretAccessKey = this.configService.get<string>('B2_APPLICATION_KEY');
@@ -74,6 +68,9 @@ export class CloudStorageService {
         'Cloud storage is not configured. Please check B2 credentials in .env file.',
       );
     }
+
+    // Dynamically import uuid to avoid ESM/CommonJS conflicts
+    const { v4: uuidv4 } = await import('uuid');
 
     const ext = filename.split('.').pop() || '';
     const uniqueFilename = `${uuidv4()}.${ext}`;
