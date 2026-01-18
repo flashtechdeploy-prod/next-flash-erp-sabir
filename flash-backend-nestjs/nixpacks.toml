@@ -9,8 +9,7 @@ cmds = [
 [start]
 cmd = "npm run start:prod"
 
-[env]
-NODE_ENV = "production"
+
 
 [processes]
 web = "npm run start:prod"
