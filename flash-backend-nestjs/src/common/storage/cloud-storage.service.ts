@@ -5,6 +5,13 @@ import {
   PutObjectCommand,
   DeleteObjectCommand,
 } from '@aws-sdk/client-s3';
+import { v4 as uuidv4 } from 'uuid'; // works in CommonJS
+
+const B2_CONFIG_DEFAULTS = {
+  endpoint: 'https://s3.us-east-005.backblazeb2.com',
+  bucketName: 'flash-erp',
+  region: 'us-east-005',
+};
 
 @Injectable()
 export class CloudStorageService {
@@ -15,11 +22,20 @@ export class CloudStorageService {
 
   constructor(private configService: ConfigService) {
 
-    const accessKeyId = this.configService.get<string>('B2_KEY_ID');
+    // Accept both legacy and current B2 key env names so deployments don't break
+    const accessKeyId =
+      this.configService.get<string>('B2_APPLICATION_KEY_ID') ??
+      this.configService.get<string>('B2_KEY_ID');
+
     const secretAccessKey = this.configService.get<string>('B2_APPLICATION_KEY');
-    this.bucketName = this.configService.get<string>('B2_BUCKET_NAME') ?? '';
-    this.endpoint = this.configService.get<string>('B2_ENDPOINT') ?? '';
-    const region = this.configService.get<string>('B2_REGION') ?? 'us-west-002';
+    this.bucketName =
+      this.configService.get<string>('B2_BUCKET_NAME') ??
+      B2_CONFIG_DEFAULTS.bucketName;
+    this.endpoint =
+      this.configService.get<string>('B2_ENDPOINT') ??
+      B2_CONFIG_DEFAULTS.endpoint;
+    const region =
+      this.configService.get<string>('B2_REGION') ?? B2_CONFIG_DEFAULTS.region;
 
     this.logger.log(
       `Checking B2 credentials: KeyID=${accessKeyId?.substring(0, 10)}..., Bucket=${this.bucketName}, Endpoint=${this.endpoint}`,
@@ -68,9 +84,6 @@ export class CloudStorageService {
         'Cloud storage is not configured. Please check B2 credentials in .env file.',
       );
     }
-
-    // Dynamically import uuid to avoid ESM/CommonJS conflicts
-    const { v4: uuidv4 } = await import('uuid');
 
     const ext = filename.split('.').pop() || '';
     const uniqueFilename = `${uuidv4()}.${ext}`;
