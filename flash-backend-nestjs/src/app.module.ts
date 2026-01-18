@@ -36,7 +36,8 @@ import { UploadsModule } from './modules/uploads/uploads.module';
     // Configuration
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: '.env',
+      // Note: .env file only used in local development
+      // In production, env vars come from the platform (Coolify, etc.)
     }),
 
 

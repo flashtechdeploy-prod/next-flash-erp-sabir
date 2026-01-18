@@ -1,11 +1,13 @@
 [install]
 pkgManager = "npm"
+# Explicit: ensure npm install runs and saves node_modules
+installCmd = "npm install --no-optional"
 
 [build]
 cmds = [
-  "npm install --verbose",
-  "npm run build -- --verbose",
-  "ls -la dist || echo 'ERROR: dist folder not created'",
+  "echo 'Checking node_modules...'",
+  "test -d node_modules && echo 'node_modules exists' || (echo 'CRITICAL: node_modules missing' && npm install && echo 'Installed node_modules')",
+  "npm run build",
   "test -d dist || exit 1"
 ]
 
