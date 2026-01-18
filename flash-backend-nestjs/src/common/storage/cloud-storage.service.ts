@@ -17,7 +17,6 @@ export class CloudStorageService {
   private bucketName: string;
   private endpoint: string;
   private readonly logger = new Logger(CloudStorageService.name);
-  private uuidModulePromise: Promise<typeof import('uuid')> | null = null;
 
   constructor(private configService: ConfigService) {
 
@@ -72,10 +71,13 @@ export class CloudStorageService {
     }
   }
 
-  private loadUuidModule() {
-    // Lazily load ESM uuid in a way that works from CommonJS output
+  private uuidModulePromise: Promise<typeof import('uuid')> | null = null;
+
+  private async loadUuidModule() {
+    // Use runtime dynamic import to avoid require() on ESM uuid after compilation to CJS
     if (!this.uuidModulePromise) {
-      this.uuidModulePromise = import('uuid');
+      const dynamicImport = new Function('specifier', 'return import(specifier);');
+      this.uuidModulePromise = dynamicImport('uuid') as Promise<typeof import('uuid')>;
     }
     return this.uuidModulePromise;
   }
