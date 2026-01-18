@@ -3,9 +3,10 @@ pkgManager = "npm"
 
 [build]
 cmds = [
-  "npm install",
-  "npm run build",
-  "test -d dist || (echo 'Build failed: dist folder missing' && exit 1)"
+  "npm install --verbose",
+  "npm run build -- --verbose",
+  "ls -la dist || echo 'ERROR: dist folder not created'",
+  "test -d dist || exit 1"
 ]
 
 [start]
