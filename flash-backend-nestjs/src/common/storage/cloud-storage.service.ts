@@ -5,7 +5,8 @@ import {
   PutObjectCommand,
   DeleteObjectCommand,
 } from '@aws-sdk/client-s3';
-import { v4 as uuidv4 } from 'uuid';
+
+let uuidv4: (namespace?: any, name?: any, buffer?: any, offset?: any) => string;
 
 @Injectable()
 export class CloudStorageService {
@@ -15,6 +16,11 @@ export class CloudStorageService {
   private readonly logger = new Logger(CloudStorageService.name);
 
   constructor(private configService: ConfigService) {
+    // Lazy-load uuidv4 from ESM module
+    import('uuid').then(mod => {
+      uuidv4 = mod.v4;
+    });
+
     const accessKeyId = this.configService.get<string>('B2_KEY_ID');
     const secretAccessKey = this.configService.get<string>('B2_APPLICATION_KEY');
     this.bucketName = this.configService.get<string>('B2_BUCKET_NAME') ?? '';
