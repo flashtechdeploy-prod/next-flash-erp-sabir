@@ -3,7 +3,7 @@ pkgManager = "npm"
 
 [build]
 cmds = [
-  "export NODE_ENV=development && npm run build"
+  "npm run build"
 ]
 
 [start]
