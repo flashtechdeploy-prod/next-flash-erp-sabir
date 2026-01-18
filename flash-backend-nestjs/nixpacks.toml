@@ -3,13 +3,14 @@ pkgManager = "npm"
 
 [build]
 cmds = [
-  "npm run build"
+  "export NODE_ENV=development && npm run build"
 ]
 
 [start]
 cmd = "npm run start:prod"
 
-
+[env]
+NODE_ENV = "production"
 
 [processes]
 web = "npm run start:prod"
