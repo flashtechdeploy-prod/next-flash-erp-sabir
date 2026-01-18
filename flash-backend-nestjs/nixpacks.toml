@@ -1,14 +1,11 @@
-[install]
-pkgManager = "npm"
+[phases.setup]
+nixPkgs = ["nodejs_20"]
 
-[build]
-cmds = [
-  "npm run build",
-  "ls -la dist || (echo 'ERROR: dist folder missing!' && exit 1)"
-]
+[phases.install]
+cmds = ["npm ci"]
+
+[phases.build]
+cmds = ["npm run build"]
 
 [start]
 cmd = "npm run start:prod"
-
-[processes]
-web = "npm run start:prod"
