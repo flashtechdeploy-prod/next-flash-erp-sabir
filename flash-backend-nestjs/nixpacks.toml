@@ -3,19 +3,12 @@ pkgManager = "npm"
 
 [build]
 cmds = [
-  "echo 'NODE_ENV is:' $NODE_ENV",
-  "echo 'Building...'",
   "npm run build",
-  "echo 'Checking dist folder...'",
-  "ls -la dist || (echo 'ERROR: dist folder missing!' && exit 1)",
-  "echo 'Build successful'"
+  "ls -la dist || (echo 'ERROR: dist folder missing!' && exit 1)"
 ]
 
 [start]
 cmd = "npm run start:prod"
-
-[env]
-NODE_ENV = "production"
 
 [processes]
 web = "npm run start:prod"
