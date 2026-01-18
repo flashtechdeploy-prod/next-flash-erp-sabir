@@ -1,0 +1,130 @@
+import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import {
+  S3Client,
+  PutObjectCommand,
+  DeleteObjectCommand,
+} from '@aws-sdk/client-s3';
+import { v4 as uuidv4 } from 'uuid';
+
+@Injectable()
+export class CloudStorageService {
+  private s3Client: S3Client;
+  private bucketName: string;
+  private endpoint: string;
+  private readonly logger = new Logger(CloudStorageService.name);
+
+  constructor(private configService: ConfigService) {
+    const accessKeyId = this.configService.get<string>('B2_KEY_ID');
+    const secretAccessKey = this.configService.get<string>('B2_APPLICATION_KEY');
+    this.bucketName = this.configService.get<string>('B2_BUCKET_NAME') ?? '';
+    this.endpoint = this.configService.get<string>('B2_ENDPOINT') ?? '';
+    const region = this.configService.get<string>('B2_REGION') ?? 'us-west-002';
+
+    this.logger.log(
+      `Checking B2 credentials: KeyID=${accessKeyId?.substring(0, 10)}..., Bucket=${this.bucketName}, Endpoint=${this.endpoint}`,
+    );
+
+    if (
+      !accessKeyId ||
+      !secretAccessKey ||
+      !this.bucketName ||
+      !this.endpoint
+    ) {
+      this.logger.warn(
+        'Missing required Cloud Storage configuration (B2). Cloud uploads will be disabled.',
+      );
+      return;
+    }
+
+    try {
+      this.s3Client = new S3Client({
+        endpoint: this.endpoint,
+        region: region,
+        credentials: {
+          accessKeyId,
+          secretAccessKey,
+        },
+        // Essential for Backblaze B2 S3 compatibility
+        forcePathStyle: true,
+      });
+
+      this.logger.log(
+        `Cloud Storage (B2 S3) initialized. Bucket: ${this.bucketName}`,
+      );
+    } catch (error) {
+      this.logger.error(`Failed to initialize S3 client: ${error.message}`);
+    }
+  }
+
+  async uploadFile(
+    fileBuffer: Buffer,
+    filename: string,
+    mimeType: string,
+    subDir?: string,
+  ): Promise<{ filename: string; url: string }> {
+    if (!this.s3Client) {
+      throw new Error(
+        'Cloud storage is not configured. Please check B2 credentials in .env file.',
+      );
+    }
+
+    const ext = filename.split('.').pop() || '';
+    const uniqueFilename = `${uuidv4()}.${ext}`;
+    const key = subDir ? `${subDir}/${uniqueFilename}` : uniqueFilename;
+    try {
+      await this.s3Client.send(
+        new PutObjectCommand({
+          Bucket: this.bucketName,
+          Key: key,
+          Body: fileBuffer,
+          ContentType: mimeType,
+        }),
+      );
+
+      // Construct URL. B2 S3 typically follows: https://{bucket}.{endpoint_host}/{key}
+      // But many use the friendly URL: https://f002.backblazeb2.com/file/{bucket}/{key}
+      // We'll use the S3 endpoint style if provided, or fallback to friendly
+      const url = `${this.endpoint}/${this.bucketName}/${key}`;
+
+      this.logger.log(`File uploaded successfully: ${url}`);
+      return { filename: uniqueFilename, url };
+    } catch (error) {
+      this.logger.error(`Failed to upload to cloud storage: ${error.message}`);
+      throw error;
+    }
+  }
+
+  async deleteFile(key: string): Promise<void> {
+    if (!this.s3Client) {
+      this.logger.warn(
+        'Cloud storage not configured, skipping delete operation',
+      );
+      return;
+    }
+
+    try {
+      await this.s3Client.send(
+        new DeleteObjectCommand({
+          Bucket: this.bucketName,
+          Key: key,
+        })
+      );
+      this.logger.log(`File deleted: ${key}`);
+    } catch (error) {
+      this.logger.error(`Failed to delete file: ${error.message}`);
+    }
+  }
+
+  /**
+   * Helper to extract key from URL if needed
+   */
+  extractKeyFromUrl(url: string): string | null {
+    try {
+      const parts = url.split(`${this.bucketName}/`);
+      return parts.length > 1 ? parts[1] : null;
+    } catch {
+      return null;
+    }
+  }
+}
