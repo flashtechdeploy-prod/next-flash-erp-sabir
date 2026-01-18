@@ -5,8 +5,6 @@ import {
   PutObjectCommand,
   DeleteObjectCommand,
 } from '@aws-sdk/client-s3';
-import { v4 as uuidv4 } from 'uuid'; // works in CommonJS
-
 const B2_CONFIG_DEFAULTS = {
   endpoint: 'https://s3.us-east-005.backblazeb2.com',
   bucketName: 'flash-erp',
@@ -19,6 +17,7 @@ export class CloudStorageService {
   private bucketName: string;
   private endpoint: string;
   private readonly logger = new Logger(CloudStorageService.name);
+  private uuidModulePromise: Promise<typeof import('uuid')> | null = null;
 
   constructor(private configService: ConfigService) {
 
@@ -73,6 +72,19 @@ export class CloudStorageService {
     }
   }
 
+  private loadUuidModule() {
+    // Lazily load ESM uuid in a way that works from CommonJS output
+    if (!this.uuidModulePromise) {
+      this.uuidModulePromise = import('uuid');
+    }
+    return this.uuidModulePromise;
+  }
+
+  private async generateUuid(): Promise<string> {
+    const { v4 } = await this.loadUuidModule();
+    return v4();
+  }
+
   async uploadFile(
     fileBuffer: Buffer,
     filename: string,
@@ -86,7 +98,7 @@ export class CloudStorageService {
     }
 
     const ext = filename.split('.').pop() || '';
-    const uniqueFilename = `${uuidv4()}.${ext}`;
+    const uniqueFilename = `${await this.generateUuid()}.${ext}`;
     const key = subDir ? `${subDir}/${uniqueFilename}` : uniqueFilename;
     try {
       await this.s3Client.send(
