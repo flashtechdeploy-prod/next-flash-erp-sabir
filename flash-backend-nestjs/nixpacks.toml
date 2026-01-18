@@ -3,8 +3,9 @@ pkgManager = "npm"
 
 [build]
 cmds = [
-  "npm ci --legacy-peer-deps",
-  "npm run build"
+  "npm install",
+  "npm run build",
+  "test -d dist || (echo 'Build failed: dist folder missing' && exit 1)"
 ]
 
 [start]
