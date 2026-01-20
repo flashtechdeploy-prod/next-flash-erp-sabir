@@ -16,7 +16,8 @@ export class GeneralInventoryService {
     return this.db
       .select()
       .from(schema.generalInventoryItems)
-      .orderBy(asc(schema.generalInventoryItems.item_code));
+      .where(eq(schema.generalInventoryItems.status, 'active'))
+      .orderBy(desc(schema.generalInventoryItems.id));
   }
 
   async getItem(itemCode: string) {
@@ -28,10 +29,24 @@ export class GeneralInventoryService {
     return item;
   }
 
+  private async generateGeneralInventoryId(): Promise<string> {
+    const items = await this.db
+      .select({ id: schema.generalInventoryItems.id })
+      .from(schema.generalInventoryItems)
+      .orderBy(desc(schema.generalInventoryItems.id))
+      .limit(1);
+    const nextId = (items[0]?.id || 0) + 1;
+    return `FGI-${String(nextId).padStart(2, '0')}`;
+  }
+
   async createItem(dto: GeneralInventoryItemDto) {
+    const itemCode = dto.item_code || await this.generateGeneralInventoryId();
     const [result] = await this.db
       .insert(schema.generalInventoryItems)
-      .values(dto)
+      .values({
+        ...dto,
+        item_code: itemCode,
+      })
       .returning();
     return result;
   }
@@ -57,7 +72,57 @@ export class GeneralInventoryService {
     const result = await this.db
       .selectDistinct({ category: schema.generalInventoryItems.category })
       .from(schema.generalInventoryItems);
-    return result.map((r) => r.category).filter(Boolean);
+    return result
+      .map((r) => r.category)
+      .filter(Boolean)
+      .sort();
+  }
+
+  async createCategory(category: string) {
+    // Check if category already exists
+    const existing = await this.db
+      .select({ category: schema.generalInventoryItems.category })
+      .from(schema.generalInventoryItems)
+      .where(eq(schema.generalInventoryItems.category, category));
+    if (existing.length > 0) {
+      throw new Error('Category already exists');
+    }
+    // Create a placeholder item with this category to persist it
+    const itemCode = await this.generateGeneralInventoryId();
+    const [result] = await this.db
+      .insert(schema.generalInventoryItems)
+      .values({
+        item_code: itemCode,
+        name: `[${category}]`, // Placeholder name to indicate it's a category holder
+        category: category,
+        unit_name: 'N/A',
+        quantity_on_hand: 0,
+        status: 'inactive',
+      })
+      .returning();
+    return { category, message: 'Category created' };
+  }
+
+  async deleteCategory(category: string) {
+    // Delete the placeholder item for this category
+    await this.db
+      .delete(schema.generalInventoryItems)
+      .where(
+        and(
+          eq(schema.generalInventoryItems.category, category),
+          eq(schema.generalInventoryItems.name, `[${category}]`)
+        )
+      );
+    return { message: 'Category deleted' };
+  }
+
+  async updateCategory(oldCategory: string, newCategory: string) {
+    // Update all items with this category
+    await this.db
+      .update(schema.generalInventoryItems)
+      .set({ category: newCategory })
+      .where(eq(schema.generalInventoryItems.category, oldCategory));
+    return { message: 'Category updated' };
   }
 
   async listTransactions(query: {

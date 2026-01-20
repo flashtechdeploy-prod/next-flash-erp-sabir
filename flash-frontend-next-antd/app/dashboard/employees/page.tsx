@@ -52,6 +52,16 @@ export default function EmployeesPage() {
   const [filters, setFilters] = useState({
     search: '',
     status: '',
+    fss_number: '',
+    full_name: '',
+    cnic: '',
+    father_name: '',
+    date_of_birth: '',
+    mobile_number: '',
+    department: '',
+    designation: '',
+    enrolled_as: '',
+    date_of_enrolment: '',
   });
 
   const fetchEmployees = async (page = pagination.current, pageSize = pagination.pageSize) => {
@@ -62,12 +72,18 @@ export default function EmployeesPage() {
       with_total: 'true',
     };
 
-    if (filters.search) {
-      params.search = filters.search;
-    }
-    if (filters.status) {
-      params.status = filters.status;
-    }
+    if (filters.search) params.search = filters.search;
+    if (filters.status) params.status = filters.status;
+    if (filters.fss_number) params.fss_number = filters.fss_number;
+    if (filters.full_name) params.full_name = filters.full_name;
+    if (filters.cnic) params.cnic = filters.cnic;
+    if (filters.father_name) params.father_name = filters.father_name;
+    if (filters.date_of_birth) params.date_of_birth = filters.date_of_birth;
+    if (filters.mobile_number) params.mobile_number = filters.mobile_number;
+    if (filters.department) params.department = filters.department;
+    if (filters.designation) params.designation = filters.designation;
+    if (filters.enrolled_as) params.enrolled_as = filters.enrolled_as;
+    if (filters.date_of_enrolment) params.date_of_enrolment = filters.date_of_enrolment;
 
     const response = await employeeApi.getAll(params);
     setLoading(false);
@@ -91,7 +107,7 @@ export default function EmployeesPage() {
   useEffect(() => {
     fetchEmployees();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.search, filters.status]);
+  }, [filters.search, filters.status, filters.fss_number, filters.full_name, filters.cnic, filters.father_name, filters.date_of_birth, filters.mobile_number, filters.department, filters.designation, filters.enrolled_as, filters.date_of_enrolment]);
 
   const handleCreate = () => {
     setEditingEmployee(null);
@@ -114,13 +130,56 @@ export default function EmployeesPage() {
   };
 
   const handleFormSubmit = async (values: Record<string, unknown>) => {
+    // Never send _profilePhotoFile or any other underscore-prefixed fields to the API
+    const cleanValues = { ...values };
+    Object.keys(cleanValues).forEach(key => {
+      if (key.startsWith('_')) {
+        delete (cleanValues as any)[key];
+      }
+    });
+
+    // Get profile photo file from form ref (check if form has it attached)
+    let profilePhotoFile = (values as any)._profilePhotoFile;
+
+    // First create or update the employee
     const response = editingEmployee
-      ? await employeeApi.update(editingEmployee.employee_id, values)
-      : await employeeApi.create(values);
+      ? await employeeApi.update(editingEmployee.employee_id, cleanValues)
+      : await employeeApi.create(cleanValues);
 
     if (response.error) {
       message.error(response.error);
       return;
+    }
+
+    const employeeData = response.data as Employee;
+
+    // Then upload profile picture if provided
+    if (profilePhotoFile && Array.isArray(profilePhotoFile) && profilePhotoFile.length > 0 && profilePhotoFile[0].originFileObj) {
+      // Get the employee's database ID
+      const empResponse = await employeeApi.getOne(employeeData.employee_id);
+      if (!empResponse.error && empResponse.data) {
+        const empId = (empResponse.data as any).id;
+
+        // Upload the profile picture as a document
+        const formData = new FormData();
+        formData.append('file', profilePhotoFile[0].originFileObj);
+        formData.append('name', 'Profile Picture');
+        formData.append('category', 'profile_photo');
+
+        const uploadResponse = await employeeApi.uploadDocument(empId, formData);
+        console.log('Upload response:', uploadResponse);
+
+        if (!uploadResponse.error && (uploadResponse.data as any)?.file_path) {
+          const filePath = (uploadResponse.data as any).file_path;
+          console.log('Updating employee profile_photo with:', filePath);
+
+          // Update employee with profile picture URL
+          const finalUpdateResponse = await employeeApi.update(employeeData.employee_id, {
+            profile_photo: filePath
+          });
+          console.log('Final update response:', finalUpdateResponse);
+        }
+      }
     }
 
     message.success(
@@ -130,26 +189,75 @@ export default function EmployeesPage() {
     fetchEmployees();
   };
 
+  const getColumnSearchProps = (dataIndex: keyof typeof filters, placeholder: string) => ({
+    filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }: any) => (
+      <div style={{ padding: 8 }} onKeyDown={(e) => e.stopPropagation()}>
+        <Input
+          placeholder={`Search ${placeholder}`}
+          value={selectedKeys[0]}
+          onChange={(e) => setSelectedKeys(e.target.value ? [e.target.value] : [])}
+          onPressEnter={() => {
+            confirm();
+            setFilters((prev) => ({ ...prev, [dataIndex]: selectedKeys[0] }));
+          }}
+          style={{ marginBottom: 8, display: 'block' }}
+        />
+        <Space>
+          <Button
+            type="primary"
+            onClick={() => {
+              confirm();
+              setFilters((prev) => ({ ...prev, [dataIndex]: selectedKeys[0] }));
+            }}
+            icon={<SearchOutlined />}
+            size="small"
+            style={{ width: 90 }}
+          >
+            Search
+          </Button>
+          <Button
+            onClick={() => {
+              clearFilters && clearFilters();
+              setFilters((prev) => ({ ...prev, [dataIndex]: '' }));
+              confirm();
+            }}
+            size="small"
+            style={{ width: 90 }}
+          >
+            Reset
+          </Button>
+        </Space>
+      </div>
+    ),
+    filterIcon: (filtered: boolean) => (
+      <SearchOutlined style={{ color: filtered ? '#1890ff' : undefined }} />
+    ),
+  });
+
   const columns = [
     {
-      title: 'Employee ID',
-      dataIndex: 'employee_id',
-      key: 'employee_id',
+      title: 'FSS Number',
+      dataIndex: 'fss_number',
+      key: 'fss_number',
       width: 120,
+      fixed: 'left' as const,
+      ...getColumnSearchProps('fss_number', 'FSS No'),
     },
     {
       title: 'Name',
       dataIndex: 'full_name',
       key: 'full_name',
       width: 200,
+      fixed: 'left' as const,
       render: (text: string, record: Employee) => text || record.name || '-',
+      ...getColumnSearchProps('full_name', 'Name'),
     },
     {
-      title: 'FSS Number',
-      dataIndex: 'fss_number',
-      key: 'fss_number',
-      width: 120,
-      render: (text: string, record: Employee) => text || record.fss_no || '-',
+      title: 'Father Name',
+      dataIndex: 'father_name',
+      key: 'father_name',
+      width: 150,
+      ...getColumnSearchProps('father_name', 'Father Name'),
     },
     {
       title: 'CNIC',
@@ -157,24 +265,76 @@ export default function EmployeesPage() {
       key: 'cnic',
       width: 150,
       render: (text: string, record: Employee) => text || record.cnic_no || '-',
+      ...getColumnSearchProps('cnic', 'CNIC'),
+    },
+    {
+      title: 'Date of Birth',
+      dataIndex: 'date_of_birth',
+      key: 'date_of_birth',
+      width: 120,
+      render: (text: string, record: Employee) => text || record.dob || '-',
+      ...getColumnSearchProps('date_of_birth', 'Date of Birth'),
+    },
+    {
+      title: 'Mobile',
+      dataIndex: 'mobile_number',
+      key: 'mobile_number',
+      width: 130,
+      render: (text: string, record: Employee) => text || record.mobile_no || record.phone || '-',
+      ...getColumnSearchProps('mobile_number', 'Mobile Number'),
     },
     {
       title: 'Rank',
       dataIndex: 'rank',
       key: 'rank',
-      width: 120,
+      width: 100,
     },
     {
       title: 'Unit',
       dataIndex: 'unit',
       key: 'unit',
+      width: 100,
+    },
+    {
+      title: 'Designation',
+      dataIndex: 'designation',
+      key: 'designation',
+      width: 150,
+      ...getColumnSearchProps('designation', 'Designation'),
+    },
+    {
+      title: 'Department',
+      dataIndex: 'department',
+      key: 'department',
+      width: 150,
+      ...getColumnSearchProps('department', 'Department'),
+    },
+    {
+      title: 'Enrolled As',
+      dataIndex: 'enrolled_as',
+      key: 'enrolled_as',
       width: 120,
+      ...getColumnSearchProps('enrolled_as', 'Enrolled As'),
+    },
+    {
+      title: 'Joining Date',
+      dataIndex: 'date_of_enrolment',
+      key: 'date_of_enrolment',
+      width: 120,
+      ...getColumnSearchProps('date_of_enrolment', 'Joining Date'),
+    },
+    {
+      title: 'Deployed At',
+      dataIndex: 'deployed_at',
+      key: 'deployed_at',
+      width: 150,
     },
     {
       title: 'Status',
       dataIndex: 'status',
       key: 'status',
       width: 100,
+      fixed: 'right' as const,
       render: (status: string) => {
         const color =
           status === 'Active' ? 'green' : status === 'Inactive' ? 'red' : 'orange';
@@ -263,7 +423,7 @@ export default function EmployeesPage() {
         onChange={(newPagination) => {
           fetchEmployees(newPagination.current || 1, newPagination.pageSize || 20);
         }}
-        scroll={{ x: 1200 }}
+        scroll={{ x: 'max-content' }}
         className="compact-table"
       />
 

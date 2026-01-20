@@ -16,7 +16,8 @@ export class RestrictedInventoryService {
     const items = await this.db
       .select()
       .from(schema.restrictedInventoryItems)
-      .orderBy(asc(schema.restrictedInventoryItems.item_code));
+      .where(eq(schema.restrictedInventoryItems.status, 'active'))
+      .orderBy(desc(schema.restrictedInventoryItems.id));
     
     // Calculate serial counts for each item
     const itemsWithCounts = await Promise.all(
@@ -51,10 +52,24 @@ export class RestrictedInventoryService {
     return item;
   }
 
+  private async generateRestrictedInventoryId(): Promise<string> {
+    const items = await this.db
+      .select({ id: schema.restrictedInventoryItems.id })
+      .from(schema.restrictedInventoryItems)
+      .orderBy(desc(schema.restrictedInventoryItems.id))
+      .limit(1);
+    const nextId = (items[0]?.id || 0) + 1;
+    return `FRI-${String(nextId).padStart(2, '0')}`;
+  }
+
   async createItem(dto: RestrictedInventoryItemDto) {
+    const itemCode = dto.item_code || await this.generateRestrictedInventoryId();
     const [result] = await this.db
       .insert(schema.restrictedInventoryItems)
-      .values(dto)
+      .values({
+        ...dto,
+        item_code: itemCode,
+      })
       .returning();
     return result;
   }
@@ -74,6 +89,63 @@ export class RestrictedInventoryService {
       .delete(schema.restrictedInventoryItems)
       .where(eq(schema.restrictedInventoryItems.item_code, itemCode));
     return { message: 'Deleted' };
+  }
+
+  async listCategories() {
+    const result = await this.db
+      .selectDistinct({ category: schema.restrictedInventoryItems.category })
+      .from(schema.restrictedInventoryItems);
+    return result
+      .map((r) => r.category)
+      .filter(Boolean)
+      .sort();
+  }
+
+  async createCategory(category: string) {
+    // Check if category already exists
+    const existing = await this.db
+      .select({ category: schema.restrictedInventoryItems.category })
+      .from(schema.restrictedInventoryItems)
+      .where(eq(schema.restrictedInventoryItems.category, category));
+    if (existing.length > 0) {
+      throw new Error('Category already exists');
+    }
+    // Create a placeholder item with this category to persist it
+    const itemCode = await this.generateRestrictedInventoryId();
+    const [result] = await this.db
+      .insert(schema.restrictedInventoryItems)
+      .values({
+        item_code: itemCode,
+        name: `[${category}]`, // Placeholder name to indicate it's a category holder
+        category: category,
+        unit_name: 'N/A',
+        is_serial_tracked: false,
+        status: 'inactive',
+      })
+      .returning();
+    return { category, message: 'Category created' };
+  }
+
+  async deleteCategory(category: string) {
+    // Delete the placeholder item for this category
+    await this.db
+      .delete(schema.restrictedInventoryItems)
+      .where(
+        and(
+          eq(schema.restrictedInventoryItems.category, category),
+          eq(schema.restrictedInventoryItems.name, `[${category}]`)
+        )
+      );
+    return { message: 'Category deleted' };
+  }
+
+  async updateCategory(oldCategory: string, newCategory: string) {
+    // Update all items with this category
+    await this.db
+      .update(schema.restrictedInventoryItems)
+      .set({ category: newCategory })
+      .where(eq(schema.restrictedInventoryItems.category, oldCategory));
+    return { message: 'Category updated' };
   }
 
   async listSerialUnits(itemCode: string) {

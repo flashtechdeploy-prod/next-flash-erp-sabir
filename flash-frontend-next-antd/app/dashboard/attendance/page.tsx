@@ -37,6 +37,7 @@ interface AttendanceRecord {
   id?: number;
   employee_id: string;
   employee_name?: string;
+  fss_id?: string;
   date: string;
   status: string;
   note?: string;
@@ -86,14 +87,29 @@ export default function AttendancePage() {
     
     // Merge with employees to show all active employees
     const attendanceMap = new Map(records.map(r => [r.employee_id, r]));
+    const getFss = (obj: unknown): string | undefined => {
+      if (!obj || typeof obj !== 'object') return undefined;
+      const rec = obj as Record<string, unknown>;
+      return (rec.fss_id as string) || (rec.fss_number as string);
+    };
     const allRecords = employees.map(emp => {
       const existing = attendanceMap.get(emp.employee_id as string);
-      return existing || {
+      const fssFromEmp = getFss(emp);
+      if (existing) {
+        const fssFromExisting = getFss(existing);
+        return {
+          ...existing,
+          fss_id: fssFromExisting || fssFromEmp,
+        };
+      }
+
+      return {
         employee_id: emp.employee_id as string,
         employee_name: (emp.full_name || emp.name) as string,
+        fss_id: fssFromEmp,
         date: dateStr,
         status: 'unmarked',
-      };
+      } as AttendanceRecord;
     });
 
     setAttendance(allRecords);
@@ -222,21 +238,23 @@ export default function AttendancePage() {
     }
   };
 
+  console.log('Attendance Records:', attendance);
+
   const columns = [
     {
-      title: 'Employee ID',
-      dataIndex: 'employee_id',
-      key: 'employee_id',
+      title: 'FSS ID',
+      dataIndex: 'fss_id',
+      key: 'fss_id',
       width: 120,
-      render: (id: string) => (
+      render: (_id: string, record: AttendanceRecord) => (
         <Button 
           type="link" 
           size="small" 
-          onClick={() => handleViewHistory(id)}
+          onClick={() => handleViewHistory(record.employee_id)}
           icon={<HistoryOutlined />}
           style={{ padding: 0, height: 'auto' }}
         >
-          {id}
+          {record.fss_id ?? ''}
         </Button>
       ),
     },

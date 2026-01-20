@@ -61,6 +61,7 @@ export class LeavePeriodsService {
         to_date: schema.leavePeriods.to_date,
         leave_type: schema.leavePeriods.leave_type,
         reason: schema.leavePeriods.reason,
+        status: schema.leavePeriods.status,
         created_at: schema.leavePeriods.created_at,
       })
       .from(schema.leavePeriods)
@@ -70,11 +71,10 @@ export class LeavePeriodsService {
       .limit(limit)
       .offset(offset);
 
-    // Add days calculation and default status
+    // Add days calculation
     const leavesWithDays = leaves.map(leave => ({
       ...leave,
       days: this.calculateDays(leave.from_date, leave.to_date),
-      status: 'approved', // Default status since column may not exist
     }));
 
     // Get total count
@@ -106,6 +106,7 @@ export class LeavePeriodsService {
         to_date: schema.leavePeriods.to_date,
         leave_type: schema.leavePeriods.leave_type,
         reason: schema.leavePeriods.reason,
+        status: schema.leavePeriods.status,
         created_at: schema.leavePeriods.created_at,
       })
       .from(schema.leavePeriods)
@@ -119,7 +120,6 @@ export class LeavePeriodsService {
     return {
       ...leave,
       days: this.calculateDays(leave.from_date, leave.to_date),
-      status: 'approved',
     };
   }
 
@@ -130,6 +130,7 @@ export class LeavePeriodsService {
       to_date: dto.to_date,
       leave_type: dto.leave_type,
       reason: dto.reason || null,
+      status: dto.status || 'approved',
     };
 
     const [result] = await this.db
@@ -140,7 +141,6 @@ export class LeavePeriodsService {
     return {
       ...result,
       days: this.calculateDays(result.from_date, result.to_date),
-      status: 'approved',
       message: 'Leave period created successfully',
     };
   }
@@ -163,6 +163,7 @@ export class LeavePeriodsService {
     if (dto.to_date) updateData.to_date = dto.to_date;
     if (dto.leave_type) updateData.leave_type = dto.leave_type;
     if (dto.reason !== undefined) updateData.reason = dto.reason;
+    if (dto.status) updateData.status = dto.status;
 
     if (Object.keys(updateData).length > 0) {
       await this.db

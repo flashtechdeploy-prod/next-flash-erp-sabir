@@ -4,28 +4,16 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   Card, Button, Space, Table, Drawer, Form, Input, Upload,
-  Popconfirm, Tag, Spin, Select, Image, App
+  Popconfirm, Tag, Spin, Select, Image, App, Modal, Radio
 } from 'antd';
 import {
   ArrowLeftOutlined, EditOutlined, DeleteOutlined, UploadOutlined,
   FilePdfOutlined, EyeOutlined, DownloadOutlined, PrinterOutlined
 } from '@ant-design/icons';
-import { employeeApi } from '@/lib/api';
+import { employeeApi, companySettingsApi } from '@/lib/api';
 import EmployeeForm, { DOCUMENT_CATEGORIES } from '../EmployeeForm';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-
-// Helper function to build full URL from file path
-const getFullFileUrl = (filePath: string): string => {
-  if (!filePath) return '';
-  const decodedPath = decodeURIComponent(filePath);
-  if (decodedPath.startsWith('http')) {
-    return decodedPath;
-  }
-  // Remove leading slash if present to avoid double slashes
-  const cleanPath = decodedPath.startsWith('/') ? decodedPath : `/${decodedPath}`;
-  return `${API_BASE}${cleanPath}`;
-};
+import { getFullFileUrl } from '@/lib/utils';
 
 // Field component moved outside to avoid re-creation during render
 const Field = ({ label, value }: { label: string; value: unknown }) => (
@@ -48,7 +36,11 @@ export default function EmployeeDetailPage() {
   const [uploadDrawerVisible, setUploadDrawerVisible] = useState(false);
   const [previewVisible, setPreviewVisible] = useState(false);
   const [previewFile, setPreviewFile] = useState<string>('');
+  const [printModalVisible, setPrintModalVisible] = useState(false);
+  const [printWithDocuments, setPrintWithDocuments] = useState(true);
   const [uploadForm] = Form.useForm();
+
+  const [companySettings, setCompanySettings] = useState<any>(null);
 
   const fetchEmployee = async () => {
     setLoading(true);
@@ -71,21 +63,72 @@ export default function EmployeeDetailPage() {
     setEmployee(employeeData);
   };
 
+  const fetchCompanySettings = async () => {
+    try {
+      const { data } = await companySettingsApi.get();
+      setCompanySettings(data);
+    } catch (error) {
+      console.error('Failed to load settings', error);
+    }
+  };
+
   useEffect(() => {
     fetchEmployee();
+    fetchCompanySettings();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [employeeId]);
 
   const handleUpdate = async (values: Record<string, unknown>) => {
-    const response = await employeeApi.update(employeeId, values);
+    // Never send _profilePhotoFile or any other underscore-prefixed fields to the API
+    const cleanValues = { ...values };
+    Object.keys(cleanValues).forEach(key => {
+      if (key.startsWith('_')) {
+        delete (cleanValues as any)[key];
+      }
+    });
+
+    const profilePhotoFile = (values as any)._profilePhotoFile;
+
+    const response = await employeeApi.update(employeeId, cleanValues);
     if (response.error) {
       message.error(response.error);
       return;
     }
+
+    const employeeData = response.data as any;
+
+    // Then upload profile picture if provided
+    if (profilePhotoFile && Array.isArray(profilePhotoFile) && profilePhotoFile.length > 0 && profilePhotoFile[0].originFileObj) {
+      if (!employeeData.id) {
+        console.error('No database ID found for employee during photo upload');
+      } else {
+        // Upload the profile picture as a document
+        const formData = new FormData();
+        formData.append('file', profilePhotoFile[0].originFileObj);
+        formData.append('name', 'Profile Picture');
+        formData.append('category', 'profile_photo');
+
+        console.log('Uploading profile photo in detail page...');
+        const uploadResponse = await employeeApi.uploadDocument(employeeData.id, formData);
+        console.log('Upload response:', uploadResponse);
+
+        if (!uploadResponse.error && (uploadResponse.data as any)?.file_path) {
+          const filePath = (uploadResponse.data as any).file_path;
+          console.log('Updating profile_photo fields with:', filePath);
+
+          // Update employee with profile picture URL
+          await employeeApi.update(employeeData.employee_id, {
+            profile_photo: filePath
+          });
+        }
+      }
+    }
+
     message.success('Employee updated');
     setEditDrawerVisible(false);
     fetchEmployee();
   };
+
 
   const handleDelete = async () => {
     const response = await employeeApi.delete(employeeId);
@@ -152,15 +195,19 @@ export default function EmployeeDetailPage() {
     fetchEmployee();
   };
 
-  const handlePreviewFile = (filePath: string) => {
+  const handlePreviewFile = (filePath: string | undefined) => {
+    if (!filePath) return;
     const fullUrl = getFullFileUrl(filePath);
     console.log('Preview file path:', filePath);
     console.log('Preview full URL:', fullUrl);
-    setPreviewFile(fullUrl);
-    setPreviewVisible(true);
+    if (fullUrl) {
+      setPreviewFile(fullUrl);
+      setPreviewVisible(true);
+    }
   };
 
-  const handlePrintReport = () => {
+
+  const handlePrintReport = (includeDocuments: boolean = true) => {
     const printContent = printRef.current;
     if (!printContent) return;
     const printWindow = window.open('', '_blank');
@@ -168,111 +215,163 @@ export default function EmployeeDetailPage() {
 
     // Build documents HTML
     let documentsHTML = '';
-    if (documents.length > 0) {
+    if (includeDocuments && documents.length > 0) {
+      const docImages = documents.map((doc: Record<string, unknown>) => {
+        const fullUrl = getFullFileUrl(doc.file_path as string);
+        const isImage = (doc.file_path as string)?.match(/\.(jpg|jpeg|png|gif|webp)$/i);
+        const isPdf = (doc.file_path as string)?.match(/\.pdf$/i);
+        
+        if (isImage) {
+          return `
+            <div style="margin-bottom: 20px; page-break-inside: avoid; border: 1px solid #ddd; padding: 10px; border-radius: 4px;">
+              <div style="font-size: 10px; font-weight: bold; margin-bottom: 8px; color: #1890ff;">${DOCUMENT_CATEGORIES.find(c => c.value === doc.category)?.label || doc.category}</div>
+              <img src="${fullUrl}" style="max-width: 100%; max-height: 300px; border-radius: 4px;" alt="Document preview" />
+              <div style="font-size: 9px; color: #666; margin-top: 6px;">${doc.filename || 'Document'}</div>
+            </div>
+          `;
+        } else if (isPdf) {
+          return `
+            <div style="margin-bottom: 20px; page-break-inside: avoid; border: 1px solid #ddd; padding: 15px; border-radius: 4px; text-align: center; background: #f9f9f9;">
+              <div style="font-size: 10px; font-weight: bold; margin-bottom: 8px; color: #1890ff;">${DOCUMENT_CATEGORIES.find(c => c.value === doc.category)?.label || doc.category}</div>
+              <div style="font-size: 40px; color: #ff4d4f; margin-bottom: 8px;">📄</div>
+              <div style="font-size: 10px; color: #333; font-weight: bold;">${doc.filename || 'PDF Document'}</div>
+              <div style="font-size: 9px; color: #999; margin-top: 4px;">PDF - See document preview in digital version</div>
+            </div>
+          `;
+        } else {
+          return `
+            <div style="margin-bottom: 20px; page-break-inside: avoid; border: 1px solid #ddd; padding: 15px; border-radius: 4px; text-align: center; background: #f9f9f9;">
+              <div style="font-size: 10px; font-weight: bold; margin-bottom: 8px; color: #1890ff;">${DOCUMENT_CATEGORIES.find(c => c.value === doc.category)?.label || doc.category}</div>
+              <div style="font-size: 40px; color: #1890ff; margin-bottom: 8px;">📎</div>
+              <div style="font-size: 10px; color: #333; font-weight: bold;">${doc.filename || 'Document'}</div>
+              <div style="font-size: 9px; color: #999; margin-top: 4px;">File - See document in digital version</div>
+            </div>
+          `;
+        }
+      }).join('');
+
       documentsHTML = `
         <div class="section page-break">
           <div class="section-title">Uploaded Documents</div>
-          <table class="doc-table">
-            <thead>
-              <tr>
-                <th>Category</th>
-                <th>File Name</th>
-                <th>Upload Date</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${documents.map((doc: Record<string, unknown>) => `
-                <tr>
-                  <td>${DOCUMENT_CATEGORIES.find(c => c.value === doc.category)?.label || doc.category}</td>
-                  <td>${doc.filename}</td>
-                  <td>${doc.created_at ? new Date(doc.created_at as string).toLocaleDateString() : '-'}</td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
+          <div style="display: flex; flex-direction: column; gap: 12px;">
+            ${docImages}
+          </div>
         </div>
       `;
     }
+
+    const profilePhotoUrl = employee?.profile_photo
+      ? getFullFileUrl(employee.profile_photo as string)
+      : null;
 
     printWindow.document.write(`<!DOCTYPE html><html><head>
       <title>Employee Report - ${employee?.full_name || employee?.employee_id}</title>
       <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Arial', sans-serif; padding: 30px; font-size: 11px; color: #333; }
+        
         .header { 
-          text-align: center; 
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
           border-bottom: 3px solid #1890ff; 
-          padding-bottom: 15px; 
-          margin-bottom: 25px;
-          position: relative;
+          padding-bottom: 10px; 
+          margin-bottom: 20px;
+        }
+        .header-left {
+          flex: 0 0 80px;
+          display: flex;
+          align-items: center;
+        }
+        .header-center {
+          flex: 1;
+          text-align: center;
+          padding: 0 10px;
+        }
+        .header-right {
+          flex: 0 0 80px;
+          display: flex;
+          justify-content: flex-end;
+          align-items: center;
         }
         .logo { 
-          width: 80px; 
-          height: 80px; 
-          margin: 0 auto 10px;
-          background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%);
-          border-radius: 50%;
+          width: 60px; 
+          height: 60px; 
           display: flex;
           align-items: center;
           justify-content: center;
-          color: white;
-          font-size: 32px;
-          font-weight: bold;
+          overflow: hidden;
         }
         .header h1 { 
-          margin: 10px 0 5px; 
-          font-size: 28px; 
+          margin: 0 0 2px; 
+          font-size: 16px; 
           color: #1890ff;
           font-weight: bold;
-          letter-spacing: 2px;
+          text-transform: uppercase;
+          letter-spacing: 1px;
         }
         .header p { 
           color: #666; 
-          font-size: 13px;
-          margin-top: 5px;
+          font-size: 10px;
+          margin: 0;
+          line-height: 1.2;
         }
         .report-meta {
           text-align: right;
-          margin-bottom: 20px;
-          font-size: 10px;
+          margin-bottom: 15px;
+          font-size: 9px;
           color: #888;
         }
+        
+        .profile-section {
+          width: 70px;
+          height: 85px;
+          border: 1px solid #ddd;
+          background: #f5f5f5;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          overflow: hidden;
+        }
+        .profile-img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+
         .section { 
-          margin-bottom: 25px; 
+          margin-bottom: 20px; 
           page-break-inside: avoid;
         }
         .section-title { 
-          font-size: 15px; 
+          font-size: 12px; 
           font-weight: bold; 
           background: linear-gradient(to right, #1890ff, #40a9ff);
           color: white;
-          padding: 10px 15px; 
-          margin-bottom: 15px;
+          padding: 8px 12px; 
+          margin-bottom: 10px; 
           border-radius: 4px;
           text-transform: uppercase;
-          letter-spacing: 1px;
         }
         .field-grid {
           display: grid;
           grid-template-columns: repeat(3, 1fr);
-          gap: 12px 20px;
+          gap: 8px 15px;
         }
         .field { 
-          padding: 8px 0;
+          padding: 6px 0;
           border-bottom: 1px solid #f0f0f0;
         }
         .field-label { 
           font-size: 9px; 
           color: #1890ff;
-          text-transform: uppercase; 
           font-weight: bold;
-          margin-bottom: 4px;
-          letter-spacing: 0.5px;
+          margin-bottom: 2px;
+          text-transform: uppercase;
         }
         .field-value { 
-          font-size: 12px; 
+          font-size: 11px; 
           color: #333;
-          font-weight: 500;
         }
         .address-field {
           grid-column: span 3;
@@ -281,100 +380,152 @@ export default function EmployeeDetailPage() {
           width: 100%;
           border-collapse: collapse;
           margin-top: 10px;
+          font-size: 10px;
         }
         .doc-table th {
           background: #f5f5f5;
-          padding: 10px;
+          padding: 8px;
           text-align: left;
           font-weight: bold;
           border: 1px solid #ddd;
-          font-size: 11px;
         }
         .doc-table td {
-          padding: 8px 10px;
+          padding: 6px 8px;
           border: 1px solid #ddd;
-          font-size: 11px;
-        }
-        .doc-table tr:nth-child(even) {
-          background: #fafafa;
         }
         .signature-section {
-          margin-top: 60px;
+          margin-top: 50px;
           display: flex;
           justify-content: space-between;
           page-break-inside: avoid;
         }
         .signature-box {
           text-align: center;
-          width: 200px;
+          width: 180px;
         }
         .signature-line {
-          border-top: 2px solid #333;
-          margin-top: 60px;
-          margin-bottom: 8px;
+          border-top: 1px solid #333;
+          margin-bottom: 5px;
         }
         .signature-label {
-          font-size: 11px;
-          color: #666;
+          font-size: 10px;
           font-weight: bold;
+          color: #555;
         }
         .page-break {
           page-break-before: always;
         }
         .footer {
-          margin-top: 40px;
-          padding-top: 15px;
+          margin-top: 30px;
+          padding-top: 10px;
           border-top: 2px solid #1890ff;
           text-align: center;
-          font-size: 10px;
+          font-size: 9px;
           color: #888;
         }
+        
+        table.print-layout { width: 100%; }
+        thead.print-header { display: table-header-group; }
+        tfoot.print-footer { display: table-footer-group; }
+        
         @media print { 
-          body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+          body { print-color-adjust: exact; -webkit-print-color-adjust: exact; padding: 0; }
           .page-break { page-break-before: always; }
         }
       </style></head><body>
-      <div class="header">
-        <div class="logo">FS</div>
-        <h1>FLASH SECURITY</h1>
-        <p>Employee Service Record & Documentation</p>
-      </div>
-      <div class="report-meta">
-        <div>Report Generated: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}</div>
-        <div>Employee ID: ${employee?.employee_id || 'N/A'}</div>
-      </div>
-      ${printContent.innerHTML}
-      ${documentsHTML}
-      <div class="signature-section">
-        <div class="signature-box">
-          <div class="signature-line"></div>
-          <div class="signature-label">Employee Signature</div>
-          <div style="font-size: 9px; color: #999; margin-top: 4px;">Date: _______________</div>
-        </div>
-        <div class="signature-box">
-          <div class="signature-line"></div>
-          <div class="signature-label">HR Manager</div>
-          <div style="font-size: 9px; color: #999; margin-top: 4px;">Date: _______________</div>
-        </div>
-        <div class="signature-box">
-          <div class="signature-line"></div>
-          <div class="signature-label">Authorized Officer</div>
-          <div style="font-size: 9px; color: #999; margin-top: 4px;">Date: _______________</div>
-        </div>
-      </div>
-      <div class="footer">
-        <p><strong>FLASH SECURITY SERVICES</strong></p>
-        <p>Confidential Employee Record - For Official Use Only</p>
-      </div>
+      
+      <table class="print-layout">
+        <thead class="print-header">
+          <tr>
+            <td>
+              <div class="header">
+                <div class="header-left">
+                  ${companySettings?.logo_url ? `
+                    <div class="logo">
+                      <img src="${getFullFileUrl(companySettings.logo_url)}" style="width: 100%; height: 100%; object-fit: contain;" />
+                    </div>
+                  ` : `
+                    <div class="logo" style="background: #1890ff; color: white;">FS</div>
+                  `}
+                </div>
+                <div class="header-center">
+                  <h1>${companySettings?.name || 'FLASH SECURITY'}</h1>
+                  <p>${companySettings?.address || ''}</p>
+                  <p>
+                    ${[
+        companySettings?.phone,
+        companySettings?.email,
+        companySettings?.website
+      ].filter(Boolean).join(' | ')}
+                  </p>
+                </div>
+                <div class="header-right">
+                  ${profilePhotoUrl ? `
+                    <div class="profile-section">
+                      <img src="${profilePhotoUrl}" class="profile-img" alt="Profile" />
+                    </div>
+                  ` : ''}
+                </div>
+              </div>
+            </td>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>
+              <div class="report-meta">
+                <div>Report Generated: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}</div>
+                <div>Employee ID: ${employee?.employee_id || 'N/A'}</div>
+              </div>
+              
+              ${printContent.innerHTML}
+              ${documentsHTML}
+              
+              <div class="signature-section">
+                <div class="signature-box">
+                  <div class="signature-line"></div>
+                  <div class="signature-label">Employee Signature</div>
+                  <div style="font-size: 9px; color: #999; margin-top: 4px;">Date: _______________</div>
+                </div>
+                <div class="signature-box">
+                  <div class="signature-line"></div>
+                  <div class="signature-label">HR Manager</div>
+                  <div style="font-size: 9px; color: #999; margin-top: 4px;">Date: _______________</div>
+                </div>
+                <div class="signature-box">
+                  <div class="signature-line"></div>
+                  <div class="signature-label">Authorized Officer</div>
+                  <div style="font-size: 9px; color: #999; margin-top: 4px;">Date: _______________</div>
+                </div>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+        <tfoot class="print-footer">
+          <tr>
+            <td>
+              <div class="footer">
+                <p><strong>FLASH SECURITY SERVICES</strong></p>
+                <p>Confidential Employee Record - For Official Use Only</p>
+              </div>
+            </td>
+          </tr>
+        </tfoot>
+      </table>
       </body></html>`);
     printWindow.document.close();
-    printWindow.print();
+    setTimeout(() => {
+      printWindow.focus();
+      printWindow.print();
+    }, 250);
   };
 
   if (loading) return <div className="flex justify-center items-center h-96"><Spin size="large" /></div>;
   if (!employee) return <div>Employee not found</div>;
 
-  const documents = (employee.documents as Array<Record<string, unknown>>) || [];
+  const documents = ((employee.documents as Array<Record<string, unknown>>) || []).filter(
+    (doc) => doc.category !== 'profile_photo' && doc.category !== 'photo'
+  );
   const documentColumns = [
     {
       title: 'Preview',
@@ -422,7 +573,7 @@ export default function EmployeeDetailPage() {
               }}
               onError={(e) => {
                 // Only log errors for remote (B2) images to avoid cluttering logs with known stale local references
-                if (fullUrl.includes('backblazeb2.com')) {
+                if (fullUrl?.includes('backblazeb2.com')) {
                   console.error('Image load error:', fullUrl, e);
                 }
               }}
@@ -515,20 +666,99 @@ export default function EmployeeDetailPage() {
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
-        <Space>
-          <Button icon={<ArrowLeftOutlined />} onClick={() => router.back()}>Back</Button>
-          <h1 className="text-2xl font-bold m-0">{(employee.full_name as string) || (employee.employee_id as string)}</h1>
-          <Tag color={employee.status === 'Active' ? 'green' : 'red'}>{employee.status as string}</Tag>
-        </Space>
-        <Space>
-          <Button icon={<PrinterOutlined />} onClick={handlePrintReport}>Print Report</Button>
-          <Button icon={<EditOutlined />} onClick={() => setEditDrawerVisible(true)}>Edit</Button>
-          <Popconfirm title="Delete employee?" onConfirm={handleDelete}>
-            <Button danger icon={<DeleteOutlined />}>Delete</Button>
-          </Popconfirm>
-        </Space>
-      </div>
+      {/* Profile Header Card */}
+      <Card className="mb-6" style={{ background: '#1890ff', border: 'none' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
+          {/* Profile Picture */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0
+          }}>
+            {employee.profile_photo ? (
+              <Image
+                src={getFullFileUrl(employee.profile_photo as string)}
+                alt={employee.full_name as string}
+                width={120}
+                height={120}
+                style={{
+                  borderRadius: '12px',
+                  objectFit: 'cover',
+                  border: '4px solid white',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+                }}
+                preview
+                fallback="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMIAAADDCAYAAADQvc6ZAAAAFUlEQVR42mNk+M9QzwAEYBxVSF+FABJADveWkH6oAAAAAElFTkSuQmCC"
+              />
+            ) : (
+              <div style={{
+                width: '120px',
+                height: '120px',
+                borderRadius: '12px',
+                background: 'rgba(255,255,255,0.2)',
+                border: '4px solid white',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '48px',
+                color: 'white',
+                fontWeight: 'bold',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+              }}>
+                {(employee.full_name as string)?.charAt(0).toUpperCase()}
+              </div>
+            )}
+          </div>
+
+          {/* Employee Info */}
+          <div style={{ flex: 1, color: 'white' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+              <h1 style={{ fontSize: '32px', fontWeight: 'bold', margin: 0 }}>
+                {(employee.full_name as string) || (employee.employee_id as string)}
+              </h1>
+              <Tag color={employee.status === 'Active' ? '#87d068' : '#ff4d4f'} style={{ fontSize: '12px', padding: '4px 12px' }}>
+                {employee.status as string}
+              </Tag>
+            </div>
+            <div style={{ fontSize: '14px', opacity: 0.9, marginBottom: '8px' }}>
+              Employee ID: <strong>{employee.employee_id as string}</strong>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', fontSize: '13px', opacity: 0.95 }}>
+              <div>
+                <div style={{ opacity: 0.8, fontSize: '12px' }}>Designation</div>
+                <div style={{ fontWeight: 'bold' }}>{String(employee?.enrolled_as || employee.designation || 'Guard')}</div>
+              </div>
+              <div>
+                <div style={{ opacity: 0.8, fontSize: '12px' }}>Mobile</div>
+                <div style={{ fontWeight: 'bold' }}>{String(employee.phone || employee.mobile_no || '-')}</div>
+              </div>
+              <div>
+                <div style={{ opacity: 0.8, fontSize: '12px' }}>District</div>
+                <div style={{ fontWeight: 'bold' }}>{String(employee.district || '-')}</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <Button icon={<ArrowLeftOutlined />} onClick={() => router.back()} style={{ minWidth: '120px' }}>
+              Back
+            </Button>
+            <Button icon={<PrinterOutlined />} onClick={() => setPrintModalVisible(true)} style={{ minWidth: '120px' }}>
+              Print
+            </Button>
+            <Button icon={<EditOutlined />} onClick={() => setEditDrawerVisible(true)} type="primary" style={{ minWidth: '120px' }}>
+              Edit
+            </Button>
+            <Popconfirm title="Delete employee?" onConfirm={handleDelete}>
+              <Button danger icon={<DeleteOutlined />} style={{ minWidth: '120px' }}>
+                Delete
+              </Button>
+            </Popconfirm>
+          </div>
+        </div>
+      </Card>
 
       <Card className="mb-6">
         <div ref={printRef}>
@@ -565,6 +795,7 @@ export default function EmployeeDetailPage() {
               <Field label="Interviewed By" value={employee.interviewed_by} />
               <Field label="Introduced By" value={employee.introduced_by} />
               <Field label="BDM" value={employee.bdm} />
+              <Field label="EOBI Number" value={employee.eobi_no} />
             </div>
           </div>
 
@@ -609,8 +840,14 @@ export default function EmployeeDetailPage() {
             <div className="field-grid">
               <Field label="SHO Verification" value={employee.sho_verification_date} />
               <Field label="SSP Verification" value={employee.ssp_verification_date} />
+              <Field label="Al-Khidmat Verification" value={employee.verified_by_khidmat_markaz} />
               <Field label="Agreement Date" value={employee.agreement_date} />
+              <Field label="Social Security #" value={employee.social_security} />
               <Field label="Documents Held" value={employee.original_document_held} />
+              <div className="field address-field">
+                <div className="field-label"><strong>Insurance:</strong></div>
+                <div className="field-value">{String(employee.insurance || '-')}</div>
+              </div>
               <div className="field address-field">
                 <div className="field-label"><strong>Remarks:</strong></div>
                 <div className="field-value">{String(employee.remarks || '-')}</div>
@@ -664,7 +901,7 @@ export default function EmployeeDetailPage() {
               if (Array.isArray(e)) {
                 return e;
               }
-              return e?.fileList;
+              return e?.fileList || [];
             }}
           >
             <Upload maxCount={1} beforeUpload={() => false} accept="image/*,.pdf,.doc,.docx">
@@ -717,6 +954,37 @@ export default function EmployeeDetailPage() {
           )}
         </div>
       </Drawer>
+
+      <Modal
+        title="Print Employee Report"
+        open={printModalVisible}
+        onCancel={() => setPrintModalVisible(false)}
+        footer={[
+          <Button key="cancel" onClick={() => setPrintModalVisible(false)}>Cancel</Button>,
+          <Button key="print" type="primary" onClick={() => {
+            handlePrintReport(printWithDocuments);
+            setPrintModalVisible(false);
+          }}>Print</Button>
+        ]}
+      >
+        <div style={{ paddingBottom: '20px' }}>
+          <p><strong>Choose what to include in the print:</strong></p>
+          <Radio.Group value={printWithDocuments} onChange={(e) => setPrintWithDocuments(e.target.value)} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <Radio value={true}>
+              <div>
+                <div style={{ fontWeight: '500' }}>With Attachments</div>
+                <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>Include all uploaded documents, images, and files</div>
+              </div>
+            </Radio>
+            <Radio value={false}>
+              <div>
+                <div style={{ fontWeight: '500' }}>Without Attachments</div>
+                <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>Print only employee information</div>
+              </div>
+            </Radio>
+          </Radio.Group>
+        </div>
+      </Modal>
 
       <style jsx>{`
         .section { margin-bottom: 25px; }

@@ -21,9 +21,7 @@ export const employees = pgTable('employees', {
   first_name: text('first_name'),
   last_name: text('last_name'),
   father_name: text('father_name'),
-  photo: text('photo'),
   profile_photo: text('profile_photo'),
-  avatar_url: text('avatar_url'),
 
   // CNIC & ID
   cnic: text('cnic'),

@@ -5,7 +5,6 @@ import { Layout, Menu, Button, Avatar, Dropdown, Space, Badge } from 'antd';
 import {
   UserOutlined,
   TeamOutlined,
-  FileTextOutlined,
   CarOutlined,
   DollarOutlined,
   ShopOutlined,
@@ -73,7 +72,7 @@ export default function DashboardLayout({
         {
           key: '/dashboard/leave',
           icon: <CalendarOutlined />,
-          label: 'Leave Management',
+          label: 'Long Leave',
         },
         {
           key: '/dashboard/payroll',

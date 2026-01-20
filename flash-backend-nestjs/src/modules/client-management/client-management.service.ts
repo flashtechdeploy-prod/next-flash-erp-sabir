@@ -9,6 +9,34 @@ import { CloudStorageService } from '../../common/storage/cloud-storage.service'
 export class ClientManagementService {
   private logger = new Logger(ClientManagementService.name);
 
+  private async generateClientId(): Promise<string> {
+    const prefix = 'FCID-';
+
+    const [lastClient] = await this.db
+      .select({ id: schema.clients.id, client_id: schema.clients.client_id })
+      .from(schema.clients)
+      .orderBy(desc(schema.clients.id))
+      .limit(1);
+
+    const nextNumber = (lastClient?.id || 0) + 1;
+    const padded = String(nextNumber).padStart(3, '0');
+    return `${prefix}${padded}`;
+  }
+
+  private async generateContractNumber(): Promise<string> {
+    const prefix = 'CTN-';
+
+    const [lastContract] = await this.db
+      .select({ id: schema.client_contracts.id })
+      .from(schema.client_contracts)
+      .orderBy(desc(schema.client_contracts.id))
+      .limit(1);
+
+    const nextNumber = (lastContract?.id || 0) + 1;
+    const padded = String(nextNumber).padStart(4, '0');
+    return `${prefix}${padded}`;
+  }
+
   constructor(
     @Inject(DRIZZLE)
     private db: NodePgDatabase<typeof schema>,
@@ -52,6 +80,10 @@ export class ClientManagementService {
 
   async createClient(dto: any) {
     const data: any = { ...dto };
+
+    if (!data.client_id) {
+      data.client_id = await this.generateClientId();
+    }
 
     const [result] = await this.db
       .insert(schema.clients)
@@ -235,6 +267,11 @@ export class ClientManagementService {
 
   async createContract(clientId: number, dto: any) {
     const data: any = { ...dto, client_id: clientId };
+
+    if (!data.contract_number) {
+      data.contract_number = await this.generateContractNumber();
+    }
+
     const [result] = await this.db
       .insert(schema.client_contracts)
       .values(data)
@@ -359,7 +396,7 @@ export class ClientManagementService {
           ...assignment,
           employee_name:
             employee?.full_name || employee?.first_name || 'Unknown',
-          employee_photo: employee?.photo || employee?.profile_photo,
+          employee_photo: employee?.profile_photo,
         };
       }),
     );

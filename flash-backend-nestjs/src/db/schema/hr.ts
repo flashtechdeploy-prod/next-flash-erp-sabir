@@ -34,6 +34,7 @@ export const leavePeriods = pgTable('leave_periods', {
   to_date: text('to_date').notNull(),
   leave_type: text('leave_type').notNull(),
   reason: text('reason'),
+  status: text('status').default('approved'),
   created_at: timestamp('created_at').defaultNow(),
 });
 

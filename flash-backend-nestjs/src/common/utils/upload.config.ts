@@ -75,6 +75,7 @@ export function getFileInterceptorOptions(uploadPath: string) {
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         'text/plain',
         'text/csv',
+        'application/octet-stream',
       ];
 
       if (allowedMimes.includes(file.mimetype)) {

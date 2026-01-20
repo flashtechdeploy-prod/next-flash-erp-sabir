@@ -30,6 +30,7 @@ import { ClientManagementModule } from './modules/client-management/client-manag
 import { GeneralInventoryModule } from './modules/general-inventory/general-inventory.module';
 import { RestrictedInventoryModule } from './modules/restricted-inventory/restricted-inventory.module';
 import { UploadsModule } from './modules/uploads/uploads.module';
+import { CompanySettingsModule } from './modules/company-settings/company-settings.module';
 
 @Module({
   imports: [
@@ -67,7 +68,9 @@ import { UploadsModule } from './modules/uploads/uploads.module';
     ClientManagementModule,
     GeneralInventoryModule,
     RestrictedInventoryModule,
+    RestrictedInventoryModule,
     UploadsModule,
+    CompanySettingsModule,
   ],
 })
 export class AppModule {}

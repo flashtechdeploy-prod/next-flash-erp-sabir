@@ -17,7 +17,7 @@ export default function RolesPermissionsPage() {
   const allPermissions = [
     { module: 'employees', label: 'Employees', permissions: ['view', 'create', 'edit', 'delete'] },
     { module: 'attendance', label: 'Attendance', permissions: ['view', 'create', 'edit', 'delete'] },
-    { module: 'leave', label: 'Leave Management', permissions: ['view', 'create', 'edit', 'delete', 'approve'] },
+    { module: 'leave', label: 'Long Leave', permissions: ['view', 'create', 'edit', 'delete', 'approve'] },
     { module: 'payroll', label: 'Payroll', permissions: ['view', 'create', 'edit', 'process'] },
     { module: 'vehicles', label: 'Vehicles', permissions: ['view', 'create', 'edit', 'delete'] },
     { module: 'clients', label: 'Clients', permissions: ['view', 'create', 'edit', 'delete'] },

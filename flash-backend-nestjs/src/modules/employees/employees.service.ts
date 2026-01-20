@@ -2,7 +2,7 @@ import { Injectable, NotFoundException, Inject, Logger } from '@nestjs/common';
 import { DRIZZLE } from '../../db/drizzle.module';
 import * as schema from '../../db/schema';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
-import { eq, like, or, and, sql, desc, SQL } from 'drizzle-orm';
+import { eq, like, or, and, sql, desc, asc, SQL } from 'drizzle-orm';
 import { CloudStorageService } from '../../common/storage/cloud-storage.service';
 import {
   CreateEmployeeDto,
@@ -30,7 +30,7 @@ export class EmployeesService {
   async findAll(query: EmployeeQueryDto) {
     const skip = Number(query.skip) || 0;
     const limit = Number(query.limit) || 100;
-    const { search, status, unit, rank, deployed_at, with_total } = query;
+    const { search, status, unit, rank, deployed_at, with_total, fss_number, full_name, cnic } = query;
 
     const filters: SQL[] = [];
 
@@ -39,6 +39,25 @@ export class EmployeesService {
     if (rank) filters.push(eq(schema.employees.rank, rank));
     if (deployed_at)
       filters.push(eq(schema.employees.deployed_at, deployed_at));
+    
+    if (fss_number) filters.push(like(schema.employees.fss_number, `%${fss_number}%`));
+    if (full_name) filters.push(like(schema.employees.full_name, `%${full_name}%`));
+    if (cnic) filters.push(like(schema.employees.cnic, `%${cnic}%`));
+    if (query.father_name) filters.push(like(schema.employees.father_name, `%${query.father_name}%`));
+    if (query.date_of_birth) filters.push(like(schema.employees.date_of_birth, `%${query.date_of_birth}%`));
+    if (query.department) filters.push(like(schema.employees.department, `%${query.department}%`));
+    if (query.designation) filters.push(like(schema.employees.designation, `%${query.designation}%`));
+    if (query.enrolled_as) filters.push(like(schema.employees.enrolled_as, `%${query.enrolled_as}%`));
+    if (query.date_of_enrolment) filters.push(like(schema.employees.date_of_enrolment, `%${query.date_of_enrolment}%`));
+    
+    if (query.mobile_number) {
+        filters.push(or(
+            like(schema.employees.mobile_number, `%${query.mobile_number}%`),
+            like(schema.employees.mobile_no, `%${query.mobile_number}%`),
+            like(schema.employees.phone, `%${query.mobile_number}%`),
+            like(schema.employees.personal_phone_number, `%${query.mobile_number}%`)
+        ) as SQL);
+    }
 
     if (search) {
       filters.push(
@@ -46,6 +65,7 @@ export class EmployeesService {
           like(schema.employees.full_name, `%${search}%`),
           like(schema.employees.employee_id, `%${search}%`),
           like(schema.employees.cnic, `%${search}%`),
+          like(schema.employees.fss_number, `%${search}%`),
           like(schema.employees.phone, `%${search}%`),
         ) as SQL,
       );
@@ -58,7 +78,7 @@ export class EmployeesService {
     )
       .limit(limit)
       .offset(skip)
-      .orderBy(desc(schema.employees.id));
+      .orderBy(desc(schema.employees.fss_number));
 
     if (with_total) {
       const results = await (this.db
@@ -68,6 +88,12 @@ export class EmployeesService {
       const count = Number(results[0]?.count || 0);
       return { employees, total: count };
     }
+
+    // Sanitize list
+    employees.forEach(emp => {
+      if ('photo' in emp) delete (emp as any)['photo'];
+      if ('avatar_url' in emp) delete (emp as any)['avatar_url'];
+    });
 
     return { employees };
   }
@@ -90,6 +116,10 @@ export class EmployeesService {
       .from(schema.employeeWarnings)
       .where(eq(schema.employeeWarnings.employee_id, employee_id));
 
+    // Explicitly remove legacy fields if they exist
+    if ('photo' in employee) delete (employee as any)['photo'];
+    if ('avatar_url' in employee) delete (employee as any)['avatar_url'];
+
     return { ...employee, documents, warnings };
   }
 
@@ -101,6 +131,10 @@ export class EmployeesService {
     if (!employee) {
       throw new NotFoundException(`Employee with DB ID ${id} not found`);
     }
+    // Explicitly remove legacy fields if they exist
+    if ('photo' in employee) delete (employee as any)['photo'];
+    if ('avatar_url' in employee) delete (employee as any)['avatar_url'];
+
     return employee;
   }
 
@@ -131,8 +165,11 @@ export class EmployeesService {
 
   async update(employee_id: string, updateDto: UpdateEmployeeDto) {
     await this.findOne(employee_id);
+    this.logger.log(`Updating employee ${employee_id} with data: ${JSON.stringify(updateDto)}`);
 
     const data: any = { ...updateDto };
+    // Remove temporary/DTO-only fields that don't exist in the database
+    delete data._profilePhotoFile;
     if ((updateDto as any).employment_status)
       data.status = (updateDto as any).employment_status;
 
@@ -269,9 +306,6 @@ export class EmployeesService {
       const employee = await this.findByDbId(employee_db_id);
       const employeeId = (employee as any).employee_id;
 
-      // Create remote file path
-      const remoteFilePath = `employees/${employeeId}/${filename}`;
-      
       this.logger.log(`Starting upload for employee ${employeeId}: ${filename}`);
       
       // Upload to Cloud Storage
@@ -284,7 +318,44 @@ export class EmployeesService {
 
       this.logger.log(`Cloud upload successful for ${filename}`);
 
-      // Store reference in database
+      // If uploading a profile photo, update the employee record directly and skip the document record
+      if (category === 'profile_photo') {
+        this.logger.log(`Found ${category} upload for employee ${employeeId}. Updating profile_photo directly.`);
+        
+        // 1. Delete previous cloud file if it exists
+        if (employee.profile_photo) {
+          const oldKey = this.cloudStorageService.extractKeyFromUrl(employee.profile_photo);
+          if (oldKey) {
+            this.logger.log(`Deleting old cloud file: ${oldKey}`);
+            await this.cloudStorageService.deleteFile(oldKey);
+          }
+        }
+
+        // 2. Clear out any legacy 'profile_photo' or 'photo' entries in employeeFiles to be safe/clean
+        const oldEntries = await this.db
+          .select()
+          .from(schema.employeeFiles)
+          .where(
+            and(
+              eq(schema.employeeFiles.employee_id, employeeId),
+                eq(schema.employeeFiles.category, 'profile_photo'),
+            ),
+          );
+          
+        for (const entry of oldEntries) {
+          await this.db.delete(schema.employeeFiles).where(eq(schema.employeeFiles.id, entry.id));
+        }
+
+        // 3. Update the employees table with the new URL
+        await this.db
+          .update(schema.employees)
+          .set({ profile_photo: url })
+          .where(eq(schema.employees.id, employee_db_id));
+
+        return { file_path: url };
+      }
+
+      // Store reference in database for all other documents
       const [result] = await this.db
         .insert(schema.employeeFiles)
         .values({

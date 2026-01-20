@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Table, Button, Space, Tag, Drawer, Form, Input, Select, message, Popconfirm, Card, Row, Col, Statistic, Tabs, Modal } from 'antd';
-import { PlusOutlined, SafetyOutlined, LockOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons';
+import { PlusOutlined, SafetyOutlined, LockOutlined, CheckCircleOutlined, CloseCircleOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import { restrictedInventoryApi, employeeApi } from '@/lib/api';
 
 export default function RestrictedInventoryPage() {
@@ -10,14 +10,18 @@ export default function RestrictedInventoryPage() {
   const [serialUnits, setSerialUnits] = useState<Record<string, unknown>[]>([]);
   const [transactions, setTransactions] = useState<Record<string, unknown>[]>([]);
   const [employees, setEmployees] = useState<Record<string, unknown>[]>([]);
+  const [categories, setCategories] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [itemDrawerVisible, setItemDrawerVisible] = useState(false);
   const [serialDrawerVisible, setSerialDrawerVisible] = useState(false);
+  const [categoryModalVisible, setCategoryModalVisible] = useState(false);
   const [editingItem, setEditingItem] = useState<Record<string, unknown> | null>(null);
+  const [editingCategory, setEditingCategory] = useState<string | null>(null);
   const [selectedItem, setSelectedItem] = useState<Record<string, unknown> | null>(null);
   const [form] = Form.useForm();
   const [serialForm] = Form.useForm();
   const [issueForm] = Form.useForm();
+  const [categoryForm] = Form.useForm();
   const [searchText, setSearchText] = useState('');
   const [serialModalVisible, setSerialModalVisible] = useState(false);
   const [issueModalVisible, setIssueModalVisible] = useState(false);
@@ -26,6 +30,7 @@ export default function RestrictedInventoryPage() {
   useEffect(() => {
     loadData();
     loadEmployees();
+    loadCategories();
   }, []);
 
   const loadEmployees = async () => {
@@ -33,14 +38,35 @@ export default function RestrictedInventoryPage() {
       const response = await employeeApi.getAll();
       console.log('=== EMPLOYEES API RESPONSE ===');
       console.log('Full response:', response);
-      const empData = Array.isArray(response?.data) 
-        ? response.data 
-        : (response?.data as { employees?: Array<any> })?.employees || [];
+      let empData: Record<string, unknown>[] = [];
+      
+      if (Array.isArray(response)) {
+        empData = response;
+      } else if (response?.data) {
+        if (Array.isArray(response.data)) {
+          empData = response.data;
+        } else if (Array.isArray(response.data.employees)) {
+          empData = response.data.employees;
+        }
+      }
+      
       console.log('✅ Loaded employees:', empData);
       setEmployees(empData);
     } catch (error) {
       console.error('❌ Employee API error:', error);
       setEmployees([]);
+    }
+  };
+
+  const loadCategories = async () => {
+    try {
+      const response = await restrictedInventoryApi.getCategories();
+      console.log('Categories response:', response);
+      const categoryList = response.data ? (Array.isArray(response.data) ? response.data : []) : [];
+      console.log('Loaded categories:', categoryList);
+      setCategories(categoryList);
+    } catch (error) {
+      console.error('Failed to load categories:', error);
     }
   };
 
@@ -117,19 +143,17 @@ export default function RestrictedInventoryPage() {
     try {
       const values = await form.validateFields();
       
-      // Ensure all required fields are present
-      const item_code = values.item_code || (editingItem?.item_code as string);
+      // Map form field names to API field names
       const item_name = values.item_name;
       const item_type = values.item_type;
       const unit_name = values.unit_name || 'unit';
       
-      if (!item_code || !item_name || !item_type) {
-        message.error('Item code, name, and category are required');
+      if (!item_name || !item_type) {
+        message.error('Item name and category are required');
         return;
       }
       
-      const data = {
-        item_code: String(item_code),
+      const data: any = {
         name: String(item_name),
         category: String(item_type),
         unit_name: String(unit_name),
@@ -140,9 +164,11 @@ export default function RestrictedInventoryPage() {
       console.log('📤 Submitting item data:', data);
       
       if (editingItem) {
+        // For edit, include item_code to update the correct record
         await restrictedInventoryApi.updateItem(String(editingItem.item_code), data);
         message.success('Item updated');
       } else {
+        // For create, don't send item_code - let backend auto-generate it
         await restrictedInventoryApi.createItem(data);
         message.success('Item created');
       }
@@ -219,6 +245,48 @@ export default function RestrictedInventoryPage() {
       loadSerialUnits(String(selectedItem?.item_code));
     } catch {
       message.error('Failed to return serial unit');
+    }
+  };
+
+  const handleAddCategory = () => {
+    setEditingCategory(null);
+    categoryForm.resetFields();
+    setCategoryModalVisible(true);
+  };
+
+  const handleEditCategory = (category: string) => {
+    setEditingCategory(category);
+    categoryForm.setFieldsValue({ category });
+    setCategoryModalVisible(true);
+  };
+
+  const handleSubmitCategory = async () => {
+    try {
+      const values = await categoryForm.validateFields();
+      if (editingCategory) {
+        await restrictedInventoryApi.updateCategory(editingCategory, values.category);
+        message.success('Category updated');
+      } else {
+        await restrictedInventoryApi.createCategory(values.category);
+        message.success('Category added');
+      }
+      setCategoryModalVisible(false);
+      categoryForm.resetFields();
+      setEditingCategory(null);
+      loadCategories();
+    } catch (error) {
+      console.error('Save error:', error);
+      message.error('Failed to save category');
+    }
+  };
+
+  const handleDeleteCategory = async (category: string) => {
+    try {
+      await restrictedInventoryApi.deleteCategory(category);
+      message.success('Category deleted');
+      loadCategories();
+    } catch (error: any) {
+      message.error(error.response?.data?.message || 'Failed to delete category');
     }
   };
 
@@ -320,6 +388,7 @@ export default function RestrictedInventoryPage() {
         <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 600 }}>Restricted Inventory</h2>
         <Space>
           <Input.Search placeholder="Search items..." value={searchText} onChange={(e) => setSearchText(e.target.value)} style={{ width: 250 }} />
+          <Button onClick={() => setCategoryModalVisible(true)}>Manage Categories</Button>
           <Button type="primary" icon={<PlusOutlined />} onClick={handleAddItem}>Add Item</Button>
         </Space>
       </div>
@@ -359,14 +428,10 @@ export default function RestrictedInventoryPage() {
       >
         <Form form={form} layout="vertical">
           <div style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white', padding: '12px 16px', marginBottom: '24px', borderRadius: '4px', fontSize: '14px', fontWeight: 600 }}>Restricted Item Details</div>
-          <Form.Item name="item_code" label="Item Code" rules={[{ required: true, message: 'Item code is required' }]}><Input placeholder="Enter item code" disabled={!!editingItem} /></Form.Item>
+          <Form.Item name="item_code" label="Item Code"><Input placeholder={editingItem ? "Cannot edit code" : "Auto-generated (FRI-##)"} disabled /></Form.Item>
           <Form.Item name="item_name" label="Item Name" rules={[{ required: true, message: 'Item name is required' }]}><Input placeholder="Enter item name" /></Form.Item>
           <Form.Item name="item_type" label="Category" rules={[{ required: true, message: 'Category is required' }]}>
-            <Select placeholder="Select category">
-              <Select.Option value="weapon">Weapon</Select.Option>
-              <Select.Option value="ammunition">Ammunition</Select.Option>
-              <Select.Option value="equipment">Equipment</Select.Option>
-            </Select>
+            <Select placeholder="Select category" options={categories.map(cat => ({ label: cat, value: cat }))} />
           </Form.Item>
           <Form.Item name="unit_name" label="Unit" initialValue="unit"><Input placeholder="Unit name (e.g., piece, box)" /></Form.Item>
           <Form.Item name="description" label="Description"><Input.TextArea rows={3} placeholder="Item description" /></Form.Item>
@@ -421,13 +486,74 @@ export default function RestrictedInventoryPage() {
             <Select 
               showSearch 
               placeholder="Select employee" 
+              notFoundContent={employees.length === 0 ? 'No employees found' : undefined}
               options={Array.isArray(employees) ? employees.map((emp) => ({ 
                 value: emp.employee_id, 
-                label: `${emp.employee_id} - ${emp.full_name}` 
+                label: `${emp.employee_id} - ${emp.full_name || emp.name || 'Unknown'}` 
               })) : []} 
             />
           </Form.Item>
         </Form>
+      </Modal>
+
+      {/* Category Management Modal */}
+      <Modal
+        title="Manage Categories"
+        open={categoryModalVisible}
+        onCancel={() => {
+          setCategoryModalVisible(false);
+          categoryForm.resetFields();
+          setEditingCategory(null);
+        }}
+        onOk={handleSubmitCategory}
+        okText={editingCategory ? 'Update' : 'Add'}
+        width={600}
+      >
+        {editingCategory ? (
+          <Form form={categoryForm} layout="vertical">
+            <Form.Item name="category" label="Category Name" rules={[{ required: true, message: 'Please enter category name' }]}>
+              <Input placeholder="Enter category name" />
+            </Form.Item>
+          </Form>
+        ) : (
+          <>
+            <Form form={categoryForm} layout="vertical" style={{ marginBottom: 24 }}>
+              <Form.Item name="category" label="New Category Name" rules={[{ required: true, message: 'Please enter category name' }]}>
+                <Input placeholder="Enter category name" />
+              </Form.Item>
+            </Form>
+            <div style={{ marginTop: '24px' }}>
+              <h4 style={{ marginBottom: '12px', fontWeight: 600 }}>Existing Categories:</h4>
+              <Space wrap>
+                {categories.length > 0 ? (
+                  categories.map(cat => (
+                    <Tag key={cat} color="blue" style={{ padding: '6px 12px', fontSize: '12px' }}>
+                      {cat}
+                      <DeleteOutlined 
+                        onClick={() => {
+                          Modal.confirm({
+                            title: 'Delete Category?',
+                            content: 'This action cannot be undone if items exist in this category.',
+                            okText: 'Delete',
+                            cancelText: 'Cancel',
+                            onOk: () => handleDeleteCategory(cat),
+                          });
+                        }}
+                        style={{ marginLeft: '8px', cursor: 'pointer' }}
+                      />
+                      <EditOutlined 
+                        onClick={() => handleEditCategory(cat)}
+                        style={{ marginLeft: '8px', cursor: 'pointer' }}
+                      />
+                    </Tag>
+                  ))
+                ) : (
+                  <p style={{ color: '#999' }}>No categories yet</p>
+                )}
+              </Space>
+            </div>
+          </>
+        )}
       </Modal>
     </div>
   );

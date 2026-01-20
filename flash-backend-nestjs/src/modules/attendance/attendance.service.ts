@@ -29,6 +29,8 @@ export class AttendanceService {
         .select({
           id: schema.attendance.id,
           employee_id: schema.attendance.employee_id,
+          fss_id: schema.employees.fss_number,
+          employee_name: schema.employees.full_name,
           date: schema.attendance.date,
           status: schema.attendance.status,
           note: schema.attendance.note,
@@ -41,6 +43,7 @@ export class AttendanceService {
           created_at: schema.attendance.created_at,
         })
         .from(schema.attendance)
+        .leftJoin(schema.employees, eq(schema.attendance.employee_id, schema.employees.employee_id))
         .where(eq(schema.attendance.date, date))
         .orderBy(asc(schema.attendance.employee_id));
       
@@ -57,6 +60,8 @@ export class AttendanceService {
         .select({
           id: schema.attendance.id,
           employee_id: schema.attendance.employee_id,
+          fss_id: schema.employees.fss_number,
+          employee_name: schema.employees.full_name,
           date: schema.attendance.date,
           status: schema.attendance.status,
           note: schema.attendance.note,
@@ -69,6 +74,7 @@ export class AttendanceService {
           created_at: schema.attendance.created_at,
         })
         .from(schema.attendance)
+        .leftJoin(schema.employees, eq(schema.attendance.employee_id, schema.employees.employee_id))
         .where(between(schema.attendance.date, fromDate, toDate))
         .orderBy(asc(schema.attendance.date), asc(schema.attendance.employee_id));
       
@@ -85,6 +91,8 @@ export class AttendanceService {
         .select({
           id: schema.attendance.id,
           employee_id: schema.attendance.employee_id,
+          fss_id: schema.employees.fss_number,
+          employee_name: schema.employees.full_name,
           date: schema.attendance.date,
           status: schema.attendance.status,
           note: schema.attendance.note,
@@ -97,6 +105,7 @@ export class AttendanceService {
           created_at: schema.attendance.created_at,
         })
         .from(schema.attendance)
+        .leftJoin(schema.employees, eq(schema.attendance.employee_id, schema.employees.employee_id))
         .where(
           and(
             eq(schema.attendance.employee_id, employeeId),

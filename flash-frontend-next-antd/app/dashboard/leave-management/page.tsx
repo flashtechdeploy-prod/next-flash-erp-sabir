@@ -2,16 +2,15 @@
 
 import { useState, useEffect } from 'react';
 import { Table, Button, Space, Tag, Drawer, Form, Input, DatePicker, Select, message, Popconfirm, Card, Row, Col, Statistic } from 'antd';
-import { PlusOutlined, CalendarOutlined, CheckCircleOutlined, ClockCircleOutlined } from '@ant-design/icons';
+import { PlusOutlined, CalendarOutlined, CheckCircleOutlined, ClockCircleOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { leaveApi, employeeApi } from '@/lib/api';
 import dayjs from 'dayjs';
-
-const { RangePicker } = DatePicker;
 
 interface LeaveRecord {
   id: number;
   employee_id: string;
   employee_name?: string;
+  fss_id?: string;
   from_date: string;
   to_date: string;
   leave_type: string;
@@ -30,9 +29,20 @@ export default function LeaveManagementPage() {
   const [searchText, setSearchText] = useState('');
 
   useEffect(() => {
-    loadData();
     loadEmployees();
   }, []);
+
+  useEffect(() => {
+    if (employees.length > 0) {
+      loadData();
+    }
+  }, [employees.length]);
+
+  const getFss = (obj: unknown): string | undefined => {
+    if (!obj || typeof obj !== 'object') return undefined;
+    const rec = obj as Record<string, unknown>;
+    return (rec.fss_id as string) || (rec.fss_number as string);
+  };
 
   const loadEmployees = async () => {
     try {
@@ -52,7 +62,6 @@ export default function LeaveManagementPage() {
       message.error('Failed to load employees');
     }
   };
-      console.log(leaves);
 
   const loadData = async () => {
     setLoading(true);
@@ -71,16 +80,21 @@ export default function LeaveManagementPage() {
         : (res.data as { leaves?: Array<Record<string, unknown>> })?.leaves || [];
       
       console.log('Raw leave data:', data);
-      // Calculate days and add employee names
+      // Calculate days and enrich with employee info
       const enriched = data.map((leave: Record<string, unknown>) => {
         const fromDate = dayjs(String(leave.from_date));
         const toDate = dayjs(String(leave.to_date));
         const days = toDate.diff(fromDate, 'day') + 1;
+        const emp = employees.find(e => e.employee_id === leave.employee_id);
+        const fssId = getFss(emp) || getFss(leave);
+        const employeeName = (emp?.full_name || emp?.name) as string | undefined;
         
         return {
           ...leave,
           days,
           status: (leave.status as string) || 'approved', // Use status from DB if available
+          fss_id: fssId,
+          employee_name: employeeName,
         } as LeaveRecord;
       });
       
@@ -96,6 +110,9 @@ export default function LeaveManagementPage() {
   const handleAdd = () => {
     setEditingLeave(null);
     form.resetFields();
+    form.setFieldsValue({
+      Status: 'approved',
+    });
     setDrawerVisible(true);
   };
 
@@ -106,6 +123,7 @@ export default function LeaveManagementPage() {
       dates: [dayjs(record.from_date), dayjs(record.to_date)],
       leave_type: record.leave_type,
       reason: record.reason,
+      Status: record.status,
     });
     setDrawerVisible(true);
   };
@@ -125,16 +143,24 @@ export default function LeaveManagementPage() {
     }
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (values: Record<string, unknown>) => {
     try {
-      const values = await form.validateFields();
+      const datesArray = (values.dates as unknown[]) || [];
+      if (!datesArray || datesArray.length !== 2) {
+        message.error('Please select valid leave period');
+        return;
+      }
+
       const data = {
-        employee_id: values.employee_id,
-        from_date: values.dates[0].format('YYYY-MM-DD'),
-        to_date: values.dates[1].format('YYYY-MM-DD'),
-        leave_type: values.leave_type,
-        reason: values.reason,
+        employee_id: String(values.employee_id),
+        from_date: (datesArray[0] as dayjs.Dayjs).format('YYYY-MM-DD'),
+        to_date: (datesArray[1] as dayjs.Dayjs).format('YYYY-MM-DD'),
+        leave_type: String(values.leave_type),
+        reason: String(values.reason),
+        status: String(values.Status),
       };
+
+      console.log('Submitting leave data:', data);
 
       let res;
       if (editingLeave) {
@@ -154,6 +180,7 @@ export default function LeaveManagementPage() {
       }
 
       setDrawerVisible(false);
+      form.resetFields();
       loadData();
     } catch (err) {
       message.error('Failed to save leave record');
@@ -163,11 +190,26 @@ export default function LeaveManagementPage() {
 
   const columns = [
     { 
-      title: 'Employee ID', 
-      dataIndex: 'employee_id', 
-      key: 'employee_id', 
-      width: 100,
-      render: (text: string) => <span style={{ fontSize: '11px' }}>{text}</span>
+      title: 'FSS ID', 
+      dataIndex: 'fss_id', 
+      key: 'fss_id', 
+      width: 110,
+      render: (_: string, record: LeaveRecord) => {
+        const emp = employees.find(e => e.employee_id === record.employee_id);
+        const fssId = record.fss_id || getFss(emp);
+        return <span style={{ fontSize: '11px' }}>{fssId || ''}</span>;
+      }
+    },
+    { 
+      title: 'Employee Name', 
+      dataIndex: 'employee_name', 
+      key: 'employee_name', 
+      width: 180,
+      render: (_: string, record: LeaveRecord) => {
+        const emp = employees.find(e => e.employee_id === record.employee_id);
+        const name = record.employee_name || (emp?.full_name || emp?.name);
+        return <span style={{ fontSize: '11px' }}>{name || '-'}</span>;
+      }
     },
     { 
       title: 'From Date', 
@@ -233,8 +275,9 @@ export default function LeaveManagementPage() {
           <Button 
             type="link" 
             size="small" 
+            icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
-            style={{ fontSize: '11px', padding: '0 4px' }}
+            style={{ padding: '0 4px' }}
           >
             Edit
           </Button>
@@ -248,7 +291,8 @@ export default function LeaveManagementPage() {
               type="link" 
               danger 
               size="small"
-              style={{ fontSize: '11px', padding: '0 4px' }}
+              icon={<DeleteOutlined />}
+              style={{ padding: '0 4px' }}
             >
               Delete
             </Button>
@@ -260,6 +304,8 @@ export default function LeaveManagementPage() {
 
   const filteredLeaves = leaves.filter(leave => 
     leave.employee_id.toLowerCase().includes(searchText.toLowerCase()) ||
+    (leave.fss_id || '').toLowerCase().includes(searchText.toLowerCase()) ||
+    (leave.employee_name || '').toLowerCase().includes(searchText.toLowerCase()) ||
     leave.leave_type.toLowerCase().includes(searchText.toLowerCase()) ||
     leave.reason?.toLowerCase().includes(searchText.toLowerCase())
   );
@@ -273,7 +319,7 @@ export default function LeaveManagementPage() {
   return (
     <div style={{ padding: '24px' }}>
       <div style={{ marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 600 }}>Leave Management</h2>
+        <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 600 }}>Long Leave</h2>
         <Space>
           <Input.Search
             placeholder="Search leaves..."
@@ -340,23 +386,29 @@ export default function LeaveManagementPage() {
       />
 
       <Drawer
-        title={editingLeave ? 'Edit Leave' : 'Add Leave'}
+        title={editingLeave ? 'Edit Leave Request' : 'Add Leave Request'}
         placement="right"
-        width={720}
-        onClose={() => setDrawerVisible(false)}
+        width={520}
+        onClose={() => {
+          setDrawerVisible(false);
+          form.resetFields();
+        }}
         open={drawerVisible}
         footer={
           <div style={{ textAlign: 'right' }}>
             <Space>
-              <Button onClick={() => setDrawerVisible(false)}>Cancel</Button>
-              <Button type="primary" onClick={handleSubmit}>
+              <Button onClick={() => {
+                setDrawerVisible(false);
+                form.resetFields();
+              }}>Cancel</Button>
+              <Button type="primary" onClick={() => form.submit()}>
                 {editingLeave ? 'Update' : 'Create'}
               </Button>
             </Space>
           </div>
         }
       >
-        <Form form={form} layout="vertical">
+        <Form form={form} layout="vertical" onFinish={handleSubmit}>
           <div style={{ 
             background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', 
             color: 'white', 
@@ -366,7 +418,7 @@ export default function LeaveManagementPage() {
             fontSize: '14px',
             fontWeight: 600
           }}>
-            Leave Information
+            Leave Request Information
           </div>
 
           <Form.Item
@@ -383,7 +435,7 @@ export default function LeaveManagementPage() {
               }
               options={employees.length > 0 ? employees.map((emp) => ({
                 value: emp.employee_id,
-                label: `${emp.employee_id} - ${emp.full_name}`,
+                label: `${getFss(emp) || ''} - ${emp.full_name || emp.name || emp.employee_id}`,
               })) : []}
               notFoundContent={employees.length === 0 ? 'No employees found' : undefined}
             />
@@ -394,7 +446,7 @@ export default function LeaveManagementPage() {
             label="Leave Period"
             rules={[{ required: true, message: 'Please select leave period' }]}
           >
-            <RangePicker style={{ width: '100%' }} />
+            <DatePicker.RangePicker style={{ width: '100%' }} />
           </Form.Item>
 
           <Form.Item
@@ -408,6 +460,18 @@ export default function LeaveManagementPage() {
               <Select.Option value="annual">Annual Leave</Select.Option>
               <Select.Option value="unpaid">Unpaid Leave</Select.Option>
               <Select.Option value="emergency">Emergency Leave</Select.Option>
+            </Select>
+          </Form.Item>
+
+          <Form.Item
+            name="Status"
+            label="Status"
+            rules={[{ required: true, message: 'Please select status' }]}
+          >
+            <Select placeholder="Select Status">
+              <Select.Option value="approved">Approved</Select.Option>
+              <Select.Option value="pending">Pending</Select.Option>
+              <Select.Option value="rejected">Rejected</Select.Option>
             </Select>
           </Form.Item>
 

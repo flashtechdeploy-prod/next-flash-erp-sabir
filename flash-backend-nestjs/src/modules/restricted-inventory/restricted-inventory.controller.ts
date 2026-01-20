@@ -46,6 +46,26 @@ export class RestrictedInventoryController {
     return this.service.deleteItem(item_code);
   }
 
+  @Get('categories')
+  async listCategories() {
+    return this.service.listCategories();
+  }
+
+  @Post('categories')
+  async createCategory(@Body() dto: { category: string }) {
+    return this.service.createCategory(dto.category);
+  }
+
+  @Put('categories/:category')
+  async updateCategory(@Param('category') category: string, @Body() dto: { newCategory: string }) {
+    return this.service.updateCategory(category, dto.newCategory);
+  }
+
+  @Delete('categories/:category')
+  async deleteCategory(@Param('category') category: string) {
+    return this.service.deleteCategory(category);
+  }
+
   @Get('items/:item_code/serial-units')
   async listSerialUnits(@Param('item_code') item_code: string) {
     return this.service.listSerialUnits(item_code);

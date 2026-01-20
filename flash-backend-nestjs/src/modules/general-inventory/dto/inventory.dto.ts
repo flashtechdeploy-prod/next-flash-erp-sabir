@@ -2,7 +2,7 @@ import { IsString, IsNumber, IsOptional, IsBoolean, IsEnum } from 'class-validat
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class GeneralInventoryItemDto {
-  @ApiProperty() @IsString() item_code: string;
+  @ApiPropertyOptional() @IsString() @IsOptional() item_code?: string;
   @ApiProperty() @IsString() name: string;
   @ApiProperty() @IsString() category: string;
   @ApiProperty() @IsString() unit_name: string;

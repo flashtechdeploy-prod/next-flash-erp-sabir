@@ -5,13 +5,13 @@ import { useParams, useRouter } from 'next/navigation';
 import {
   Card, Button, Space, Table, Drawer, Form, Input,
   message, Popconfirm, Tag, Spin, Select, Tabs, InputNumber, DatePicker,
-  Upload, Modal, List, Avatar
+  Upload, Modal, List, Avatar, Image
 } from 'antd';
 import {
   ArrowLeftOutlined, EditOutlined, DeleteOutlined, PlusOutlined,
   PrinterOutlined, TeamOutlined, EnvironmentOutlined, FileTextOutlined,
   UserOutlined, UploadOutlined, FileOutlined, UserAddOutlined,
-  UserDeleteOutlined, DownloadOutlined
+  UserDeleteOutlined, DownloadOutlined, FilePdfOutlined
 } from '@ant-design/icons';
 import { clientApi } from '@/lib/api';
 import ClientForm from '../ClientForm';
@@ -53,6 +53,8 @@ export default function ClientDetailPage() {
   const [selectedContractId, setSelectedContractId] = useState<number | null>(null);
   const [contractDocuments, setContractDocuments] = useState<Array<Record<string, unknown>>>([]);
   const [uploadingDocument, setUploadingDocument] = useState(false);
+  const [previewVisible, setPreviewVisible] = useState(false);
+  const [previewFile, setPreviewFile] = useState('');
 
   const [guardsModalVisible, setGuardsModalVisible] = useState(false);
   const [assignGuardDrawerVisible, setAssignGuardDrawerVisible] = useState(false);
@@ -147,6 +149,7 @@ export default function ClientDetailPage() {
     message.success('Contact deleted');
     fetchContacts();
   };
+
 
   // Site handlers
   const handleSiteSubmit = async (values: Record<string, unknown>) => {
@@ -298,6 +301,10 @@ export default function ClientDetailPage() {
     fetchSites(); // Refresh to update guard counts
   };
 
+  console.log('contacts', contacts);
+
+
+  
   const handlePrint = () => {
     const printContent = printRef.current;
     if (!printContent) return;
@@ -335,6 +342,7 @@ export default function ClientDetailPage() {
   if (!client) return <div>Client not found</div>;
 
   const contactColumns = [
+    { title: 'Contact ID', dataIndex: 'id', key: 'id', width: 100, render: (id: number) => `CIT-${String(id).padStart(4, '0')}` },
     { title: 'Name', dataIndex: 'name', key: 'name' },
     { title: 'Email', dataIndex: 'email', key: 'email' },
     { title: 'Phone', dataIndex: 'phone', key: 'phone' },
@@ -352,15 +360,14 @@ export default function ClientDetailPage() {
       render: (_: unknown, record: Record<string, unknown>) => (
         <Space>
           <Button type="link" size="small" icon={<EditOutlined />} onClick={() => { setEditingContact(record); contactForm.setFieldsValue(record); setContactDrawerVisible(true); }} />
-          <Popconfirm title="Delete?" onConfirm={() => handleDeleteContact(record.id as number)}>
-            <Button type="link" size="small" danger icon={<DeleteOutlined />} />
-          </Popconfirm>
+      
         </Space>
       ),
     },
   ];
 
   const siteColumns = [
+    { title: 'Site ID', dataIndex: 'id', key: 'id', width: 100, render: (id: number) => `SITE-${String(id).padStart(4, '0')}` },
     { title: 'Name', dataIndex: 'name', key: 'name' },
     { title: 'Address', dataIndex: 'address', key: 'address', ellipsis: true },
     { title: 'City', dataIndex: 'city', key: 'city' },
@@ -402,16 +409,13 @@ export default function ClientDetailPage() {
       render: (_: unknown, record: Record<string, unknown>) => (
         <Space>
           <Button type="link" size="small" icon={<EditOutlined />} onClick={() => { setEditingSite(record); siteForm.setFieldsValue(record); setSiteDrawerVisible(true); }} />
-          <Popconfirm title="Delete?" onConfirm={() => handleDeleteSite(record.id as number)}>
-            <Button type="link" size="small" danger icon={<DeleteOutlined />} />
-          </Popconfirm>
         </Space>
       ),
     },
   ];
 
   const contractColumns = [
-    { title: 'Contract #', dataIndex: 'contract_number', key: 'contract_number' },
+    { title: 'Contract #', dataIndex: 'contract_number', key: 'contract_number', width: 120, render: (val: string) => val || '-' },
     { title: 'Start Date', dataIndex: 'start_date', key: 'start_date' },
     { title: 'End Date', dataIndex: 'end_date', key: 'end_date' },
     { title: 'Value', dataIndex: 'value', key: 'value', render: (val: number) => val ? `Rs ${val.toLocaleString()}` : '-' },
@@ -449,9 +453,7 @@ export default function ClientDetailPage() {
             contractForm.setFieldsValue(values);
             setContractDrawerVisible(true);
           }} />
-          <Popconfirm title="Delete?" onConfirm={() => handleDeleteContract(record.id as number)}>
-            <Button type="link" size="small" danger icon={<DeleteOutlined />} />
-          </Popconfirm>
+    
         </Space>
       ),
     },
@@ -630,7 +632,7 @@ export default function ClientDetailPage() {
       >
         <Form form={contractForm} layout="vertical" onFinish={handleContractSubmit}>
           <Form.Item label="Contract Number" name="contract_number">
-            <Input placeholder="CNT-2024-001" />
+            <Input placeholder={editingContract ? "CTN-0001" : "Auto-generated (CTN-####)"} disabled={!editingContract} />
           </Form.Item>
           <Form.Item label="Start Date" name="start_date">
             <DatePicker style={{ width: '100%' }} />
@@ -686,23 +688,23 @@ export default function ClientDetailPage() {
             <List.Item
               actions={[
                 <Button
+                  key="preview"
+                  type="link"
+                  onClick={() => {
+                    setPreviewFile(item.file_path as string);
+                    setPreviewVisible(true);
+                  }}
+                >
+                  Preview
+                </Button>,
+                <Button
                   key="download"
                   type="link"
-                  icon={<DownloadOutlined />}
                   href={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/${item.file_path}`}
                   target="_blank"
                 >
                   Download
                 </Button>,
-                <Popconfirm
-                  key="delete"
-                  title="Delete this document?"
-                  onConfirm={() => selectedContractId && handleDeleteDocument(selectedContractId, item.id as number)}
-                >
-                  <Button type="link" danger icon={<DeleteOutlined />}>
-                    Delete
-                  </Button>
-                </Popconfirm>,
               ]}
             >
               <List.Item.Meta
@@ -822,6 +824,50 @@ export default function ClientDetailPage() {
             <TextArea rows={3} placeholder="Any additional notes..." />
           </Form.Item>
         </Form>
+      </Drawer>
+
+      <Drawer
+        title="Document Preview"
+        open={previewVisible}
+        onClose={() => setPreviewVisible(false)}
+        size="large"
+        footer={
+          <div style={{ textAlign: 'right' }}>
+            <Button icon={<DownloadOutlined />} href={previewFile} target="_blank" style={{ marginRight: 8 }}>Download</Button>
+            <Button onClick={() => setPreviewVisible(false)}>Close</Button>
+          </div>
+        }
+      >
+        <div style={{ background: '#f5f5f5', padding: '20px', borderRadius: '8px', minHeight: '500px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          {previewFile.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
+            <div style={{ background: 'white', padding: '10px', borderRadius: '4px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
+              <Image
+                src={previewFile}
+                alt="Preview"
+                style={{ maxWidth: '100%', maxHeight: '70vh', objectFit: 'contain' }}
+                preview={false}
+              />
+            </div>
+          ) : previewFile.match(/\.pdf$/i) ? (
+            <iframe
+              src={previewFile}
+              style={{
+                width: '100%',
+                height: '70vh',
+                border: 'none',
+                borderRadius: '4px',
+                background: 'white',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+              }}
+            />
+          ) : (
+            <div style={{ textAlign: 'center', padding: '40px' }}>
+              <FilePdfOutlined style={{ fontSize: 80, color: '#bfbfbf', marginBottom: '20px' }} />
+              <p style={{ fontSize: '16px', color: '#666', marginBottom: '10px' }}>Preview not available for this file type</p>
+              <p style={{ fontSize: '14px', color: '#999' }}>Click download to view the file</p>
+            </div>
+          )}
+        </div>
       </Drawer>
 
       <style jsx>{`

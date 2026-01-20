@@ -14,9 +14,8 @@ import { ApiPropertyOptional, PartialType } from '@nestjs/swagger';
  */
 export class CreateEmployeeDto {
   // Basic Identification
-  @ApiPropertyOptional() @IsString() @IsOptional() photo?: string;
   @ApiPropertyOptional() @IsString() @IsOptional() profile_photo?: string;
-  @ApiPropertyOptional() @IsString() @IsOptional() avatar_url?: string;
+  @ApiPropertyOptional() @IsOptional() _profilePhotoFile?: any;
   @ApiPropertyOptional() @IsString() @IsOptional() full_name?: string;
   @ApiPropertyOptional() @IsString() @IsOptional() name?: string;
   @ApiPropertyOptional() @IsString() @IsOptional() first_name?: string;
@@ -124,6 +123,9 @@ export class CreateEmployeeDto {
   @ApiPropertyOptional() @IsString() @IsOptional() bdm?: string;
   @ApiPropertyOptional() @IsString() @IsOptional() bank_name?: string;
   @ApiPropertyOptional() @IsString() @IsOptional() account_number?: string;
+  @ApiPropertyOptional() @IsString() @IsOptional() eobi_no?: string;
+  @ApiPropertyOptional() @IsString() @IsOptional() insurance?: string;
+  @ApiPropertyOptional() @IsString() @IsOptional() social_security?: string;
 
   // Training & Verification
   @ApiPropertyOptional() @IsString() @IsOptional() security_clearance?: string;
@@ -149,6 +151,10 @@ export class CreateEmployeeDto {
   @IsString()
   @IsOptional()
   ssp_verification_date?: string;
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  verified_by_khidmat_markaz?: string;
 
   // Documents
   @ApiPropertyOptional()
@@ -209,6 +215,16 @@ export class EmployeeQueryDto {
   @ApiPropertyOptional() @IsString() @IsOptional() unit?: string;
   @ApiPropertyOptional() @IsString() @IsOptional() rank?: string;
   @ApiPropertyOptional() @IsString() @IsOptional() deployed_at?: string;
+  @ApiPropertyOptional() @IsString() @IsOptional() fss_number?: string;
+  @ApiPropertyOptional() @IsString() @IsOptional() full_name?: string;
+  @ApiPropertyOptional() @IsString() @IsOptional() cnic?: string;
+  @ApiPropertyOptional() @IsString() @IsOptional() father_name?: string;
+  @ApiPropertyOptional() @IsString() @IsOptional() date_of_birth?: string;
+  @ApiPropertyOptional() @IsString() @IsOptional() mobile_number?: string;
+  @ApiPropertyOptional() @IsString() @IsOptional() department?: string;
+  @ApiPropertyOptional() @IsString() @IsOptional() designation?: string;
+  @ApiPropertyOptional() @IsString() @IsOptional() enrolled_as?: string;
+  @ApiPropertyOptional() @IsString() @IsOptional() date_of_enrolment?: string;
   @ApiPropertyOptional() @IsString() @IsOptional() sort_by?: string;
   @ApiPropertyOptional() @IsString() @IsOptional() sort_order?: 'asc' | 'desc';
   @ApiPropertyOptional() @IsOptional() with_total?: boolean;

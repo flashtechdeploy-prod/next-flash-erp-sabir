@@ -1,36 +1,66 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Table, Button, Space, Tag, Drawer, Form, Input, InputNumber, Select, message, Popconfirm, Card, Row, Col, Statistic, Tabs } from 'antd';
-import { PlusOutlined, InboxOutlined, WarningOutlined, CheckCircleOutlined } from '@ant-design/icons';
+import { Table, Button, Space, Tag, Drawer, Form, Input, InputNumber, Select, message, Popconfirm, Card, Row, Col, Statistic, Tabs, Modal } from 'antd';
+import { PlusOutlined, InboxOutlined, WarningOutlined, CheckCircleOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import { generalInventoryApi, employeeApi } from '@/lib/api';
 
 export default function GeneralInventoryPage() {
   const [items, setItems] = useState<Record<string, unknown>[]>([]);
   const [transactions, setTransactions] = useState<Record<string, unknown>[]>([]);
   const [employees, setEmployees] = useState<Record<string, unknown>[]>([]);
+  const [categories, setCategories] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [itemDrawerVisible, setItemDrawerVisible] = useState(false);
   const [transactionDrawerVisible, setTransactionDrawerVisible] = useState(false);
+  const [categoryModalVisible, setCategoryModalVisible] = useState(false);
   const [editingItem, setEditingItem] = useState<Record<string, unknown> | null>(null);
+  const [editingCategory, setEditingCategory] = useState<string | null>(null);
   const [selectedItem, setSelectedItem] = useState<Record<string, unknown> | null>(null);
   const [form] = Form.useForm();
   const [transactionForm] = Form.useForm();
+  const [categoryForm] = Form.useForm();
   const [searchText, setSearchText] = useState('');
 
   useEffect(() => {
     loadData();
     loadEmployees();
+    loadCategories();
   }, []);
+
+  const loadCategories = async () => {
+    try {
+      const response = await generalInventoryApi.getCategories();
+      console.log('Categories response:', response);
+      const categoryList = response.data ? (Array.isArray(response.data) ? response.data : []) : [];
+      console.log('Loaded categories:', categoryList);
+      setCategories(categoryList);
+    } catch (error) {
+      console.error('Failed to load categories:', error);
+    }
+  };
 
   const loadEmployees = async () => {
     try {
       const response = await employeeApi.getAll();
       console.log('Employees response:', response);
-      const employeeList = response.data ? (Array.isArray(response.data) ? response.data : []) : [];
+      let employeeList: Record<string, unknown>[] = [];
+      
+      if (Array.isArray(response)) {
+        employeeList = response;
+      } else if (response?.data) {
+        if (Array.isArray(response.data)) {
+          employeeList = response.data;
+        } else if (Array.isArray(response.data.employees)) {
+          employeeList = response.data.employees;
+        }
+      }
+      
+      console.log('Loaded employees:', employeeList);
       setEmployees(employeeList);
-    } catch {
-      console.error('Failed to load employees');
+    } catch (error) {
+      console.error('Failed to load employees:', error);
+      setEmployees([]);
     }
   };
 
@@ -83,8 +113,7 @@ export default function GeneralInventoryPage() {
     try {
       const values = await form.validateFields();
       // Map form field names to API field names
-      const data = {
-        item_code: values.item_code,
+      const data: any = {
         name: values.name,  // Backend expects 'name', not 'item_name'
         category: values.category,
         unit_name: values.unit_name,  // Backend expects 'unit_name', not 'unit'
@@ -94,9 +123,11 @@ export default function GeneralInventoryPage() {
       };
 
       if (editingItem) {
+        // For edit, include the item_code to update the correct record
         await generalInventoryApi.updateItem(String(editingItem.item_code), data);
         message.success('Item updated');
       } else {
+        // For create, don't send item_code - let backend auto-generate it
         await generalInventoryApi.createItem(data);
         message.success('Item created');
       }
@@ -143,6 +174,48 @@ export default function GeneralInventoryPage() {
       loadData();
     } catch {
       message.error('Failed to record transaction');
+    }
+  };
+
+  const handleAddCategory = () => {
+    setEditingCategory(null);
+    categoryForm.resetFields();
+    setCategoryModalVisible(true);
+  };
+
+  const handleEditCategory = (category: string) => {
+    setEditingCategory(category);
+    categoryForm.setFieldsValue({ category });
+    setCategoryModalVisible(true);
+  };
+
+  const handleSubmitCategory = async () => {
+    try {
+      const values = await categoryForm.validateFields();
+      if (editingCategory) {
+        await generalInventoryApi.updateCategory(editingCategory, values.category);
+        message.success('Category updated');
+      } else {
+        await generalInventoryApi.createCategory(values.category);
+        message.success('Category added');
+      }
+      setCategoryModalVisible(false);
+      categoryForm.resetFields();
+      setEditingCategory(null);
+      loadCategories();
+    } catch (error) {
+      console.error('Save error:', error);
+      message.error('Failed to save category');
+    }
+  };
+
+  const handleDeleteCategory = async (category: string) => {
+    try {
+      await generalInventoryApi.deleteCategory(category);
+      message.success('Category deleted');
+      loadCategories();
+    } catch (error: any) {
+      message.error(error.response?.data?.message || 'Failed to delete category');
     }
   };
 
@@ -215,6 +288,7 @@ export default function GeneralInventoryPage() {
         <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 600 }}>General Inventory</h2>
         <Space>
           <Input.Search placeholder="Search items..." value={searchText} onChange={(e) => setSearchText(e.target.value)} style={{ width: 250 }} />
+          <Button onClick={() => setCategoryModalVisible(true)}>Manage Categories</Button>
           <Button type="primary" icon={<PlusOutlined />} onClick={handleAddItem}>Add Item</Button>
         </Space>
       </div>
@@ -254,17 +328,10 @@ export default function GeneralInventoryPage() {
       >
         <Form form={form} layout="vertical">
           <div style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white', padding: '12px 16px', marginBottom: '24px', borderRadius: '4px', fontSize: '14px', fontWeight: 600 }}>Item Details</div>
-          <Form.Item name="item_code" label="Item Code" rules={[{ required: true, message: 'Please enter item code' }]}><Input placeholder="Enter item code" disabled={!!editingItem} /></Form.Item>
+          <Form.Item name="item_code" label="Item Code"><Input placeholder={editingItem ? "Cannot edit code" : "Auto-generated (FGI-##)"} disabled /></Form.Item>
           <Form.Item name="name" label="Item Name" rules={[{ required: true, message: 'Please enter item name' }]}><Input placeholder="Enter item name" /></Form.Item>
           <Form.Item name="category" label="Category" rules={[{ required: true, message: 'Please select category' }]}>
-            <Select placeholder="Select category">
-              <Select.Option value="Uniforms">Uniforms</Select.Option>
-              <Select.Option value="Equipment">Equipment</Select.Option>
-              <Select.Option value="Stationery">Stationery</Select.Option>
-              <Select.Option value="Tools">Tools</Select.Option>
-              <Select.Option value="Safety Gear">Safety Gear</Select.Option>
-              <Select.Option value="Other">Other</Select.Option>
-            </Select>
+            <Select placeholder="Select category" options={categories.map(cat => ({ label: cat, value: cat }))} />
           </Form.Item>
           <Form.Item name="unit_name" label="Unit Name" rules={[{ required: true, message: 'Please enter unit name' }]}><Input placeholder="e.g., pcs, kg, box" /></Form.Item>
           <Form.Item name="quantity_on_hand" label="Quantity in Stock" rules={[{ required: true, message: 'Please enter quantity' }]}><InputNumber style={{ width: '100%' }} min={0} /></Form.Item>
@@ -296,11 +363,71 @@ export default function GeneralInventoryPage() {
           </Form.Item>
           <Form.Item name="quantity" label="Quantity" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} min={1} /></Form.Item>
           <Form.Item name="employee_id" label="Employee">
-            <Select showSearch placeholder="Select employee" options={employees.map((emp) => ({ value: emp.employee_id, label: `${emp.employee_id} - ${emp.full_name}` }))} />
+            <Select showSearch placeholder="Select employee" notFoundContent={employees.length === 0 ? 'No employees found' : undefined} options={employees.map((emp) => ({ value: emp.employee_id, label: `${emp.employee_id} - ${emp.full_name || emp.name || 'Unknown'}` }))} />
           </Form.Item>
           <Form.Item name="notes" label="Notes"><Input.TextArea rows={3} placeholder="Additional notes" /></Form.Item>
         </Form>
       </Drawer>
+
+      {/* Category Management Modal */}
+      <Modal
+        title="Manage Categories"
+        open={categoryModalVisible}
+        onCancel={() => {
+          setCategoryModalVisible(false);
+          categoryForm.resetFields();
+          setEditingCategory(null);
+        }}
+        onOk={handleSubmitCategory}
+        okText={editingCategory ? 'Update' : 'Add'}
+        width={600}
+      >
+        {editingCategory ? (
+          <Form form={categoryForm} layout="vertical">
+            <Form.Item name="category" label="Category Name" rules={[{ required: true, message: 'Please enter category name' }]}>
+              <Input placeholder="Enter category name" />
+            </Form.Item>
+          </Form>
+        ) : (
+          <>
+            <Form form={categoryForm} layout="vertical" style={{ marginBottom: 24 }}>
+              <Form.Item name="category" label="New Category Name" rules={[{ required: true, message: 'Please enter category name' }]}>
+                <Input placeholder="Enter category name" />
+              </Form.Item>
+            </Form>
+            <div style={{ marginTop: '24px' }}>
+              <h4 style={{ marginBottom: '12px', fontWeight: 600 }}>Existing Categories:</h4>
+              <Space wrap>
+                {categories.length > 0 ? (
+                  categories.map(cat => (
+                    <Tag key={cat} color="blue" style={{ padding: '6px 12px', fontSize: '12px' }}>
+                      {cat}
+                      <DeleteOutlined 
+                        onClick={() => {
+                          Modal.confirm({
+                            title: 'Delete Category?',
+                            content: 'This action cannot be undone if items exist in this category.',
+                            okText: 'Delete',
+                            cancelText: 'Cancel',
+                            onOk: () => handleDeleteCategory(cat),
+                          });
+                        }}
+                        style={{ marginLeft: '8px', cursor: 'pointer' }}
+                      />
+                      <EditOutlined 
+                        onClick={() => handleEditCategory(cat)}
+                        style={{ marginLeft: '8px', cursor: 'pointer' }}
+                      />
+                    </Tag>
+                  ))
+                ) : (
+                  <p style={{ color: '#999' }}>No categories yet</p>
+                )}
+              </Space>
+            </div>
+          </>
+        )}
+      </Modal>
     </div>
   );
 }

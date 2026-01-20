@@ -1,6 +1,8 @@
 'use client';
 
-import { Form, Input, Button, Row, Col, DatePicker, InputNumber, Select, Divider } from 'antd';
+import { useEffect, useRef } from 'react';
+import { Form, Input, Button, Row, Col, DatePicker, InputNumber, Select, Divider, Upload } from 'antd';
+import { CameraOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 
 const { TextArea } = Input;
@@ -14,7 +16,6 @@ interface EmployeeFormProps {
 const DOCUMENT_CATEGORIES = [
   { label: 'CNIC (Front)', value: 'cnic_front' },
   { label: 'CNIC (Back)', value: 'cnic_back' },
-  { label: 'Photo', value: 'photo' },
   { label: 'Educational Certificate', value: 'education_cert' },
   { label: 'Experience Letter', value: 'experience_letter' },
   { label: 'Police Verification', value: 'police_verification' },
@@ -34,40 +35,74 @@ export default function EmployeeForm({
   onCancel,
 }: EmployeeFormProps) {
   const [form] = Form.useForm();
+  const profilePhotoFileRef = useRef<any>(null);
+
+  const handleProfilePictureChange = ({ fileList }: any) => {
+    if (!Array.isArray(fileList)) {
+      profilePhotoFileRef.current = null;
+      return;
+    }
+    // Store file in ref, not in form
+    profilePhotoFileRef.current = fileList;
+  };
 
   const handleSubmit = (values: Record<string, unknown>) => {
     const formattedValues = { ...values };
-    
+
     // Convert dates to strings
-    const dateFields = ['cnic_expiry_date', 'date_of_birth', 'date_of_enrolment', 
-      'date_of_re_enrolment', 'agreement_date', 'sho_verification_date', 'ssp_verification_date'];
-    
+    const dateFields = ['cnic_expiry_date', 'date_of_birth', 'date_of_enrolment',
+      'date_of_re_enrolment', 'agreement_date', 'sho_verification_date', 'ssp_verification_date', 'verified_by_khidmat_markaz'];
+
     dateFields.forEach(field => {
       if (formattedValues[field]) {
         formattedValues[field] = dayjs(formattedValues[field] as string).format('YYYY-MM-DD');
       }
     });
-    
+
+    // Always remove profile_photo field - it will be handled via document upload if there's a new file
+    delete formattedValues.profile_photo;
+
+    // Only add _profilePhotoFile if there's a new file to upload (from ref)
+    if (profilePhotoFileRef.current && Array.isArray(profilePhotoFileRef.current) && profilePhotoFileRef.current.length > 0) {
+      formattedValues._profilePhotoFile = profilePhotoFileRef.current;
+    }
+
     onSubmit(formattedValues);
   };
 
-  // Convert string dates to dayjs for initial values
   const getInitialValues = () => {
-    if (!initialValues) return { status: 'Active' };
-    
+    if (!initialValues) return { status: 'Active', profile_photo: [] };
+
     const values = { ...initialValues };
-    const dateFields = ['cnic_expiry_date', 'date_of_birth', 'date_of_enrolment', 
-      'date_of_re_enrolment', 'agreement_date', 'sho_verification_date', 'ssp_verification_date'];
-    
+    const dateFields = ['cnic_expiry_date', 'date_of_birth', 'date_of_enrolment',
+      'date_of_re_enrolment', 'agreement_date', 'sho_verification_date', 'ssp_verification_date', 'verified_by_khidmat_markaz'];
+
     dateFields.forEach(field => {
       const val = values[field];
       if (val && typeof val === 'string') {
         values[field] = dayjs(val);
       }
     });
-    
+
+    if (values.profile_photo && typeof values.profile_photo === 'string') {
+      values.profile_photo = [{
+        uid: '-1',
+        name: 'profile-photo.jpg',
+        status: 'done',
+        url: values.profile_photo as string,
+      }];
+    } else if (!values.profile_photo || !Array.isArray(values.profile_photo)) {
+      // Ensure it's always an array
+      values.profile_photo = [];
+    }
+
     return values;
   };
+
+  // Update form when initialValues change (e.g., when editing different employees)
+  useEffect(() => {
+    form.setFieldsValue(getInitialValues());
+  }, [initialValues, form]);
 
   return (
     <Form
@@ -80,6 +115,35 @@ export default function EmployeeForm({
       {/* BASIC IDENTIFICATION */}
       <Divider>Basic Identification</Divider>
       <Row gutter={16}>
+        <Col span={24}>
+          <Form.Item
+            label="Profile Picture"
+            name="profile_photo"
+            valuePropName="fileList"
+            getValueFromEvent={(e) => {
+              if (Array.isArray(e)) {
+                return e;
+              }
+              return e?.fileList || [];
+            }}
+            normalize={(value) => {
+              // Extra safety: ensure value is always an array
+              if (!value) return [];
+              if (Array.isArray(value)) return value;
+              return [];
+            }}
+          >
+            <Upload
+              maxCount={1}
+              beforeUpload={() => false}
+              listType="picture"
+              accept="image/*"
+              onChange={handleProfilePictureChange}
+            >
+              <Button icon={<CameraOutlined />}>Upload Picture</Button>
+            </Upload>
+          </Form.Item>
+        </Col>
         <Col span={8}>
           <Form.Item label="Full Name" name="full_name" rules={[{ required: true, message: 'Name is required' }]}>
             <Input placeholder="Full name as per CNIC" />
@@ -149,18 +213,26 @@ export default function EmployeeForm({
       <Divider>Service Details</Divider>
       <Row gutter={16}>
         <Col span={6}>
+          <Form.Item label="Person Status" name="rank" rules={[{ required: true, message: 'Person Status is required' }]}>
+            <Select placeholder="Select Military/Service Status" options={[
+              { label: 'Army', value: 'Army' },
+              { label: 'Navy', value: 'Navy' },
+              { label: 'PAF', value: 'PAF' },
+              { label: 'Police', value: 'Police' },
+              { label: 'FC', value: 'FC' },
+              { label: 'MJD', value: 'MJD' },
+              { label: 'Civil', value: 'Civil' },
+            ]} />
+          </Form.Item>
+        </Col>
+        <Col span={6}>
+          <Form.Item label="EOBI Number" name="eobi_no">
+            <Input placeholder="EOBI account number" />
+          </Form.Item>
+        </Col>
+        <Col span={6}>
           <Form.Item label="FSS Number" name="fss_number">
             <Input placeholder="FSS-2024-001" />
-          </Form.Item>
-        </Col>
-        <Col span={6}>
-          <Form.Item label="Rank" name="rank">
-            <Input placeholder="Guard/Supervisor" />
-          </Form.Item>
-        </Col>
-        <Col span={6}>
-          <Form.Item label="Unit" name="unit">
-            <Input placeholder="Alpha/Bravo" />
           </Form.Item>
         </Col>
         <Col span={6}>
@@ -171,6 +243,16 @@ export default function EmployeeForm({
               { label: 'Suspended', value: 'Suspended' },
               { label: 'Left', value: 'Left' },
             ]} />
+          </Form.Item>
+        </Col>
+        <Col span={6}>
+          <Form.Item label="Rank" name="rank">
+            <Input placeholder="Guard/Supervisor" />
+          </Form.Item>
+        </Col>
+        <Col span={6}>
+          <Form.Item label="Unit" name="unit">
+            <Input placeholder="Alpha/Bravo" />
           </Form.Item>
         </Col>
         <Col span={6}>
@@ -333,13 +415,33 @@ export default function EmployeeForm({
           </Form.Item>
         </Col>
         <Col span={6}>
+          <Form.Item label="Al-Khidmat Verification Date" name="verified_by_khidmat_markaz">
+            <DatePicker style={{ width: '100%' }} />
+          </Form.Item>
+        </Col>
+        <Col span={6}>
+          <Form.Item label="Social Security #" name="social_security">
+            <Input placeholder="SSN or Social Security Number" />
+          </Form.Item>
+        </Col>
+        <Col span={6}>
           <Form.Item label="Agreement Date" name="agreement_date">
             <DatePicker style={{ width: '100%' }} />
           </Form.Item>
         </Col>
         <Col span={6}>
+          <Form.Item label="Social Security #" name="social_security">
+            <Input placeholder="SSN or Social Security Number" />
+          </Form.Item>
+        </Col>
+        <Col span={6}>
           <Form.Item label="Documents Held" name="original_document_held">
             <Input placeholder="CNIC, Certificates" />
+          </Form.Item>
+        </Col>
+        <Col span={24}>
+          <Form.Item label="Insurance" name="insurance">
+            <TextArea rows={3} placeholder="Insurance details, policy number, coverage..." />
           </Form.Item>
         </Col>
         <Col span={24}>

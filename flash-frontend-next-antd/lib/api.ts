@@ -87,6 +87,7 @@ class ApiClient {
   async uploadFile<T>(
     endpoint: string,
     formData: FormData,
+    method: string = "POST",
   ): Promise<ApiResponse<T>> {
     try {
       const headers: HeadersInit = {};
@@ -98,7 +99,7 @@ class ApiClient {
       }
 
       const response = await fetch(`${this.baseUrl}${endpoint}`, {
-        method: "POST",
+        method,
         headers,
         body: formData,
       });
@@ -542,6 +543,9 @@ export const generalInventoryApi = {
 
   // Categories
   getCategories: () => api.get("/api/general-inventory/categories"),
+  createCategory: (category: string) => api.post("/api/general-inventory/categories", { category }),
+  updateCategory: (category: string, newCategory: string) => api.put(`/api/general-inventory/categories/${category}`, { newCategory }),
+  deleteCategory: (category: string) => api.delete(`/api/general-inventory/categories/${category}`),
 
   // Transactions
   getTransactions: (query?: Record<string, unknown>) => {
@@ -583,6 +587,12 @@ export const restrictedInventoryApi = {
     api.put(`/api/restricted-inventory/items/${itemCode}`, data),
   deleteItem: (itemCode: string) =>
     api.delete(`/api/restricted-inventory/items/${itemCode}`),
+
+  // Categories
+  getCategories: () => api.get("/api/restricted-inventory/categories"),
+  createCategory: (category: string) => api.post("/api/restricted-inventory/categories", { category }),
+  updateCategory: (category: string, newCategory: string) => api.put(`/api/restricted-inventory/categories/${category}`, { newCategory }),
+  deleteCategory: (category: string) => api.delete(`/api/restricted-inventory/categories/${category}`),
 
   // Serial Units
   getSerialUnits: (itemCode: string) =>
@@ -732,3 +742,9 @@ export const usersApi = {
     api.put(`/api/users/${id}`, data),
   delete: (id: number) => api.delete(`/api/users/${id}`),
 };
+
+export const companySettingsApi = {
+  get: () => api.get('/api/company-settings'),
+  update: (data: any) => api.uploadFile('/api/company-settings', data, 'PUT'),
+};
+
