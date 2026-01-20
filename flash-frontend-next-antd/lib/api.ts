@@ -625,6 +625,12 @@ export const restrictedInventoryApi = {
       `/api/restricted-inventory/serial-units/${serialUnitId}/return`,
       {},
     ),
+
+  // Quantity operations (for ammunition/consumables)
+  issueItem: (itemCode: string, data: Record<string, unknown>) =>
+    api.post(`/api/restricted-inventory/items/${itemCode}/issue`, data),
+  returnItem: (itemCode: string, data: Record<string, unknown>) =>
+    api.post(`/api/restricted-inventory/items/${itemCode}/return`, data),
 };
 
 // Finance API

@@ -1,4 +1,4 @@
-import { IsString, IsNumber, IsOptional, IsBoolean, IsEnum } from 'class-validator';
+import { IsString, IsNumber, IsOptional, IsBoolean } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class GeneralInventoryItemDto {
@@ -20,7 +20,10 @@ export class RestrictedInventoryItemDto extends GeneralInventoryItemDto {
   @ApiPropertyOptional() @IsString() @IsOptional() make_model?: string;
   @ApiPropertyOptional() @IsString() @IsOptional() caliber?: string;
   @ApiPropertyOptional() @IsString() @IsOptional() storage_location?: string;
-  @ApiPropertyOptional() @IsBoolean() @IsOptional() requires_maintenance?: boolean;
+  @ApiPropertyOptional()
+  @IsBoolean()
+  @IsOptional()
+  requires_maintenance?: boolean;
   @ApiPropertyOptional() @IsBoolean() @IsOptional() requires_cleaning?: boolean;
 }
 

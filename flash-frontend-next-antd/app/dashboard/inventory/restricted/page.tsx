@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Table, Button, Space, Tag, Drawer, Form, Input, Select, message, Popconfirm, Card, Row, Col, Statistic, Tabs, Modal } from 'antd';
+import { Table, Button, Space, Tag, Drawer, Form, Input, InputNumber, Select, message, Popconfirm, Card, Row, Col, Statistic, Tabs, Modal } from 'antd';
 import { PlusOutlined, SafetyOutlined, LockOutlined, CheckCircleOutlined, CloseCircleOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import { restrictedInventoryApi, employeeApi } from '@/lib/api';
 
@@ -21,10 +21,15 @@ export default function RestrictedInventoryPage() {
   const [form] = Form.useForm();
   const [serialForm] = Form.useForm();
   const [issueForm] = Form.useForm();
+  const [transactionForm] = Form.useForm();
   const [categoryForm] = Form.useForm();
+  const [transactionDrawerVisible, setTransactionDrawerVisible] = useState(false);
+  const [transactionType, setTransactionType] = useState<string>('issue');
   const [searchText, setSearchText] = useState('');
   const [serialModalVisible, setSerialModalVisible] = useState(false);
   const [issueModalVisible, setIssueModalVisible] = useState(false);
+  const [returnDrawerVisible, setReturnDrawerVisible] = useState(false);
+  const [returnForm] = Form.useForm();
   const [selectedSerialUnitId, setSelectedSerialUnitId] = useState<number | null>(null);
 
   useEffect(() => {
@@ -121,9 +126,12 @@ export default function RestrictedInventoryPage() {
     setEditingItem(record);
     form.setFieldsValue({
       item_code: record.item_code,
-      item_name: record.name, // Map backend 'name' → form field 'item_name'
-      item_type: record.category, // Map backend 'category' → form field 'item_type'
+      item_name: record.name,
+      item_type: record.category,
       unit_name: record.unit_name,
+      quantity_on_hand: record.quantity_on_hand || 0,
+      min_quantity: record.min_quantity || 0,
+      is_serial_tracked: record.is_serial_tracked || false,
       description: record.description,
     });
     setItemDrawerVisible(true);
@@ -147,6 +155,8 @@ export default function RestrictedInventoryPage() {
       const item_name = values.item_name;
       const item_type = values.item_type;
       const unit_name = values.unit_name || 'unit';
+      const quantity_on_hand = values.quantity_on_hand || 0;
+      const min_quantity = values.min_quantity || 0;
       
       if (!item_name || !item_type) {
         message.error('Item name and category are required');
@@ -157,8 +167,10 @@ export default function RestrictedInventoryPage() {
         name: String(item_name),
         category: String(item_type),
         unit_name: String(unit_name),
+        quantity_on_hand: Number(quantity_on_hand),
+        min_quantity: Number(min_quantity),
         description: values.description || undefined,
-        is_serial_tracked: true,
+        is_serial_tracked: values.is_serial_tracked || false,
       };
       
       console.log('📤 Submitting item data:', data);
@@ -178,6 +190,49 @@ export default function RestrictedInventoryPage() {
     } catch (error) {
       console.error('❌ Error saving item:', error);
       message.error('Failed to save item');
+    }
+  };
+
+  const handleTransaction = (item: Record<string, unknown>, type: string) => {
+    setSelectedItem(item);
+    setTransactionType(type);
+    transactionForm.resetFields();
+    setTransactionDrawerVisible(true);
+  };
+
+  const handleSubmitTransaction = async () => {
+    try {
+      const values = await transactionForm.validateFields();
+      const itemCode = String(selectedItem?.item_code);
+      
+      await restrictedInventoryApi.issueItem(itemCode, values);
+      message.success('Transaction recorded');
+      setTransactionDrawerVisible(false);
+      loadData();
+    } catch (error) {
+      console.error('❌ Failed to record transaction:', error);
+      message.error('Failed to record transaction');
+    }
+  };
+
+  const handleReturnItem = (item: Record<string, unknown>) => {
+    setSelectedItem(item);
+    returnForm.resetFields();
+    setReturnDrawerVisible(true);
+  };
+
+  const handleSubmitReturn = async () => {
+    try {
+      const values = await returnForm.validateFields();
+      const itemCode = String(selectedItem?.item_code);
+      
+      await restrictedInventoryApi.returnItem(itemCode, values);
+      message.success('Return recorded');
+      setReturnDrawerVisible(false);
+      loadData();
+    } catch (error) {
+      console.error('❌ Failed to record return:', error);
+      message.error('Failed to record return');
     }
   };
 
@@ -223,15 +278,16 @@ export default function RestrictedInventoryPage() {
   const handleSubmitIssue = async () => {
     try {
       const values = await issueForm.validateFields();
-      const employeeId = String(values.employee_id);
+      const fssNumber = String(values.employee_id);
       
-      console.log('📤 Issuing serial unit to employee:', employeeId);
+      console.log('📤 Issuing serial unit to employee:', fssNumber);
       
-      await restrictedInventoryApi.issueSerial(selectedSerialUnitId!, employeeId);
+      await restrictedInventoryApi.issueSerial(selectedSerialUnitId!, fssNumber);
       message.success('Serial unit issued');
       issueForm.resetFields();
       setIssueModalVisible(false);
       loadSerialUnits(String(selectedItem?.item_code));
+      loadData(); // Refresh items to update statistics
     } catch (error) {
       console.error('❌ Failed to issue serial unit:', error);
       message.error('Failed to issue serial unit');
@@ -243,6 +299,7 @@ export default function RestrictedInventoryPage() {
       await restrictedInventoryApi.returnSerial(serialUnitId);
       message.success('Serial unit returned');
       loadSerialUnits(String(selectedItem?.item_code));
+      loadData(); // Refresh items to update statistics
     } catch {
       message.error('Failed to return serial unit');
     }
@@ -303,22 +360,65 @@ export default function RestrictedInventoryPage() {
         return <Tag color={colors[category] || 'default'} style={{ fontSize: '11px' }}>{category?.toUpperCase()}</Tag>;
       }
     },
-    { title: 'Total Units', dataIndex: 'serial_total', key: 'serial_total', width: 100, render: (v: number) => <span style={{ fontSize: '11px', fontWeight: 600 }}>{v || 0}</span> },
-    { title: 'Available', dataIndex: 'serial_in_stock', key: 'serial_in_stock', width: 100, render: (v: number) => <span style={{ fontSize: '11px', color: '#52c41a' }}>{v || 0}</span> },
-    { title: 'Issued', dataIndex: 'issued_units', key: 'issued_units', width: 100, render: (v: number) => <span style={{ fontSize: '11px', color: '#1890ff' }}>{(Number(v) || 0) > 0 ? v : 0}</span> },
+    { 
+      title: 'Total',
+      dataIndex: 'serial_total', 
+      key: 'serial_total', 
+      width: 100, 
+      render: (v: number, record: Record<string, unknown>) => {
+        const isAmmo = String(record.category || '').toUpperCase() === 'AMMUNITION' || record.is_serial_tracked === false;
+        const label = isAmmo ? 'qty' : 'units';
+        // For ammo, use quantity_on_hand directly; for weapons, use serial_total
+        const displayValue = isAmmo ? (record.quantity_on_hand || 0) : v;
+        return <span style={{ fontSize: '11px', fontWeight: 600 }}>{displayValue} {label}</span>;
+      }
+    },
+    { 
+      title: 'Available',
+      dataIndex: 'serial_in_stock', 
+      key: 'serial_in_stock', 
+      width: 100, 
+      render: (v: number, record: Record<string, unknown>) => {
+        const isAmmo = String(record.category || '').toUpperCase() === 'AMMUNITION' || record.is_serial_tracked === false;
+        const label = isAmmo ? 'qty' : 'units';
+        return <span style={{ fontSize: '11px', color: '#52c41a' }}>{v || 0} {label}</span>;
+      }
+    },
+    { 
+      title: 'Issued',
+      dataIndex: 'issued_units', 
+      key: 'issued_units', 
+      width: 100, 
+      render: (v: number, record: Record<string, unknown>) => {
+        const isAmmo = String(record.category || '').toUpperCase() === 'AMMUNITION' || record.is_serial_tracked === false;
+        const label = isAmmo ? 'qty' : 'units';
+        return <span style={{ fontSize: '11px', color: '#1890ff' }}>{(Number(v) || 0) > 0 ? v : 0} {label}</span>;
+      }
+    },
     {
       title: 'Actions',
       key: 'actions',
-      width: 200,
-      render: (_: unknown, record: Record<string, unknown>) => (
-        <Space size="small">
-          <Button type="link" size="small" onClick={() => handleViewSerials(record)} style={{ fontSize: '11px', padding: '0 4px' }}>View Units</Button>
-          <Button type="link" size="small" onClick={() => handleEditItem(record)} style={{ fontSize: '11px', padding: '0 4px' }}>Edit</Button>
-          <Popconfirm title="Delete?" onConfirm={() => handleDeleteItem(String(record.item_code))} okText="Yes" cancelText="No">
-            <Button type="link" danger size="small" style={{ fontSize: '11px', padding: '0 4px' }}>Delete</Button>
-          </Popconfirm>
-        </Space>
-      ),
+      width: 250,
+      render: (_: unknown, record: Record<string, unknown>) => {
+        const isAmmo = String(record.category || '').toUpperCase() === 'AMMUNITION' || record.is_serial_tracked === false;
+        return (
+          <Space size="small">
+            {!isAmmo && record.is_serial_tracked === true && (
+              <Button type="link" size="small" onClick={() => handleViewSerials(record)} style={{ fontSize: '11px', padding: '0 4px' }}>View Units</Button>
+            )}
+            {isAmmo && (
+              <>
+                <Button type="link" size="small" onClick={() => handleTransaction(record, 'issue')} style={{ fontSize: '11px', padding: '0 4px', color: '#1890ff' }}>Issue</Button>
+                <Button type="link" size="small" onClick={() => handleReturnItem(record)} style={{ fontSize: '11px', padding: '0 4px', color: '#52c41a' }}>Return</Button>
+              </>
+            )}
+            <Button type="link" size="small" onClick={() => handleEditItem(record)} style={{ fontSize: '11px', padding: '0 4px' }}>Edit</Button>
+            <Popconfirm title="Delete?" onConfirm={() => handleDeleteItem(String(record.item_code))} okText="Yes" cancelText="No">
+              <Button type="link" danger size="small" style={{ fontSize: '11px', padding: '0 4px' }}>Delete</Button>
+            </Popconfirm>
+          </Space>
+        );
+      },
     },
   ];
 
@@ -334,7 +434,7 @@ export default function RestrictedInventoryPage() {
         return <Tag color={colors[status] || 'default'} style={{ fontSize: '11px' }}>{status?.toUpperCase()}</Tag>;
       }
     },
-    { title: 'Issued To', dataIndex: 'issued_to_employee_id', key: 'issued_to_employee_id', width: 120, render: (t: string) => <span style={{ fontSize: '11px' }}>{t || '-'}</span> },
+    { title: 'Issued To (FSS)', dataIndex: 'issued_to_employee_id', key: 'issued_to_employee_id', width: 140, render: (t: string) => <span style={{ fontSize: '11px' }}>{t || '-'}</span> },
     {
       title: 'Actions',
       key: 'actions',
@@ -355,20 +455,21 @@ export default function RestrictedInventoryPage() {
   ];
 
   const transactionColumns = [
-    { title: 'Date', dataIndex: 'transaction_date', key: 'transaction_date', width: 110, render: (t: string) => <span style={{ fontSize: '11px' }}>{t}</span> },
+    { title: 'Date', dataIndex: 'created_at', key: 'created_at', width: 110, render: (t: string) => <span style={{ fontSize: '11px' }}>{t ? new Date(t).toLocaleDateString() : '-'}</span> },
     { title: 'Item', dataIndex: 'item_code', key: 'item_code', width: 100, render: (t: string) => <span style={{ fontSize: '11px', fontWeight: 600 }}>{t}</span> },
-    { title: 'Serial', dataIndex: 'serial_number', key: 'serial_number', width: 120, render: (t: string) => <span style={{ fontSize: '11px' }}>{t}</span> },
+    { title: 'Serial', dataIndex: 'serial_number', key: 'serial_number', width: 120, render: (t: string) => <span style={{ fontSize: '11px' }}>{t || '-'}</span> },
+    { title: 'Quantity', dataIndex: 'quantity', key: 'quantity', width: 90, render: (v: number) => <span style={{ fontSize: '11px' }}>{v || '-'}</span> },
     { 
       title: 'Type', 
-      dataIndex: 'transaction_type', 
-      key: 'transaction_type', 
+      dataIndex: 'action', 
+      key: 'action', 
       width: 100,
       render: (type: string) => {
         const colors: Record<string, string> = { issue: 'blue', return: 'green' };
         return <Tag color={colors[type] || 'default'} style={{ fontSize: '11px' }}>{type?.toUpperCase()}</Tag>;
       }
     },
-    { title: 'Employee', dataIndex: 'employee_id', key: 'employee_id', width: 100, render: (t: string) => <span style={{ fontSize: '11px' }}>{t}</span> },
+    { title: 'FSS No.', dataIndex: 'employee_id', key: 'employee_id', width: 120, render: (t: string) => <span style={{ fontSize: '11px' }}>{t}</span> },
     { title: 'Notes', dataIndex: 'notes', key: 'notes', ellipsis: true, render: (t: string) => <span style={{ fontSize: '11px' }}>{t}</span> },
   ];
 
@@ -434,6 +535,9 @@ export default function RestrictedInventoryPage() {
             <Select placeholder="Select category" options={categories.map(cat => ({ label: cat, value: cat }))} />
           </Form.Item>
           <Form.Item name="unit_name" label="Unit" initialValue="unit"><Input placeholder="Unit name (e.g., piece, box)" /></Form.Item>
+          <Form.Item name="quantity_on_hand" label="Total Quantity" initialValue={0}><InputNumber style={{ width: '100%' }} min={0} placeholder="Enter total quantity" /></Form.Item>
+          <Form.Item name="min_quantity" label="Minimum Stock Level" initialValue={0}><InputNumber style={{ width: '100%' }} min={0} placeholder="Enter minimum stock level" /></Form.Item>
+          <Form.Item name="is_serial_tracked" label="Track by Serial Number" valuePropName="checked" initialValue={false}><div style={{ fontSize: '12px', color: '#666' }}>Check for weapons (rifles, etc.). Uncheck for ammo/consumables.</div></Form.Item>
           <Form.Item name="description" label="Description"><Input.TextArea rows={3} placeholder="Item description" /></Form.Item>
         </Form>
       </Drawer>
@@ -448,6 +552,72 @@ export default function RestrictedInventoryPage() {
         extra={<Button type="primary" icon={<PlusOutlined />} onClick={handleAddSerial}>Add Serial Unit</Button>}
       >
         <Table columns={serialColumns} dataSource={serialUnits} rowKey="id" size="small" pagination={{ pageSize: 20 }} style={{ fontSize: '11px' }} />
+      </Drawer>
+
+      {/* Transaction Drawer */}
+      <Drawer
+        title="Record Transaction"
+        placement="right"
+        width={720}
+        onClose={() => setTransactionDrawerVisible(false)}
+        open={transactionDrawerVisible}
+        footer={<div style={{ textAlign: 'right' }}><Space><Button onClick={() => setTransactionDrawerVisible(false)}>Cancel</Button><Button type="primary" onClick={handleSubmitTransaction}>Submit</Button></Space></div>}
+      >
+        <Form form={transactionForm} layout="vertical">
+          <div style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white', padding: '12px 16px', marginBottom: '24px', borderRadius: '4px', fontSize: '14px', fontWeight: 600 }}>Transaction Details</div>
+          <Form.Item label="Item"><Input value={`${selectedItem?.item_code} - ${selectedItem?.name}`} disabled /></Form.Item>
+          <Form.Item name="quantity" label="Quantity" rules={[{ required: true, message: 'Quantity is required' }]}><InputNumber style={{ width: '100%' }} min={1} /></Form.Item>
+          <Form.Item name="employee_id" label="FSS Number" rules={[{ required: true, message: 'FSS Number is required' }]}>
+            <Select
+              showSearch
+              placeholder="Select FSS number"
+              notFoundContent={employees.length === 0 ? 'No employees found' : undefined}
+              options={employees
+                .filter((emp) => emp.fss_number || emp.fss_no)
+                .map((emp) => {
+                  const fss = emp.fss_number || emp.fss_no;
+                  return {
+                    value: fss,
+                    label: `${fss} - ${emp.full_name || emp.name || 'Unknown'}`,
+                  };
+                })}
+            />
+          </Form.Item>
+          <Form.Item name="notes" label="Notes"><Input.TextArea rows={3} placeholder="Additional notes" /></Form.Item>
+        </Form>
+      </Drawer>
+
+      {/* Return Drawer */}
+      <Drawer
+        title="Return Item"
+        placement="right"
+        width={720}
+        onClose={() => setReturnDrawerVisible(false)}
+        open={returnDrawerVisible}
+        footer={<div style={{ textAlign: 'right' }}><Space><Button onClick={() => setReturnDrawerVisible(false)}>Cancel</Button><Button type="primary" onClick={handleSubmitReturn}>Submit</Button></Space></div>}
+      >
+        <Form form={returnForm} layout="vertical">
+          <div style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white', padding: '12px 16px', marginBottom: '24px', borderRadius: '4px', fontSize: '14px', fontWeight: 600 }}>Return Details</div>
+          <Form.Item label="Item"><Input value={`${selectedItem?.item_code} - ${selectedItem?.name}`} disabled /></Form.Item>
+          <Form.Item name="quantity" label="Quantity to Return" rules={[{ required: true, message: 'Quantity is required' }]}><InputNumber style={{ width: '100%' }} min={1} /></Form.Item>
+          <Form.Item name="employee_id" label="FSS Number" rules={[{ required: true, message: 'FSS Number is required' }]}>
+            <Select
+              showSearch
+              placeholder="Select FSS number"
+              notFoundContent={employees.length === 0 ? 'No employees found' : undefined}
+              options={employees
+                .filter((emp) => emp.fss_number || emp.fss_no)
+                .map((emp) => {
+                  const fss = emp.fss_number || emp.fss_no;
+                  return {
+                    value: fss,
+                    label: `${fss} - ${emp.full_name || emp.name || 'Unknown'}`,
+                  };
+                })}
+            />
+          </Form.Item>
+          <Form.Item name="notes" label="Return Reason"><Input.TextArea rows={3} placeholder="Why is this being returned?" /></Form.Item>
+        </Form>
       </Drawer>
 
       {/* Add Serial Unit Modal */}
@@ -482,15 +652,20 @@ export default function RestrictedInventoryPage() {
         okText="Issue"
       >
         <Form form={issueForm} layout="vertical">
-          <Form.Item name="employee_id" label="Employee" rules={[{ required: true, message: 'Employee is required' }]}>
+          <Form.Item name="employee_id" label="FSS Number" rules={[{ required: true, message: 'Employee is required' }]}>
             <Select 
               showSearch 
-              placeholder="Select employee" 
+              placeholder="Select FSS number" 
               notFoundContent={employees.length === 0 ? 'No employees found' : undefined}
-              options={Array.isArray(employees) ? employees.map((emp) => ({ 
-                value: emp.employee_id, 
-                label: `${emp.employee_id} - ${emp.full_name || emp.name || 'Unknown'}` 
-              })) : []} 
+              options={Array.isArray(employees) ? employees
+                .filter((emp) => emp.fss_number || emp.fss_no)
+                .map((emp) => {
+                  const fss = emp.fss_number || emp.fss_no;
+                  return {
+                    value: fss,
+                    label: `${fss} - ${emp.full_name || emp.name || 'Unknown'}`
+                  };
+                }) : []} 
             />
           </Form.Item>
         </Form>

@@ -96,4 +96,20 @@ export class RestrictedInventoryController {
   async returnSerial(@Param('serial_unit_id') id: number) {
     return this.service.returnSerial(id);
   }
+
+  @Post('items/:item_code/issue')
+  async issueItem(
+    @Param('item_code') item_code: string,
+    @Body() dto: any,
+  ) {
+    return this.service.issueItem(item_code, dto);
+  }
+
+  @Post('items/:item_code/return')
+  async returnItem(
+    @Param('item_code') item_code: string,
+    @Body() dto: any,
+  ) {
+    return this.service.returnItem(item_code, dto);
+  }
 }

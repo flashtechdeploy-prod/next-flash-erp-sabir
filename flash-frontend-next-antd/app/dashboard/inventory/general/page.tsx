@@ -151,21 +151,24 @@ export default function GeneralInventoryPage() {
       const values = await transactionForm.validateFields();
       const itemCode = String(selectedItem?.item_code);
       
-      switch (values.transaction_type) {
+      // Extract only the data needed for API (exclude transaction_type)
+      const { transaction_type, ...transactionData } = values;
+      
+      switch (transaction_type) {
         case 'issue':
-          await generalInventoryApi.issueItem(itemCode, values);
+          await generalInventoryApi.issueItem(itemCode, transactionData);
           break;
         case 'return':
-          await generalInventoryApi.returnItem(itemCode, values);
+          await generalInventoryApi.returnItem(itemCode, transactionData);
           break;
         case 'lost':
-          await generalInventoryApi.lostItem(itemCode, values);
+          await generalInventoryApi.lostItem(itemCode, transactionData);
           break;
         case 'damaged':
-          await generalInventoryApi.damagedItem(itemCode, values);
+          await generalInventoryApi.damagedItem(itemCode, transactionData);
           break;
         case 'adjust':
-          await generalInventoryApi.adjustItem(itemCode, values);
+          await generalInventoryApi.adjustItem(itemCode, transactionData);
           break;
       }
       
@@ -268,7 +271,7 @@ export default function GeneralInventoryPage() {
       }
     },
     { title: 'Quantity', dataIndex: 'quantity', key: 'quantity', width: 80, render: (v: number) => <span style={{ fontSize: '11px' }}>{v}</span> },
-    { title: 'Employee', dataIndex: 'employee_id', key: 'employee_id', width: 100, render: (t: string) => <span style={{ fontSize: '11px' }}>{t}</span> },
+    { title: 'FSS No.', dataIndex: 'employee_id', key: 'employee_id', width: 120, render: (t: string) => <span style={{ fontSize: '11px' }}>{t}</span> },
     { title: 'Notes', dataIndex: 'notes', key: 'notes', ellipsis: true, render: (t: string) => <span style={{ fontSize: '11px' }}>{t}</span> },
   ];
 
@@ -362,8 +365,21 @@ export default function GeneralInventoryPage() {
             </Select>
           </Form.Item>
           <Form.Item name="quantity" label="Quantity" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} min={1} /></Form.Item>
-          <Form.Item name="employee_id" label="Employee">
-            <Select showSearch placeholder="Select employee" notFoundContent={employees.length === 0 ? 'No employees found' : undefined} options={employees.map((emp) => ({ value: emp.employee_id, label: `${emp.employee_id} - ${emp.full_name || emp.name || 'Unknown'}` }))} />
+          <Form.Item name="employee_id" label="FSS Number">
+            <Select
+              showSearch
+              placeholder="Select FSS number"
+              notFoundContent={employees.length === 0 ? 'No employees found' : undefined}
+              options={employees
+                .filter((emp) => emp.fss_number || emp.fss_no)
+                .map((emp) => {
+                  const fss = emp.fss_number || emp.fss_no;
+                  return {
+                    value: fss,
+                    label: `${fss} - ${emp.full_name || emp.name || 'Unknown'}`,
+                  };
+                })}
+            />
           </Form.Item>
           <Form.Item name="notes" label="Notes"><Input.TextArea rows={3} placeholder="Additional notes" /></Form.Item>
         </Form>

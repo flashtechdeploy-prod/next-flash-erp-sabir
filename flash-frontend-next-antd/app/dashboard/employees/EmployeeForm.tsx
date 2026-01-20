@@ -429,11 +429,7 @@ export default function EmployeeForm({
             <DatePicker style={{ width: '100%' }} />
           </Form.Item>
         </Col>
-        <Col span={6}>
-          <Form.Item label="Social Security #" name="social_security">
-            <Input placeholder="SSN or Social Security Number" />
-          </Form.Item>
-        </Col>
+        
         <Col span={6}>
           <Form.Item label="Documents Held" name="original_document_held">
             <Input placeholder="CNIC, Certificates" />
