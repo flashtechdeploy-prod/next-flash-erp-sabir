@@ -67,7 +67,7 @@ export class EmployeesService {
           like(schema.employees.cnic, `%${search}%`),
           like(schema.employees.fss_number, `%${search}%`),
           like(schema.employees.phone, `%${search}%`),
-        ) as SQL,
+        ),
       );
     }
 
@@ -185,11 +185,59 @@ export class EmployeesService {
   }
 
   async remove(employee_id: string) {
-    await this.findOne(employee_id);
-    await this.db
-      .delete(schema.employees)
-      .where(eq(schema.employees.employee_id, employee_id));
-    return { message: `Employee ${employee_id} deleted successfully` };
+    const employee = await this.findOne(employee_id);
+    
+    try {
+      // Delete all related records first (in order to avoid foreign key violations)
+      
+      // Delete attendance records
+      await this.db
+        .delete(schema.attendance)
+        .where(eq(schema.attendance.employee_id, employee_id));
+      
+      // Delete leave periods
+      await this.db
+        .delete(schema.leavePeriods)
+        .where(eq(schema.leavePeriods.employee_id, employee_id));
+      
+      // Delete payroll payment status
+      await this.db
+        .delete(schema.payrollPaymentStatus)
+        .where(eq(schema.payrollPaymentStatus.employee_id, employee_id));
+      
+      // Delete advances (legacy table)
+      await this.db
+        .delete(schema.advances)
+        .where(eq(schema.advances.employee_id, employee_id));
+      
+      // Delete records referencing employee.id
+      if (employee.id) {
+        // Delete payroll sheet entries
+        await this.db
+          .delete(schema.payrollSheetEntries)
+          .where(eq(schema.payrollSheetEntries.employee_db_id, employee.id));
+        
+        // Delete employee advances
+        await this.db
+          .delete(schema.employee_advances)
+          .where(eq(schema.employee_advances.employee_db_id, employee.id));
+        
+        // Delete employee advance deductions
+        await this.db
+          .delete(schema.employee_advance_deductions)
+          .where(eq(schema.employee_advance_deductions.employee_db_id, employee.id));
+      }
+      
+      // Finally delete the employee
+      await this.db
+        .delete(schema.employees)
+        .where(eq(schema.employees.employee_id, employee_id));
+        
+      return { message: `Employee ${employee_id} deleted successfully` };
+    } catch (error) {
+      this.logger.error(`Failed to delete employee ${employee_id}:`, error);
+      throw new Error(`Failed to delete employee: ${error.message}`);
+    }
   }
 
   async removeAll() {
@@ -227,6 +275,129 @@ export class EmployeesService {
       })
       .where(eq(schema.employees.employee_id, employee_id));
     return this.findOne(employee_id);
+  }
+
+  // Bulk import from CSV Buffer
+  async importCsvBuffer(fileBuffer: Buffer) {
+    const csvText = fileBuffer.toString('utf8');
+
+    // Minimal CSV parser supporting quoted fields and commas
+    const parseRow = (line: string): string[] => {
+      const result: string[] = [];
+      let current = '';
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        if (char === '"') {
+          if (inQuotes && line[i + 1] === '"') {
+            current += '"';
+            i++;
+          } else {
+            inQuotes = !inQuotes;
+          }
+        } else if (char === ',' && !inQuotes) {
+          result.push(current);
+          current = '';
+        } else {
+          current += char;
+        }
+      }
+      result.push(current);
+      return result.map((s) => s.trim());
+    };
+
+    const lines = csvText.split(/\r?\n/).filter((l) => l.length > 0);
+    if (lines.length === 0) return { processed: 0, inserted: 0, skipped: 0, errors: [] };
+    const header = parseRow(lines[0]);
+    const records: Record<string, any>[] = [];
+    for (let i = 1; i < lines.length; i++) {
+      const cols = parseRow(lines[i]);
+      const row: Record<string, any> = {};
+      for (let c = 0; c < header.length; c++) {
+        row[header[c]] = cols[c] ?? '';
+      }
+      records.push(row);
+    }
+
+    const allowedKeys = new Set(Object.keys(schema.employees));
+    const timestampKeys = new Set(['created_at', 'updated_at']);
+    const booleanKeys = new Set([
+      'basic_security_training',
+      'fire_safety_training',
+      'first_aid_certification',
+      'agreement',
+      'police_clearance',
+      'fingerprint_check',
+      'background_screening',
+      'reference_verification',
+      'guard_card',
+    ]);
+
+    const normalize = (val: any) => {
+      if (val === undefined) return undefined;
+      if (val === '' || val === 'NULL') return null;
+      return val;
+    };
+
+    const toBoolean = (val: any): boolean | null => {
+      const s = String(val).toLowerCase();
+      if (s === 'true' || s === '1') return true;
+      if (s === 'false' || s === '0') return false;
+      return null;
+    };
+
+    const cleaned: any[] = records.map((row) => {
+      const obj: any = {};
+      for (const [k, v] of Object.entries(row)) {
+        if (allowedKeys.has(k) && k !== 'id') {
+          // Handle timestamp columns: use Date if parseable, otherwise omit to let DB defaults apply
+          if (timestampKeys.has(k)) {
+            const val = normalize(v);
+            if (val) {
+              const d = new Date(val as any);
+              if (!isNaN(d.getTime())) {
+                obj[k] = d;
+              }
+              // else: skip setting to allow defaultNow()
+            }
+            continue;
+          }
+
+          // Handle booleans
+          if (booleanKeys.has(k)) {
+            const b = toBoolean(v);
+            obj[k] = b !== null ? b : null;
+            continue;
+          }
+
+          obj[k] = normalize(v);
+        }
+      }
+      return obj;
+    });
+
+    let inserted = 0;
+    let skipped = 0;
+    const errors: string[] = [];
+
+    const chunkSize = 100;
+    for (let i = 0; i < cleaned.length; i += chunkSize) {
+      const chunk = cleaned.slice(i, i + chunkSize);
+      try {
+        const results = await (this.db
+          .insert(schema.employees)
+          .values(chunk)
+          .onConflictDoNothing()
+          .returning({ employee_id: schema.employees.employee_id }) as any);
+        inserted += results.length;
+        skipped += chunk.length - results.length;
+      } catch (err: any) {
+        this.logger.error(`CSV import chunk failed at index ${i}: ${err?.message}`);
+        errors.push(err?.message || 'Unknown error');
+      }
+    }
+
+    return { processed: cleaned.length, inserted, skipped, errors };
   }
 
   async getDepartments() {
@@ -341,7 +512,6 @@ export class EmployeesService {
                 eq(schema.employeeFiles.category, 'profile_photo'),
             ),
           );
-          
         for (const entry of oldEntries) {
           await this.db.delete(schema.employeeFiles).where(eq(schema.employeeFiles.id, entry.id));
         }

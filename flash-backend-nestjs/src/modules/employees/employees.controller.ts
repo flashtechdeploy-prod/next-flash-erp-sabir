@@ -21,6 +21,7 @@ import {
   ApiBearerAuth,
   ApiQuery,
   ApiConsumes,
+  ApiBody,
 } from '@nestjs/swagger';
 import { EmployeesService } from './employees.service';
 import {
@@ -29,6 +30,8 @@ import {
   EmployeeQueryDto,
   CreateWarningDto,
 } from './dto/employee.dto';
+import { ImportCsvDto } from './dto/import-csv.dto';
+import { Public } from '../auth/decorators/public.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import {
   UPLOAD_PATHS,
@@ -130,6 +133,24 @@ export class EmployeesController {
   @HttpCode(HttpStatus.NO_CONTENT)
   async remove(@Param('employee_id') employee_id: string) {
     return this.employeesService.remove(employee_id);
+  }
+
+  // Bulk import from CSV
+  @Post('import')
+  @ApiOperation({ summary: 'Bulk import employees from CSV' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({ type: ImportCsvDto })
+  @Public()
+  @UseInterceptors(
+    FileInterceptor(
+      'file',
+      getFileInterceptorOptions(UPLOAD_PATHS.EMPLOYEES.DOCUMENTS),
+    ),
+  )
+  async importCsv(
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    return this.employeesService.importCsvBuffer(file.buffer);
   }
 
   @Post(':employee_id/mark-left')

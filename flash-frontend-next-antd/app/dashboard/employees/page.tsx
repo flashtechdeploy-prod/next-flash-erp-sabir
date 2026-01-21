@@ -120,13 +120,19 @@ export default function EmployeesPage() {
   };
 
   const handleDelete = async (id: string) => {
-    const response = await employeeApi.delete(id);
-    if (response.error) {
-      message.error(response.error);
-      return;
+    try {
+      const response = await employeeApi.delete(id);
+      if (response.error) {
+        message.error(response.error);
+        return;
+      }
+      message.success('Employee deleted successfully');
+      // Refresh the employee list
+      await fetchEmployees();
+    } catch (error) {
+      console.error('Delete error:', error);
+      message.error('Failed to delete employee');
     }
-    message.success('Employee deleted successfully');
-    fetchEmployees();
   };
 
   const handleFormSubmit = async (values: Record<string, unknown>) => {
@@ -241,6 +247,8 @@ export default function EmployeesPage() {
       key: 'fss_number',
       width: 120,
       fixed: 'left' as const,
+      render: (_: unknown, record: Employee) =>
+        record.fss_number || record.fss_no || record.cnic || '-',
       ...getColumnSearchProps('fss_number', 'FSS No'),
     },
     {

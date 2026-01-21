@@ -55,7 +55,7 @@ export default function DashboardHome() {
         advancesRes,
         inventoryRes,
       ] = await Promise.all([
-        employeeApi.getAll(),
+        employeeApi.getAll({ with_total: 'true', limit: '2000' }),
         vehicleApi.getAll(),
         clientApi.getAll(),
         attendanceApi.getByDate(today),
@@ -66,6 +66,7 @@ export default function DashboardHome() {
 
       // Process employees
       const employees = (employeesRes.data as any)?.employees || (employeesRes.data as any) || [];
+      const totalEmployees = (employeesRes.data as any)?.total ?? employees.length;
       const activeEmployees = employees.filter((e: Record<string, unknown>) => e.status === 'Active' || e.status === 'active');
 
       // Process vehicles
@@ -101,7 +102,7 @@ export default function DashboardHome() {
       ).length;
 
       setStats({
-        totalEmployees: employees.length,
+        totalEmployees,
         activeEmployees: activeEmployees.length,
         totalVehicles: vehicles.length,
         totalClients: clients.length,

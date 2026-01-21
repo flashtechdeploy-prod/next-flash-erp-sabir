@@ -18,7 +18,9 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
-    "seed": "ts-node src/db/seed.ts"
+    "seed": "ts-node src/db/seed.ts",
+    "seed:employees": "ts-node src/db/seed-employees.ts",
+    "seed:employees:all": "ts-node src/db/seed-employees-all.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.969.0",
@@ -35,6 +37,7 @@
     "better-sqlite3": "^12.6.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.3",
+    "csv-parse": "^5.5.6",
     "dotenv": "^17.2.3",
     "drizzle-orm": "^0.45.1",
     "multer": "^2.0.2",
@@ -57,7 +60,7 @@
     "@types/express": "^5.0.0",
     "@types/jest": "^30.0.0",
     "@types/multer": "^2.0.0",
-    "@types/node": "^22.10.7",
+    "@types/node": "^22.19.7",
     "@types/passport-jwt": "^4.0.1",
     "@types/pg": "^8.16.0",
     "@types/supertest": "^6.0.2",
