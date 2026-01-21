@@ -390,7 +390,7 @@ export default function AttendancePage() {
     {
       title: 'OT Days',
       key: 'ot_days',
-      width: 100,
+      width: 180,
       align: 'center' as const,
       render: (_: unknown, record: AttendanceRecord) => (
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
