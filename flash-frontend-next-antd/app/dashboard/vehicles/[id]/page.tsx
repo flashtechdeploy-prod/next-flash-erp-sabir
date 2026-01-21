@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
-  Card, Button, Space, Table, Drawer, Form, Upload, 
+  Card, Button, Space, Table, Drawer, Form, Upload, Input,
   message, Popconfirm, Tag, Spin, Image, Tabs
 } from 'antd';
 import {
@@ -75,11 +75,20 @@ export default function VehicleDetailPage() {
     router.push('/dashboard/vehicles');
   };
 
-  const handleUpload = async (values: { file: { file: File } }) => {
+  const handleUpload = async (values: { file: { file: File }; title?: string }) => {
     if (!values.file) return;
     
     const formData = new FormData();
-    formData.append('file', values.file.file);
+    const file = values.file.file;
+    
+    if (values.title) {
+      const originalExtension = file.name.split('.').pop();
+      const newFilename = `${values.title}.${originalExtension}`;
+      const renamedFile = new File([file], newFilename, { type: file.type });
+      formData.append('file', renamedFile);
+    } else {
+      formData.append('file', file);
+    }
 
     const response = uploadType === 'document'
       ? await vehicleApi.uploadDocument(vehicleId, formData)
@@ -160,6 +169,9 @@ export default function VehicleDetailPage() {
 
   const documents = (vehicle.documents as Array<Record<string, unknown>>) || [];
   const images = (vehicle.images as Array<Record<string, unknown>>) || [];
+  
+  console.log('Documents array:', documents);
+  console.log('Images array:', images);
 
   const documentColumns = [
     { 
@@ -185,6 +197,22 @@ export default function VehicleDetailPage() {
             <EyeOutlined style={{ fontSize: 20, color: '#1890ff' }} />
           </div>
         );
+      }
+    },
+    { 
+      title: 'Title', 
+      dataIndex: 'title', 
+      key: 'title', 
+      width: 250,
+      render: (title: string, record: Record<string, unknown>) => {
+        // If title exists, show it; otherwise show filename without extension
+        if (title) return title;
+        const filename = record.filename as string;
+        if (filename) {
+          // Remove file extension and return
+          return filename.replace(/\.[^/.]+$/, '');
+        }
+        return '-';
       }
     },
     { title: 'File Name', dataIndex: 'filename', key: 'filename', ellipsis: true },
@@ -272,13 +300,18 @@ export default function VehicleDetailPage() {
                   {images.map((img: Record<string, unknown>) => {
                     const decodedPath = decodeURIComponent(img.url as string);
                     const fullUrl = decodedPath.startsWith('http') ? decodedPath : `${API_BASE}${decodedPath}`;
+                    const filename = img.filename as string;
+                    const title = filename ? filename.replace(/\.[^/.]+$/, '') : 'Image';
                     return (
                       <div key={img.id as number} className="relative group">
-                        <Image src={fullUrl} alt={img.filename as string} className="rounded" />
+                        <Image src={fullUrl} alt={filename} className="rounded" />
                         <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
                           <Popconfirm title="Delete?" onConfirm={() => handleDeleteImage(img.id as number)}>
                             <Button danger size="small" icon={<DeleteOutlined />} />
                           </Popconfirm>
+                        </div>
+                        <div className="mt-2 text-center text-sm text-gray-700 font-medium truncate px-2">
+                          {title}
                         </div>
                       </div>
                     );
@@ -308,6 +341,13 @@ export default function VehicleDetailPage() {
         }
       >
         <Form form={uploadForm} layout="vertical" onFinish={handleUpload}>
+          <Form.Item 
+            label="Document Title" 
+            name="title"
+            rules={[{ required: true, message: 'Please enter document title' }]}
+          >
+            <Input placeholder="e.g., Vehicle Registration, Insurance Certificate" />
+          </Form.Item>
           <Form.Item label="File" name="file" rules={[{ required: true }]}>
             <Upload maxCount={1} beforeUpload={() => false} accept={uploadType === 'image' ? 'image/*' : '*'}>
               <Button icon={<UploadOutlined />}>Select File</Button>

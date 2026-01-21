@@ -18,6 +18,10 @@ import {
   Input,
   Modal,
   Tag,
+  Badge,
+  Checkbox,
+  Switch,
+  Tooltip,
 } from 'antd';
 import {
   CalendarOutlined,
@@ -27,6 +31,7 @@ import {
   SaveOutlined,
   ReloadOutlined,
   HistoryOutlined,
+  DeleteOutlined,
 } from '@ant-design/icons';
 import { attendanceApi, employeeApi } from '@/lib/api';
 import dayjs, { Dayjs } from 'dayjs';
@@ -45,6 +50,8 @@ interface AttendanceRecord {
   late_minutes?: number;
   fine_amount?: number;
   leave_type?: string;
+  long_leave_days?: number;
+  is_long_leave?: boolean;
 }
 
 export default function AttendancePage() {
@@ -85,6 +92,7 @@ export default function AttendancePage() {
     const responseData = response.data as { date?: string; records?: AttendanceRecord[] } | AttendanceRecord[];
     const records = Array.isArray(responseData) ? responseData : (responseData?.records || []);
     
+    console.log('Fetched attendance records:', records);
     // Merge with employees to show all active employees
     const attendanceMap = new Map(records.map(r => [r.employee_id, r]));
     const getFss = (obj: unknown): string | undefined => {
@@ -238,93 +246,244 @@ export default function AttendancePage() {
     }
   };
 
-  console.log('Attendance Records:', attendance);
+  const getStatusBadge = (status: string, statusType: string) => {
+    const isActive = status === statusType;
+    const colorMap: Record<string, string> = {
+      present: '#90ee90',
+      late: '#ffe4b5',
+      absent: '#ffcccb',
+      leave: '#b0e0e6',
+    };
+    
+    if (!isActive) {
+      return <span style={{ color: '#999', fontSize: '12px' }}>{statusType === 'present' ? 'P' : statusType === 'late' ? 'Late' : statusType === 'absent' ? 'A' : 'L'}</span>;
+    }
+
+    return (
+      <div
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '4px 12px',
+          borderRadius: '16px',
+          backgroundColor: colorMap[statusType],
+          fontWeight: 'bold',
+          fontSize: '12px',
+          cursor: 'pointer',
+        }}
+        onClick={() => handleStatusChange(status)}
+      >
+        {statusType === 'present' ? 'P' : statusType === 'late' ? 'Late' : statusType === 'absent' ? 'A' : 'L'}
+      </div>
+    );
+  };
 
   const columns = [
     {
-      title: 'FSS ID',
+      title: '-',
+      key: 'checkbox',
+      width: 30,
+      align: 'center' as const,
+      render: (_: unknown, record: AttendanceRecord) => (
+        <Checkbox />
+      ),
+    },
+    {
+      title: 'FSS No',
       dataIndex: 'fss_id',
       key: 'fss_id',
-      width: 120,
-      render: (_id: string, record: AttendanceRecord) => (
-        <Button 
-          type="link" 
-          size="small" 
-          onClick={() => handleViewHistory(record.employee_id)}
-          icon={<HistoryOutlined />}
-          style={{ padding: 0, height: 'auto' }}
-        >
-          {record.fss_id ?? ''}
-        </Button>
-      ),
+      width: 80,
+      render: (_: unknown, record: AttendanceRecord) => {
+        const emp = employees.find(e => e.employee_id === record.employee_id);
+        const fssId = (emp?.fss_id || emp?.fss_number || record.fss_id) as string;
+        return fssId || '-';
+      },
     },
     {
       title: 'Employee Name',
       dataIndex: 'employee_name',
       key: 'employee_name',
-      width: 200,
+      width: 150,
       render: (_: unknown, record: AttendanceRecord) => {
         const emp = employees.find(e => e.employee_id === record.employee_id);
         return (emp?.full_name || emp?.name || record.employee_name || '-') as string;
       },
     },
     {
-      title: 'Status',
-      dataIndex: 'status',
-      key: 'status',
-      width: 150,
-      render: (status: string, record: AttendanceRecord) => (
-        <Select
-          value={status}
-          onChange={(value) => handleStatusChange(record.employee_id, value)}
-          style={{ width: '100%' }}
+      title: 'P',
+      key: 'present',
+      width: 60,
+      align: 'center' as const,
+      render: (_: unknown, record: AttendanceRecord) => (
+        <div onClick={() => handleStatusChange(record.employee_id, 'present')} style={{ cursor: 'pointer' }}>
+          {getStatusBadge(record.status, 'present')}
+        </div>
+      ),
+    },
+    {
+      title: 'Late',
+      key: 'late_status',
+      width: 80,
+      align: 'center' as const,
+      render: (_: unknown, record: AttendanceRecord) => (
+        <div onClick={() => handleStatusChange(record.employee_id, 'late')} style={{ cursor: 'pointer' }}>
+          {getStatusBadge(record.status, 'late')}
+        </div>
+      ),
+    },
+    {
+      title: 'A',
+      key: 'absent',
+      width: 60,
+      align: 'center' as const,
+      render: (_: unknown, record: AttendanceRecord) => (
+        <div onClick={() => handleStatusChange(record.employee_id, 'absent')} style={{ cursor: 'pointer' }}>
+          {getStatusBadge(record.status, 'absent')}
+        </div>
+      ),
+    },
+    {
+      title: 'L',
+      key: 'leave',
+      width: 60,
+      align: 'center' as const,
+      render: (_: unknown, record: AttendanceRecord) => (
+        <div onClick={() => handleStatusChange(record.employee_id, 'leave')} style={{ cursor: 'pointer' }}>
+          {getStatusBadge(record.status, 'leave')}
+        </div>
+      ),
+    },
+    {
+      title: 'Leave type',
+      key: 'leave_type',
+      width: 120,
+      align: 'center' as const,
+      render: (_: unknown, record: AttendanceRecord) => {
+        if (record.status !== 'leave') return '-';
+        return (
+          <Select
+            value={record.leave_type || 'casual'}
+            onChange={(val) => {
+              setAttendance(prev =>
+                prev.map(r =>
+                  r.employee_id === record.employee_id
+                    ? { ...r, leave_type: val }
+                    : r
+                )
+              );
+            }}
+            size="small"
+            style={{ width: '100%' }}
+            options={[
+              { label: 'Paid', value: 'paid' },
+              { label: 'Sick', value: 'sick' },
+              { label: 'Casual', value: 'casual' },
+              { label: 'Annual', value: 'annual' },
+              { label: 'Unpaid', value: 'unpaid' },
+              { label: 'Emergency', value: 'emergency' },
+            ]}
+          />
+        );
+      },
+    },
+    {
+      title: 'OT Days',
+      key: 'ot_days',
+      width: 100,
+      align: 'center' as const,
+      render: (_: unknown, record: AttendanceRecord) => (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
+          <Switch
+            checked={!!record.overtime_minutes}
+            onChange={(checked) => {
+              setAttendance(prev =>
+                prev.map(r =>
+                  r.employee_id === record.employee_id
+                    ? { ...r, overtime_minutes: checked ? 480 : 0 }
+                    : r
+                )
+              );
+            }}
+            size="small"
+          />
+          <InputNumber
+            value={record.overtime_minutes ? Math.round(record.overtime_minutes / 60) : 0}
+            onChange={(val) => {
+              setAttendance(prev =>
+                prev.map(r =>
+                  r.employee_id === record.employee_id
+                    ? { ...r, overtime_minutes: (val || 0) * 60 }
+                    : r
+                )
+              );
+            }}
+            size="small"
+            style={{ width: '50px' }}
+            min={0}
+          />
+          <span style={{ fontSize: '12px', color: '#999' }}>Days</span>
+        </div>
+      ),
+    },
+    {
+      title: 'Late',
+      key: 'late_minutes',
+      width: 120,
+      align: 'center' as const,
+      render: (_: unknown, record: AttendanceRecord) => (
+        <Input
+          value={record.status === 'late' ? 'deduct' : '-'}
+          placeholder="deduct"
+          disabled={record.status !== 'late'}
           size="small"
-          options={[
-            { label: 'Present', value: 'present' },
-            { label: 'Late', value: 'late' },
-            { label: 'Absent', value: 'absent' },
-            { label: 'Leave', value: 'leave' },
-            { label: 'Unmarked', value: 'unmarked' },
-          ]}
+          style={{ width: '100%' }}
         />
       ),
     },
     {
-      title: 'Late (min)',
-      dataIndex: 'late_minutes',
-      key: 'late_minutes',
-      width: 100,
-      render: (val: number) => val || '-',
-    },
-    {
-      title: 'OT (min)',
-      dataIndex: 'overtime_minutes',
-      key: 'overtime_minutes',
-      width: 100,
-      render: (val: number) => val || '-',
-    },
-    {
       title: 'Fine',
-      dataIndex: 'fine_amount',
-      key: 'fine_amount',
+      key: 'fine',
       width: 100,
-      render: (val: number) => val ? `Rs ${val}` : '-',
+      align: 'center' as const,
+      render: (_: unknown, record: AttendanceRecord) => (
+        <InputNumber
+          value={record.fine_amount || 0}
+          onChange={(val) => {
+            setAttendance(prev =>
+              prev.map(r =>
+                r.employee_id === record.employee_id
+                  ? { ...r, fine_amount: val || 0 }
+                  : r
+              )
+            );
+          }}
+          size="small"
+          style={{ width: '100%' }}
+          min={0}
+        />
+      ),
     },
     {
       title: 'Note',
-      dataIndex: 'note',
       key: 'note',
-      ellipsis: true,
-      width: 150,
-    },
-    {
-      title: 'Actions',
-      key: 'actions',
-      width: 100,
+      width: 200,
       render: (_: unknown, record: AttendanceRecord) => (
-        <Button type="link" size="small" onClick={() => handleEdit(record)}>
-          Edit Details
-        </Button>
+        <Input
+          value={record.note || ''}
+          onChange={(e) => {
+            setAttendance(prev =>
+              prev.map(r =>
+                r.employee_id === record.employee_id
+                  ? { ...r, note: e.target.value }
+                  : r
+              )
+            );
+          }}
+          placeholder="Optional"
+          size="small"
+          style={{ width: '100%' }}
+        />
       ),
     },
   ];
@@ -364,75 +523,21 @@ export default function AttendancePage() {
         </Space>
       </div>
 
-      <Row gutter={16} className="mb-6">
-        <Col span={4}>
-          <Card>
-            <Statistic
-              title="Total"
-              value={summary.total}
-              prefix={<CalendarOutlined />}
-            />
-          </Card>
-        </Col>
-        <Col span={4}>
-          <Card>
-            <Statistic
-              title="Present"
-              value={summary.present}
-              valueStyle={{ color: '#3f8600' }}
-              prefix={<CheckCircleOutlined />}
-            />
-          </Card>
-        </Col>
-        <Col span={4}>
-          <Card>
-            <Statistic
-              title="Late"
-              value={summary.late}
-              valueStyle={{ color: '#fa8c16' }}
-              prefix={<ClockCircleOutlined />}
-            />
-          </Card>
-        </Col>
-        <Col span={4}>
-          <Card>
-            <Statistic
-              title="Absent"
-              value={summary.absent}
-              valueStyle={{ color: '#cf1322' }}
-              prefix={<CloseCircleOutlined />}
-            />
-          </Card>
-        </Col>
-        <Col span={4}>
-          <Card>
-            <Statistic
-              title="Leave"
-              value={summary.leave}
-              valueStyle={{ color: '#1890ff' }}
-            />
-          </Card>
-        </Col>
-        <Col span={4}>
-          <Card>
-            <Statistic
-              title="Unmarked"
-              value={summary.unmarked}
-              valueStyle={{ color: '#8c8c8c' }}
-            />
-          </Card>
-        </Col>
-      </Row>
-
-      <Card>
+      <Card style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.08)', border: 'none' }}>
         <Table
           columns={columns}
           dataSource={attendance}
           rowKey="employee_id"
           loading={loading}
           size="small"
-          pagination={{ pageSize: 50 }}
-          className="compact-table"
+          pagination={{ 
+            pageSize: 20,
+            showSizeChanger: true,
+            showTotal: (total, range) => `${range[0]}-${range[1]} of ${total}`,
+            pageSizeOptions: ['10', '20', '50', '100'],
+          }}
+          className="attendance-table"
+          bordered={false}
         />
       </Card>
 
@@ -456,7 +561,6 @@ export default function AttendancePage() {
           <Form.Item label="Status" name="status">
             <Select 
               onChange={(value) => {
-                // Show/hide leave_type based on status
                 if (value !== 'leave') {
                   form.setFieldValue('leave_type', undefined);
                 }
@@ -620,6 +724,32 @@ export default function AttendancePage() {
       </Modal>
 
       <style jsx global>{`
+        .attendance-table .ant-table {
+          font-size: 13px;
+          border: none;
+        }
+        .attendance-table .ant-table-thead > tr > th {
+          font-size: 12px;
+          font-weight: 600;
+          padding: 12px 8px;
+          background: #f5f5f5;
+          border-bottom: 1px solid #e8e8e8;
+          color: #333;
+        }
+        .attendance-table .ant-table-tbody > tr > td {
+          padding: 12px 8px;
+          font-size: 12px;
+          border-bottom: 1px solid #f0f0f0;
+        }
+        .attendance-table .ant-table-tbody > tr:hover > td {
+          background: #fafafa;
+        }
+        .attendance-table .ant-select {
+          font-size: 12px;
+        }
+        .attendance-table .ant-input-number {
+          width: 100% !important;
+        }
         .compact-table .ant-table {
           font-size: 12px;
         }

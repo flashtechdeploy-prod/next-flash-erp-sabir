@@ -1,15 +1,42 @@
 'use client';
 
 import { Form, Input, Button, Row, Col, InputNumber, Select, Divider } from 'antd';
+import { useEffect, useState } from 'react';
 
 interface VehicleFormProps {
   initialValues?: Record<string, unknown> | null;
   onSubmit: (values: Record<string, unknown>) => void;
   onCancel: () => void;
+  allVehicles?: Array<Record<string, unknown>>;
 }
 
-export default function VehicleForm({ initialValues, onSubmit, onCancel }: VehicleFormProps) {
+export default function VehicleForm({ initialValues, onSubmit, onCancel, allVehicles = [] }: VehicleFormProps) {
   const [form] = Form.useForm();
+  const [nextVehicleId, setNextVehicleId] = useState<string>('FCID-001');
+
+  useEffect(() => {
+    if (!initialValues) {
+      // Generate next vehicle ID
+      const generateNextId = () => {
+        const existingIds = allVehicles
+          .map(v => v.vehicle_id as string)
+          .filter(id => id && id.startsWith('FCID-'))
+          .map(id => {
+            const num = parseInt(id.replace('FCID-', ''), 10);
+            return isNaN(num) ? 0 : num;
+          });
+
+        const maxNum = existingIds.length > 0 ? Math.max(...existingIds) : 0;
+        const nextNum = maxNum + 1;
+        const newId = `FCID-${String(nextNum).padStart(3, '0')}`;
+        return newId;
+      };
+
+      const newId = generateNextId();
+      setNextVehicleId(newId);
+      form.setFieldValue('vehicle_id', newId);
+    }
+  }, [initialValues, allVehicles, form]);
 
   const handleSubmit = (values: Record<string, unknown>) => {
     onSubmit(values);
@@ -31,7 +58,7 @@ export default function VehicleForm({ initialValues, onSubmit, onCancel }: Vehic
             name="vehicle_id" 
             rules={[{ required: true, message: 'Vehicle ID is required' }]}
           >
-            <Input placeholder="VEH-001" disabled={!!initialValues} />
+            <Input placeholder="FCID-001" disabled />
           </Form.Item>
         </Col>
         <Col span={12}>

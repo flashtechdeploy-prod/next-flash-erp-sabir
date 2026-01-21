@@ -229,6 +229,7 @@ export default function VehiclesPage() {
           initialValues={editingVehicle}
           onSubmit={handleFormSubmit}
           onCancel={() => setDrawerVisible(false)}
+          allVehicles={vehicles}
         />
       </Drawer>
 
