@@ -381,4 +381,47 @@ export class RestrictedInventoryService {
 
     return { success: true, message: 'Item returned successfully' };
   }
+
+  async listWeaponRegions() {
+    const rows = await this.db
+      .selectDistinct({ weapon_region: schema.restrictedInventoryItems.weapon_region })
+      .from(schema.restrictedInventoryItems)
+      .orderBy(asc(schema.restrictedInventoryItems.weapon_region));
+    return rows.map((r) => r.weapon_region).filter(Boolean);
+  }
+
+  async createWeaponRegion(region: string) {
+    const item_code = await this.generateRestrictedInventoryId();
+    await this.db.insert(schema.restrictedInventoryItems).values({
+      item_code,
+      name: region,
+      category: 'temp',
+      weapon_region: region,
+      unit_name: 'unit',
+      quantity_on_hand: 0,
+      status: 'inactive',
+      is_serial_tracked: true,
+    });
+    return { message: 'Weapon region created' };
+  }
+
+  async updateWeaponRegion(oldRegion: string, newRegion: string) {
+    await this.db
+      .update(schema.restrictedInventoryItems)
+      .set({ weapon_region: newRegion })
+      .where(eq(schema.restrictedInventoryItems.weapon_region, oldRegion));
+    return { message: 'Weapon region updated' };
+  }
+
+  async deleteWeaponRegion(region: string) {
+    await this.db
+      .delete(schema.restrictedInventoryItems)
+      .where(
+        and(
+          eq(schema.restrictedInventoryItems.weapon_region, region),
+          eq(schema.restrictedInventoryItems.status, 'inactive'),
+        ),
+      );
+    return { message: 'Weapon region deleted' };
+  }
 }

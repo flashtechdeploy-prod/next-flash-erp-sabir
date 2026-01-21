@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Table, Button, Space, Tag, Drawer, Form, Input, InputNumber, Select, message, Popconfirm, Card, Row, Col, Statistic, Tabs, Modal } from 'antd';
-import { PlusOutlined, InboxOutlined, WarningOutlined, CheckCircleOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
+import { PlusOutlined, InboxOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import { generalInventoryApi, employeeApi } from '@/lib/api';
 
 export default function GeneralInventoryPage() {
@@ -21,6 +21,21 @@ export default function GeneralInventoryPage() {
   const [transactionForm] = Form.useForm();
   const [categoryForm] = Form.useForm();
   const [searchText, setSearchText] = useState('');
+
+  // Aggregate issued quantities per item (issue adds, return subtracts)
+  const issuedByItem = useMemo(() => {
+    const acc: Record<string, number> = {};
+    transactions.forEach((tx: Record<string, unknown>) => {
+      const code = String(tx.item_code || '');
+      const qty = Number(tx.quantity || 0);
+      const type = String(tx.action || tx.transaction_type || '').toLowerCase();
+      if (!code) return;
+      if (!acc[code]) acc[code] = 0;
+      if (type === 'issue') acc[code] += qty;
+      if (type === 'return') acc[code] -= qty;
+    });
+    return acc;
+  }, [transactions]);
 
   useEffect(() => {
     loadData();
@@ -223,15 +238,35 @@ export default function GeneralInventoryPage() {
   };
 
   const itemColumns = [
-    { title: 'Code', dataIndex: 'item_code', key: 'item_code', width: 100, render: (t: string) => <span style={{ fontSize: '11px', fontWeight: 600 }}>{t}</span> },
-    { title: 'Name', dataIndex: 'name', key: 'name', width: 200, render: (t: string) => <span style={{ fontSize: '11px' }}>{t}</span> },
-    { title: 'Category', dataIndex: 'category', key: 'category', width: 120, render: (t: string) => <Tag color="blue" style={{ fontSize: '11px' }}>{t}</Tag> },
-    { title: 'Stock', dataIndex: 'quantity_on_hand', key: 'quantity_on_hand', width: 80, render: (v: number) => <span style={{ fontSize: '11px', fontWeight: 600 }}>{v}</span> },
+    { title: 'Code', dataIndex: 'item_code', key: 'item_code', width: 90, render: (t: string) => <span style={{ fontSize: '11px', fontWeight: 600 }}>{t}</span> },
+    { title: 'Name', dataIndex: 'name', key: 'name', width: 180, render: (t: string) => <span style={{ fontSize: '11px' }}>{t}</span> },
+    { title: 'Category', dataIndex: 'category', key: 'category', width: 110, render: (t: string) => <Tag color="blue" style={{ fontSize: '11px' }}>{t}</Tag> },
+    { title: 'Quantity in Stock', dataIndex: 'quantity_on_hand', key: 'quantity_on_hand', width: 110, render: (_: number, record: Record<string, unknown>) => <span style={{ fontSize: '11px', fontWeight: 600 }}>{getQty(record)}</span> },
+    { title: 'Total Quantity', key: 'total_quantity', width: 110, render: (_: unknown, record: Record<string, unknown>) => {
+        const code = String(record.item_code || '');
+        const stock = getQty(record);
+        const issued = issuedByItem[code] || 0;
+        const totalQty = stock + issued;
+        return <span style={{ fontSize: '11px' }}>{totalQty}</span>;
+      }
+    },
+    { title: 'Total Issues', key: 'total_issues', width: 100, render: (_: unknown, record: Record<string, unknown>) => {
+        const code = String(record.item_code || '');
+        const issued = issuedByItem[code] || 0;
+        return <span style={{ fontSize: '11px', fontWeight: 600 }}>{issued}</span>;
+      }
+    },
+    { title: 'Available', key: 'available', width: 100, render: (_: unknown, record: Record<string, unknown>) => {
+        const code = String(record.item_code || '');
+        const available = getQty(record);
+        return <span style={{ fontSize: '11px', fontWeight: 600 }}>{available}</span>;
+      }
+    },
     { title: 'Min Stock', dataIndex: 'min_quantity', key: 'min_quantity', width: 90, render: (v: number) => <span style={{ fontSize: '11px' }}>{v}</span> },
     { 
       title: 'Status', 
       key: 'status', 
-      width: 100,
+      width: 90,
       render: (_: unknown, record: Record<string, unknown>) => {
         const stock = Number(record.quantity_on_hand || 0);
         const minStock = Number(record.min_quantity || 0);
@@ -258,12 +293,24 @@ export default function GeneralInventoryPage() {
   ];
 
   const transactionColumns = [
-    { title: 'Date', dataIndex: 'transaction_date', key: 'transaction_date', width: 110, render: (t: string) => <span style={{ fontSize: '11px' }}>{t}</span> },
+    { title: 'FSS No.', dataIndex: 'employee_id', key: 'employee_id', width: 100, render: (t: string) => <span style={{ fontSize: '11px', fontWeight: 600 }}>{t}</span> },
+    { 
+      title: 'Emp Name', 
+      dataIndex: 'employee_id', 
+      key: 'emp_name', 
+      width: 150,
+      render: (empId: string) => {
+        const emp = employees.find((e: Record<string, unknown>) => 
+          String(e.fss_number || e.fss_no || e.id || '') === String(empId)
+        );
+        return <span style={{ fontSize: '11px' }}>{emp ? (String(emp.full_name || emp.name || '') || (String(emp.first_name || '') + ' ' + String(emp.last_name || '')).trim()) : empId || '-'}</span>;
+      }
+    },
     { title: 'Item', dataIndex: 'item_code', key: 'item_code', width: 100, render: (t: string) => <span style={{ fontSize: '11px', fontWeight: 600 }}>{t}</span> },
     { 
       title: 'Type', 
-      dataIndex: 'transaction_type', 
-      key: 'transaction_type', 
+      dataIndex: 'action', 
+      key: 'action', 
       width: 100,
       render: (type: string) => {
         const colors: Record<string, string> = { issue: 'blue', return: 'green', lost: 'red', damaged: 'orange', adjust: 'purple' };
@@ -271,19 +318,33 @@ export default function GeneralInventoryPage() {
       }
     },
     { title: 'Quantity', dataIndex: 'quantity', key: 'quantity', width: 80, render: (v: number) => <span style={{ fontSize: '11px' }}>{v}</span> },
-    { title: 'FSS No.', dataIndex: 'employee_id', key: 'employee_id', width: 120, render: (t: string) => <span style={{ fontSize: '11px' }}>{t}</span> },
-    { title: 'Notes', dataIndex: 'notes', key: 'notes', ellipsis: true, render: (t: string) => <span style={{ fontSize: '11px' }}>{t}</span> },
+    { title: 'Notes', dataIndex: 'notes', key: 'notes', width: 180, ellipsis: true, render: (t: string) => <span style={{ fontSize: '11px' }}>{t || '-'}</span> },
+    { title: 'Date', dataIndex: 'transaction_date', key: 'transaction_date', width: 110, render: (t: string) => <span style={{ fontSize: '11px' }}>{t}</span> },
   ];
 
-  const filteredItems = items.filter(item => 
-    String(item.item_code || '').toLowerCase().includes(searchText.toLowerCase()) ||
-    String(item.item_name || '').toLowerCase().includes(searchText.toLowerCase())
-  );
+  const filteredItems = items.filter(item => {
+    const term = searchText.toLowerCase();
+    const code = String(item.item_code || '').toLowerCase();
+    const name = String(item.name || item.item_name || '').toLowerCase();
+    return code.includes(term) || name.includes(term);
+  });
+
+  const getQty = (item: Record<string, unknown>) =>
+    Number(item.quantity_on_hand ?? item.quantity_in_stock ?? item.quantity ?? 0);
+  const getMin = (item: Record<string, unknown>) =>
+    Number(item.min_quantity ?? item.min_stock_level ?? 0);
 
   const totalItems = filteredItems.length;
-  const totalStock = filteredItems.reduce((sum, item) => sum + Number(item.quantity_in_stock || 0), 0);
-  const lowStockCount = filteredItems.filter(item => Number(item.quantity_in_stock || 0) <= Number(item.min_stock_level || 0)).length;
-  const outOfStockCount = filteredItems.filter(item => Number(item.quantity_in_stock || 0) === 0).length;
+  const totalStock = filteredItems.reduce((sum, item) => sum + getQty(item), 0);
+  const issuedUnits = transactions.reduce((sum, tx) => {
+    const qty = Number((tx as any).quantity || 0);
+    const type = String((tx as any).action || (tx as any).transaction_type || '').toLowerCase();
+    if (type === 'issue') return sum + qty;
+    if (type === 'return') return sum - qty;
+    return sum;
+  }, 0);
+  const totalUnits = totalStock + issuedUnits;
+  const availableUnits = totalStock;
 
   return (
     <div style={{ padding: '24px' }}>
@@ -298,16 +359,14 @@ export default function GeneralInventoryPage() {
 
       <Row gutter={16} style={{ marginBottom: '24px' }}>
         <Col span={6}>
-          <Card><Statistic title={<span style={{ fontSize: '12px' }}>Total Items</span>} value={totalItems} valueStyle={{ fontSize: '20px' }} prefix={<InboxOutlined />} /></Card>
-        </Col>
-        <Col span={6}>
-          <Card><Statistic title={<span style={{ fontSize: '12px' }}>Total Stock</span>} value={totalStock} valueStyle={{ fontSize: '20px', color: '#1890ff' }} /></Card>
-        </Col>
-        <Col span={6}>
-          <Card><Statistic title={<span style={{ fontSize: '12px' }}>Low Stock</span>} value={lowStockCount} valueStyle={{ fontSize: '20px', color: '#faad14' }} prefix={<WarningOutlined />} /></Card>
-        </Col>
-        <Col span={6}>
-          <Card><Statistic title={<span style={{ fontSize: '12px' }}>Out of Stock</span>} value={outOfStockCount} valueStyle={{ fontSize: '20px', color: '#ff4d4f' }} /></Card>
+          <Card>
+            <Statistic 
+              title={<span style={{ fontSize: '12px' }}>Total Quantity</span>} 
+              value={totalStock} 
+              valueStyle={{ fontSize: '20px', color: '#1890ff' }} 
+              prefix={<InboxOutlined />} 
+            />
+          </Card>
         </Col>
       </Row>
 

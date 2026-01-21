@@ -37,7 +37,10 @@ export class RestrictedInventoryController {
   }
 
   @Put('items/:item_code')
-  async updateItem(@Param('item_code') item_code: string, @Body() dto: Partial<RestrictedInventoryItemDto>) {
+  async updateItem(
+    @Param('item_code') item_code: string,
+    @Body() dto: Partial<RestrictedInventoryItemDto>,
+  ) {
     return this.service.updateItem(item_code, dto);
   }
 
@@ -57,7 +60,10 @@ export class RestrictedInventoryController {
   }
 
   @Put('categories/:category')
-  async updateCategory(@Param('category') category: string, @Body() dto: { newCategory: string }) {
+  async updateCategory(
+    @Param('category') category: string,
+    @Body() dto: { newCategory: string },
+  ) {
     return this.service.updateCategory(category, dto.newCategory);
   }
 
@@ -111,5 +117,28 @@ export class RestrictedInventoryController {
     @Body() dto: any,
   ) {
     return this.service.returnItem(item_code, dto);
+  }
+
+  @Get('weapon-regions')
+  async listWeaponRegions() {
+    return this.service.listWeaponRegions();
+  }
+
+  @Post('weapon-regions')
+  async createWeaponRegion(@Body() dto: { region: string }) {
+    return this.service.createWeaponRegion(dto.region);
+  }
+
+  @Put('weapon-regions/:region')
+  async updateWeaponRegion(
+    @Param('region') region: string,
+    @Body() dto: { newRegion: string },
+  ) {
+    return this.service.updateWeaponRegion(region, dto.newRegion);
+  }
+
+  @Delete('weapon-regions/:region')
+  async deleteWeaponRegion(@Param('region') region: string) {
+    return this.service.deleteWeaponRegion(region);
   }
 }

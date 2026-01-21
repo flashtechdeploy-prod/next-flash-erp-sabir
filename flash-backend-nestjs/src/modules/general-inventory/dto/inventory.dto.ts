@@ -20,6 +20,8 @@ export class RestrictedInventoryItemDto extends GeneralInventoryItemDto {
   @ApiPropertyOptional() @IsString() @IsOptional() make_model?: string;
   @ApiPropertyOptional() @IsString() @IsOptional() caliber?: string;
   @ApiPropertyOptional() @IsString() @IsOptional() storage_location?: string;
+  @ApiPropertyOptional() @IsString() @IsOptional() license_number?: string;
+  @ApiPropertyOptional() @IsString() @IsOptional() weapon_region?: string;
   @ApiPropertyOptional()
   @IsBoolean()
   @IsOptional()

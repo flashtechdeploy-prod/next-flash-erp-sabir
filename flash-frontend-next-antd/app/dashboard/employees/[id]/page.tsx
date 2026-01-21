@@ -8,7 +8,7 @@ import {
 } from 'antd';
 import {
   ArrowLeftOutlined, EditOutlined, DeleteOutlined, UploadOutlined,
-  FilePdfOutlined, EyeOutlined, DownloadOutlined, PrinterOutlined
+  FilePdfOutlined, EyeOutlined, DownloadOutlined, PrinterOutlined, ExportOutlined
 } from '@ant-design/icons';
 import { employeeApi, companySettingsApi } from '@/lib/api';
 import EmployeeForm, { DOCUMENT_CATEGORIES } from '../EmployeeForm';
@@ -520,6 +520,101 @@ export default function EmployeeDetailPage() {
     }, 250);
   };
 
+  const handleExportCSV = () => {
+    if (!employee) return;
+
+    const escapeCSVValue = (value: unknown): string => {
+      if (value === null || value === undefined) return '';
+      const str = String(value);
+      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+
+    // Headers
+    const headers = [
+      'Employee ID',
+      'Full Name',
+      'Father Name',
+      'Phone',
+      'Email',
+      'Date of Birth',
+      'Age',
+      'Blood Group',
+      'Address',
+      'District',
+      'State',
+      'Zip Code',
+      'Aadhar Number',
+      'Pan Number',
+      'Designation',
+      'Enrolled As',
+      'Joining Date',
+      'Experience',
+      'Qualification',
+      'Bank Account Number',
+      'IFSC Code',
+      'Pan Name',
+      'Basic Salary',
+      'Status',
+      'Profile Photo',
+      'Number of Documents'
+    ];
+
+    // Create CSV row
+    const row = [
+      employee.employee_id,
+      employee.full_name,
+      employee.father_name,
+      employee.phone || employee.mobile_no,
+      employee.email,
+      employee.date_of_birth,
+      employee.age,
+      employee.blood_group,
+      employee.address,
+      employee.district,
+      employee.state,
+      employee.zip_code,
+      employee.aadhar_number,
+      employee.pan_number,
+      employee.designation,
+      employee.enrolled_as,
+      employee.joining_date,
+      employee.experience,
+      employee.qualification,
+      employee.bank_account_number,
+      employee.ifsc_code,
+      employee.pan_name,
+      employee.basic_salary,
+      employee.status || 'Active',
+      employee.profile_photo || '-',
+      ((employee.documents as Array<any>) || []).length
+    ];
+
+    // Build CSV content
+    const csvContent = [
+      headers.map(escapeCSVValue).join(','),
+      row.map(escapeCSVValue).join(',')
+    ].join('\n');
+
+    // Create blob and download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    
+    const fileName = `employee-${employee.employee_id}-${new Date().toISOString().split('T')[0]}.csv`;
+    link.setAttribute('href', url);
+    link.setAttribute('download', fileName);
+    link.style.visibility = 'hidden';
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    message.success('CSV exported successfully');
+  };
+
   if (loading) return <div className="flex justify-center items-center h-96"><Spin size="large" /></div>;
   if (!employee) return <div>Employee not found</div>;
 
@@ -747,6 +842,9 @@ export default function EmployeeDetailPage() {
             </Button>
             <Button icon={<PrinterOutlined />} onClick={() => setPrintModalVisible(true)} style={{ minWidth: '120px' }}>
               Print
+            </Button>
+            <Button icon={<ExportOutlined />} onClick={handleExportCSV} style={{ minWidth: '120px' }}>
+              Export CSV
             </Button>
             <Button icon={<EditOutlined />} onClick={() => setEditDrawerVisible(true)} type="primary" style={{ minWidth: '120px' }}>
               Edit

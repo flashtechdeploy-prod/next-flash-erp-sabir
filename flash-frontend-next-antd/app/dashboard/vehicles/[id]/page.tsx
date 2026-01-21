@@ -3,16 +3,17 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
-  Card, Button, Space, Table, Drawer, Form, Upload, Input,
+  Card, Button, Space, Table, Drawer, Form, Upload, Input, Statistic, Row, Col, Progress,
   message, Popconfirm, Tag, Spin, Image, Tabs
 } from 'antd';
 import {
   ArrowLeftOutlined, EditOutlined, DeleteOutlined, UploadOutlined,
-  FilePdfOutlined, EyeOutlined, DownloadOutlined, PrinterOutlined,
+  FilePdfOutlined, EyeOutlined, DownloadOutlined, PrinterOutlined, WarningOutlined,
   CarOutlined, FileImageOutlined
 } from '@ant-design/icons';
-import { vehicleApi } from '@/lib/api';
+import { vehicleApi, fuelEntryApi } from '@/lib/api';
 import VehicleForm from '../VehicleForm';
+import dayjs from 'dayjs';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -37,6 +38,8 @@ export default function VehicleDetailPage() {
   const [previewVisible, setPreviewVisible] = useState(false);
   const [previewFile, setPreviewFile] = useState<string>('');
   const [uploadForm] = Form.useForm();
+  const [monthlyFuelUsage, setMonthlyFuelUsage] = useState(0);
+  const [loadingFuelData, setLoadingFuelData] = useState(false);
 
   const fetchVehicle = async () => {
     setLoading(true);
@@ -49,8 +52,33 @@ export default function VehicleDetailPage() {
     setVehicle(response.data as Record<string, unknown>);
   };
 
+  const fetchMonthlyFuelUsage = async () => {
+    setLoadingFuelData(true);
+    try {
+      const startOfMonth = dayjs().startOf('month').format('YYYY-MM-DD');
+      const endOfMonth = dayjs().endOf('month').format('YYYY-MM-DD');
+      
+      const response = await fuelEntryApi.getAll({ 
+        vehicle_id: vehicleId,
+        from_date: startOfMonth,
+        to_date: endOfMonth
+      });
+      
+      if (!response.error) {
+        const entries = (response.data as any)?.fuel_entries || (response.data as any) || [];
+        const totalLiters = entries.reduce((sum: number, entry: any) => sum + (Number(entry.liters) || 0), 0);
+        setMonthlyFuelUsage(totalLiters);
+      }
+    } catch (error) {
+      console.error('Failed to fetch fuel usage:', error);
+    } finally {
+      setLoadingFuelData(false);
+    }
+  };
+
   useEffect(() => {
     fetchVehicle();
+      fetchMonthlyFuelUsage();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vehicleId]);
 
@@ -62,6 +90,7 @@ export default function VehicleDetailPage() {
     }
     message.success('Vehicle updated');
     setEditDrawerVisible(false);
+      fetchMonthlyFuelUsage();
     fetchVehicle();
   };
 
@@ -271,6 +300,69 @@ export default function VehicleDetailPage() {
           </div>
         </div>
       </Card>
+
+      {vehicle?.fuel_limit_monthly && (
+        <Card className="mb-6" title="Monthly Fuel Monitoring" loading={loadingFuelData}>
+          <Row gutter={16}>
+            <Col span={8}>
+              <Statistic 
+                title="Fuel Limit (Liters)" 
+                value={Number(vehicle.fuel_limit_monthly)} 
+                precision={2}
+                suffix="L"
+              />
+            </Col>
+            <Col span={8}>
+              <Statistic 
+                title="Current Usage (This Month)" 
+                value={monthlyFuelUsage} 
+                precision={2}
+                suffix="L"
+                valueStyle={{ 
+                  color: monthlyFuelUsage > Number(vehicle.fuel_limit_monthly) ? '#cf1322' : 
+                         monthlyFuelUsage > Number(vehicle.fuel_limit_monthly) * 0.8 ? '#faad14' : '#3f8600' 
+                }}
+              />
+            </Col>
+            <Col span={8}>
+              <Statistic 
+                title="Status" 
+                value={monthlyFuelUsage > Number(vehicle.fuel_limit_monthly) ? 'Exceeded' : 'Within Limit'}
+                valueStyle={{ 
+                  color: monthlyFuelUsage > Number(vehicle.fuel_limit_monthly) ? '#cf1322' : '#3f8600',
+                  fontSize: '16px'
+                }}
+                prefix={monthlyFuelUsage > Number(vehicle.fuel_limit_monthly) ? <WarningOutlined /> : null}
+              />
+            </Col>
+          </Row>
+          <div className="mt-4">
+            <Progress 
+              percent={Math.min((monthlyFuelUsage / Number(vehicle.fuel_limit_monthly)) * 100, 100)} 
+              status={
+                monthlyFuelUsage > Number(vehicle.fuel_limit_monthly) ? 'exception' : 
+                monthlyFuelUsage > Number(vehicle.fuel_limit_monthly) * 0.8 ? 'normal' : 
+                'success'
+              }
+              strokeColor={
+                monthlyFuelUsage > Number(vehicle.fuel_limit_monthly) ? '#ff4d4f' : 
+                monthlyFuelUsage > Number(vehicle.fuel_limit_monthly) * 0.8 ? '#faad14' : 
+                '#52c41a'
+              }
+            />
+            {monthlyFuelUsage > Number(vehicle.fuel_limit_monthly) && (
+              <Tag color="error" className="mt-2" icon={<WarningOutlined />}>
+                Fuel limit exceeded by {(monthlyFuelUsage - Number(vehicle.fuel_limit_monthly)).toFixed(2)} liters
+              </Tag>
+            )}
+            {monthlyFuelUsage > Number(vehicle.fuel_limit_monthly) * 0.8 && monthlyFuelUsage <= Number(vehicle.fuel_limit_monthly) && (
+              <Tag color="warning" className="mt-2" icon={<WarningOutlined />}>
+                Approaching fuel limit - {((Number(vehicle.fuel_limit_monthly) - monthlyFuelUsage) || 0).toFixed(2)} liters remaining
+              </Tag>
+            )}
+          </div>
+        </Card>
+      )}
 
       <Tabs
         items={[

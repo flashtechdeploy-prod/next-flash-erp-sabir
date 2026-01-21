@@ -163,6 +163,24 @@ export default function VehicleForm({ initialValues, onSubmit, onCancel, allVehi
         </Col>
       </Row>
 
+      <Divider>Fuel Management</Divider>
+      <Row gutter={16}>
+        <Col span={24}>
+          <Form.Item 
+            label="Monthly Fuel Limit (Liters)" 
+            name="fuel_limit_monthly"
+            extra="Set a monthly fuel consumption limit. You'll be notified when this vehicle exceeds the limit."
+          >
+            <InputNumber 
+              style={{ width: '100%' }} 
+              min={0} 
+              placeholder="e.g., 200" 
+              addonAfter="Liters"
+            />
+          </Form.Item>
+        </Col>
+      </Row>
+
       <div className="flex justify-end gap-2 mt-4 pt-4 border-t sticky bottom-0 bg-white">
         <Button onClick={onCancel}>Cancel</Button>
         <Button type="primary" htmlType="submit">

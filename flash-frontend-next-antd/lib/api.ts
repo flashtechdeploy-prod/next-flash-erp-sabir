@@ -594,6 +594,12 @@ export const restrictedInventoryApi = {
   updateCategory: (category: string, newCategory: string) => api.put(`/api/restricted-inventory/categories/${category}`, { newCategory }),
   deleteCategory: (category: string) => api.delete(`/api/restricted-inventory/categories/${category}`),
 
+  // Weapon Regions
+  getWeaponRegions: () => api.get("/api/restricted-inventory/weapon-regions"),
+  createWeaponRegion: (region: string) => api.post("/api/restricted-inventory/weapon-regions", { region }),
+  updateWeaponRegion: (region: string, newRegion: string) => api.put(`/api/restricted-inventory/weapon-regions/${region}`, { newRegion }),
+  deleteWeaponRegion: (region: string) => api.delete(`/api/restricted-inventory/weapon-regions/${region}`),
+
   // Serial Units
   getSerialUnits: (itemCode: string) =>
     api.get(`/api/restricted-inventory/items/${itemCode}/serial-units`),

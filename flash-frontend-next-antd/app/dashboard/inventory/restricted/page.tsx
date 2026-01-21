@@ -11,18 +11,22 @@ export default function RestrictedInventoryPage() {
   const [transactions, setTransactions] = useState<Record<string, unknown>[]>([]);
   const [employees, setEmployees] = useState<Record<string, unknown>[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
+  const [weaponRegions, setWeaponRegions] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [itemDrawerVisible, setItemDrawerVisible] = useState(false);
   const [serialDrawerVisible, setSerialDrawerVisible] = useState(false);
   const [categoryModalVisible, setCategoryModalVisible] = useState(false);
+  const [weaponRegionModalVisible, setWeaponRegionModalVisible] = useState(false);
   const [editingItem, setEditingItem] = useState<Record<string, unknown> | null>(null);
   const [editingCategory, setEditingCategory] = useState<string | null>(null);
+  const [editingWeaponRegion, setEditingWeaponRegion] = useState<string | null>(null);
   const [selectedItem, setSelectedItem] = useState<Record<string, unknown> | null>(null);
   const [form] = Form.useForm();
   const [serialForm] = Form.useForm();
   const [issueForm] = Form.useForm();
   const [transactionForm] = Form.useForm();
   const [categoryForm] = Form.useForm();
+  const [weaponRegionForm] = Form.useForm();
   const [transactionDrawerVisible, setTransactionDrawerVisible] = useState(false);
   const [transactionType, setTransactionType] = useState<string>('issue');
   const [searchText, setSearchText] = useState('');
@@ -31,11 +35,16 @@ export default function RestrictedInventoryPage() {
   const [returnDrawerVisible, setReturnDrawerVisible] = useState(false);
   const [returnForm] = Form.useForm();
   const [selectedSerialUnitId, setSelectedSerialUnitId] = useState<number | null>(null);
+  const [employeeReportVisible, setEmployeeReportVisible] = useState(false);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
+  const [employeeAssignments, setEmployeeAssignments] = useState<{ general: any[], restricted: any[], vehicles: any[] }>({ general: [], restricted: [], vehicles: [] });
+  const [loadingReport, setLoadingReport] = useState(false);
 
   useEffect(() => {
     loadData();
     loadEmployees();
     loadCategories();
+    loadWeaponRegions();
   }, []);
 
   const loadEmployees = async () => {
@@ -72,6 +81,18 @@ export default function RestrictedInventoryPage() {
       setCategories(categoryList);
     } catch (error) {
       console.error('Failed to load categories:', error);
+    }
+  };
+
+  const loadWeaponRegions = async () => {
+    try {
+      const response = await restrictedInventoryApi.getWeaponRegions();
+      console.log('Weapon regions response:', response);
+      const regionList = response.data ? (Array.isArray(response.data) ? response.data : []) : [];
+      console.log('Loaded weapon regions:', regionList);
+      setWeaponRegions(regionList);
+    } catch (error) {
+      console.error('Failed to load weapon regions:', error);
     }
   };
 
@@ -133,6 +154,8 @@ export default function RestrictedInventoryPage() {
       min_quantity: record.min_quantity || 0,
       is_serial_tracked: record.is_serial_tracked || false,
       description: record.description,
+      license_number: record.license_number,
+      weapon_region: record.weapon_region,
     });
     setItemDrawerVisible(true);
   };
@@ -171,6 +194,8 @@ export default function RestrictedInventoryPage() {
         min_quantity: Number(min_quantity),
         description: values.description || undefined,
         is_serial_tracked: values.is_serial_tracked || false,
+        license_number: values.license_number || undefined,
+        weapon_region: values.weapon_region || undefined,
       };
       
       console.log('📤 Submitting item data:', data);
@@ -347,6 +372,103 @@ export default function RestrictedInventoryPage() {
     }
   };
 
+  const handleEditWeaponRegion = (region: string) => {
+    setEditingWeaponRegion(region);
+    weaponRegionForm.setFieldsValue({ region });
+  };
+
+  const handleSubmitWeaponRegion = async () => {
+    try {
+      const values = await weaponRegionForm.validateFields();
+      if (editingWeaponRegion) {
+        await restrictedInventoryApi.updateWeaponRegion(editingWeaponRegion, values.region);
+        message.success('Weapon region updated');
+      } else {
+        await restrictedInventoryApi.createWeaponRegion(values.region);
+        message.success('Weapon region added');
+      }
+      setWeaponRegionModalVisible(false);
+      weaponRegionForm.resetFields();
+      setEditingWeaponRegion(null);
+      loadWeaponRegions();
+    } catch (error) {
+      console.error('Save error:', error);
+      message.error('Failed to save weapon region');
+    }
+  };
+
+  const handleDeleteWeaponRegion = async (region: string) => {
+    try {
+      await restrictedInventoryApi.deleteWeaponRegion(region);
+      message.success('Weapon region deleted');
+      loadWeaponRegions();
+    } catch (error: any) {
+      message.error(error.response?.data?.message || 'Failed to delete weapon region');
+    }
+  };
+
+  const handleViewEmployeeReport = async (employeeId: string) => {
+    setSelectedEmployeeId(employeeId);
+    setEmployeeReportVisible(true);
+    setLoadingReport(true);
+    
+    try {
+      const token = localStorage.getItem('token');
+      const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      // Fetch transactions, items, vehicles, and vehicle assignments
+      const [generalTransResponse, restrictedTransResponse, generalItemsResponse, restrictedItemsResponse, vehiclesResponse, vehicleAssignmentsResponse] = await Promise.all([
+        fetch(`${API_BASE}/api/general-inventory/transactions?employee_id=${employeeId}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }).then(r => r.json()),
+        restrictedInventoryApi.getTransactions({ employee_id: employeeId }),
+        fetch(`${API_BASE}/api/general-inventory/items`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }).then(r => r.json()),
+        restrictedInventoryApi.getItems(),
+        fetch(`${API_BASE}/api/vehicles`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }).then(r => r.json()).catch(() => ({ data: [] })),
+        fetch(`${API_BASE}/api/vehicle-assignments?employee_fss=${employeeId}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }).then(r => r.json()).catch(() => ({ data: [] }))
+      ]);
+      
+      const generalTrans = generalTransResponse?.data || (Array.isArray(generalTransResponse) ? generalTransResponse : []);
+      const restrictedTrans = restrictedTransResponse?.data || (Array.isArray(restrictedTransResponse) ? restrictedTransResponse : []);
+      const generalItems = generalItemsResponse?.data || (Array.isArray(generalItemsResponse) ? generalItemsResponse : []);
+      const restrictedItems = restrictedItemsResponse?.data || (Array.isArray(restrictedItemsResponse) ? restrictedItemsResponse : []);
+      const vehicles = vehiclesResponse?.data || (Array.isArray(vehiclesResponse) ? vehiclesResponse : []);
+      const vehicleAssignments = vehicleAssignmentsResponse?.data || (Array.isArray(vehicleAssignmentsResponse) ? vehicleAssignmentsResponse : []);
+      
+      // Create item lookup maps
+      const generalItemMap = new Map(generalItems.map((item: any) => [item.item_code, item.name || item.item_name]));
+      const restrictedItemMap = new Map(restrictedItems.map((item: any) => [item.item_code, item.name]));
+      const vehicleMap = new Map(vehicles.map((v: any) => [v.vehicle_id || v.id, v.vehicle_name || v.name || v.make_model]));
+      
+      // Filter only 'issue' transactions and add item names
+      const generalIssued = generalTrans
+        .filter((t: any) => t.action === 'issue')
+        .map((t: any) => ({ ...t, item_name: generalItemMap.get(t.item_code) || 'Unknown Item' }));
+      
+      const restrictedIssued = restrictedTrans
+        .filter((t: any) => t.action === 'issue')
+        .map((t: any) => ({ ...t, item_name: restrictedItemMap.get(t.item_code) || 'Unknown Item' }));
+      
+      // Add vehicle names to assignments
+      const vehiclesWithNames = vehicleAssignments.map((va: any) => ({
+        ...va,
+        vehicle_name: vehicleMap.get(va.vehicle_id) || va.vehicle_name || 'Unknown Vehicle'
+      }));
+      
+      setEmployeeAssignments({ general: generalIssued, restricted: restrictedIssued, vehicles: vehiclesWithNames });
+    } catch (error) {
+      console.error('Failed to load employee report:', error);
+      message.error('Failed to load employee assignments');
+    } finally {
+      setLoadingReport(false);
+    }
+  };
+
   const itemColumns = [
     { title: 'Code', dataIndex: 'item_code', key: 'item_code', width: 100, render: (t: string) => <span style={{ fontSize: '11px', fontWeight: 600 }}>{t}</span> },
     { title: 'Name', dataIndex: 'name', key: 'name', width: 200, render: (t: string) => <span style={{ fontSize: '11px' }}>{t}</span> },
@@ -469,7 +591,22 @@ export default function RestrictedInventoryPage() {
         return <Tag color={colors[type] || 'default'} style={{ fontSize: '11px' }}>{type?.toUpperCase()}</Tag>;
       }
     },
-    { title: 'FSS No.', dataIndex: 'employee_id', key: 'employee_id', width: 120, render: (t: string) => <span style={{ fontSize: '11px' }}>{t}</span> },
+    { 
+      title: 'FSS No.', 
+      dataIndex: 'employee_id', 
+      key: 'employee_id', 
+      width: 120, 
+      render: (t: string) => (
+        <Button 
+          type="link" 
+          size="small" 
+          onClick={() => handleViewEmployeeReport(t)} 
+          style={{ fontSize: '11px', padding: 0, fontWeight: 600 }}
+        >
+          {t}
+        </Button>
+      )
+    },
     { title: 'Notes', dataIndex: 'notes', key: 'notes', ellipsis: true, render: (t: string) => <span style={{ fontSize: '11px' }}>{t}</span> },
   ];
 
@@ -490,6 +627,7 @@ export default function RestrictedInventoryPage() {
         <Space>
           <Input.Search placeholder="Search items..." value={searchText} onChange={(e) => setSearchText(e.target.value)} style={{ width: 250 }} />
           <Button onClick={() => setCategoryModalVisible(true)}>Manage Categories</Button>
+          <Button onClick={() => setWeaponRegionModalVisible(true)}>Manage Regions</Button>
           <Button type="primary" icon={<PlusOutlined />} onClick={handleAddItem}>Add Item</Button>
         </Space>
       </div>
@@ -537,6 +675,10 @@ export default function RestrictedInventoryPage() {
           <Form.Item name="unit_name" label="Unit" initialValue="unit"><Input placeholder="Unit name (e.g., piece, box)" /></Form.Item>
           <Form.Item name="quantity_on_hand" label="Total Quantity" initialValue={0}><InputNumber style={{ width: '100%' }} min={0} placeholder="Enter total quantity" /></Form.Item>
           <Form.Item name="min_quantity" label="Minimum Stock Level" initialValue={0}><InputNumber style={{ width: '100%' }} min={0} placeholder="Enter minimum stock level" /></Form.Item>
+          <Form.Item name="license_number" label="License Number"><Input placeholder="Enter license number" /></Form.Item>
+          <Form.Item name="weapon_region" label="Weapon Region">
+            <Select placeholder="Select weapon region" allowClear options={weaponRegions.map(region => ({ label: region, value: region }))} />
+          </Form.Item>
           <Form.Item name="is_serial_tracked" label="Track by Serial Number" valuePropName="checked" initialValue={false}><div style={{ fontSize: '12px', color: '#666' }}>Check for weapons (rifles, etc.). Uncheck for ammo/consumables.</div></Form.Item>
           <Form.Item name="description" label="Description"><Input.TextArea rows={3} placeholder="Item description" /></Form.Item>
         </Form>
@@ -727,6 +869,175 @@ export default function RestrictedInventoryPage() {
                 )}
               </Space>
             </div>
+          </>
+        )}
+      </Modal>
+
+      {/* Weapon Region Management Modal */}
+      <Modal
+        title="Manage Weapon Regions"
+        open={weaponRegionModalVisible}
+        onCancel={() => {
+          setWeaponRegionModalVisible(false);
+          weaponRegionForm.resetFields();
+          setEditingWeaponRegion(null);
+        }}
+        onOk={handleSubmitWeaponRegion}
+        okText={editingWeaponRegion ? 'Update' : 'Add'}
+        width={600}
+      >
+        {editingWeaponRegion ? (
+          <Form form={weaponRegionForm} layout="vertical">
+            <Form.Item name="region" label="Region Name" rules={[{ required: true, message: 'Please enter region name' }]}>
+              <Input placeholder="Enter region name" />
+            </Form.Item>
+          </Form>
+        ) : (
+          <>
+            <Form form={weaponRegionForm} layout="vertical" style={{ marginBottom: 24 }}>
+              <Form.Item name="region" label="New Region Name" rules={[{ required: true, message: 'Please enter region name' }]}>
+                <Input placeholder="Enter region name" />
+              </Form.Item>
+            </Form>
+            <div style={{ marginTop: '24px' }}>
+              <h4 style={{ marginBottom: '12px', fontWeight: 600 }}>Existing Weapon Regions:</h4>
+              <Space wrap>
+                {weaponRegions.length > 0 ? (
+                  weaponRegions.map(region => (
+                    <Tag key={region} color="green" style={{ padding: '6px 12px', fontSize: '12px' }}>
+                      {region}
+                      <DeleteOutlined 
+                        onClick={() => {
+                          Modal.confirm({
+                            title: 'Delete Weapon Region?',
+                            content: 'This action cannot be undone if items exist in this region.',
+                            okText: 'Delete',
+                            cancelText: 'Cancel',
+                            onOk: () => handleDeleteWeaponRegion(region),
+                          });
+                        }}
+                        style={{ marginLeft: '8px', cursor: 'pointer' }}
+                      />
+                      <EditOutlined 
+                        onClick={() => handleEditWeaponRegion(region)}
+                        style={{ marginLeft: '8px', cursor: 'pointer' }}
+                      />
+                    </Tag>
+                  ))
+                ) : (
+                  <p style={{ color: '#999' }}>No weapon regions yet</p>
+                )}
+              </Space>
+            </div>
+          </>
+        )}
+      </Modal>
+
+      {/* Employee Assignment Report Modal */}
+      <Modal
+        title={`Employee Assignment Report - FSS: ${selectedEmployeeId}`}
+        open={employeeReportVisible}
+        onCancel={() => setEmployeeReportVisible(false)}
+        width={1000}
+        footer={[
+          <Button key="close" onClick={() => setEmployeeReportVisible(false)}>Close</Button>
+        ]}
+      >
+        {loadingReport ? (
+          <div style={{ textAlign: 'center', padding: '40px' }}>Loading...</div>
+        ) : (
+          <>
+            <Row gutter={16} style={{ marginBottom: '24px' }}>
+              <Col span={6}>
+                <Card>
+                  <Statistic 
+                    title="General Inventory" 
+                    value={employeeAssignments.general.reduce((sum, t) => sum + (t.quantity || 0), 0)} 
+                    valueStyle={{ color: '#1890ff', fontSize: '20px' }}
+                    suffix="items"
+                  />
+                </Card>
+              </Col>
+              <Col span={6}>
+                <Card>
+                  <Statistic 
+                    title="Restricted Inventory" 
+                    value={employeeAssignments.restricted.length} 
+                    valueStyle={{ color: '#52c41a', fontSize: '20px' }}
+                    suffix="items"
+                  />
+                </Card>
+              </Col>
+              <Col span={6}>
+                <Card>
+                  <Statistic 
+                    title="Vehicles Assigned" 
+                    value={employeeAssignments.vehicles.length} 
+                    valueStyle={{ color: '#faad14', fontSize: '20px' }}
+                    suffix="vehicles"
+                  />
+                </Card>
+              </Col>
+              <Col span={6}>
+                <Card>
+                  <Statistic 
+                    title="Total Assignments" 
+                    value={employeeAssignments.general.length + employeeAssignments.restricted.length + employeeAssignments.vehicles.length} 
+                    valueStyle={{ color: '#722ed1', fontSize: '20px' }}
+                  />
+                </Card>
+              </Col>
+            </Row>
+
+            <Tabs defaultActiveKey="general">
+              <Tabs.TabPane tab={`General Inventory (${employeeAssignments.general.length})`} key="general">
+                <Table 
+                  dataSource={employeeAssignments.general} 
+                  rowKey="id" 
+                  size="small"
+                  pagination={{ pageSize: 10 }}
+                  columns={[
+                    { title: 'Item Code', dataIndex: 'item_code', key: 'item_code', width: 120 },
+                    { title: 'Item Name', dataIndex: 'item_name', key: 'item_name', width: 200, render: (t: string) => <span style={{ fontWeight: 600 }}>{t}</span> },
+                    { title: 'Quantity', dataIndex: 'quantity', key: 'quantity', width: 100 },
+                    { title: 'Date', dataIndex: 'transaction_date', key: 'transaction_date', width: 120 },
+                    { title: 'Notes', dataIndex: 'notes', key: 'notes', ellipsis: true },
+                  ]}
+                />
+              </Tabs.TabPane>
+              <Tabs.TabPane tab={`Restricted Inventory (${employeeAssignments.restricted.length})`} key="restricted">
+                <Table 
+                  dataSource={employeeAssignments.restricted} 
+                  rowKey="id" 
+                  size="small"
+                  pagination={{ pageSize: 10 }}
+                  columns={[
+                    { title: 'Item Code', dataIndex: 'item_code', key: 'item_code', width: 120 },
+                    { title: 'Item Name', dataIndex: 'item_name', key: 'item_name', width: 200, render: (t: string) => <span style={{ fontWeight: 600 }}>{t}</span> },
+                    { title: 'Serial Number', dataIndex: 'serial_number', key: 'serial_number', width: 150, render: (t: string) => t || '-' },
+                    { title: 'Quantity', dataIndex: 'quantity', key: 'quantity', width: 100, render: (v: number) => v || '-' },
+                    { title: 'Date', dataIndex: 'created_at', key: 'created_at', width: 120, render: (t: string) => t ? new Date(t).toLocaleDateString() : '-' },
+                    { title: 'Notes', dataIndex: 'notes', key: 'notes', ellipsis: true },
+                  ]}
+                />
+              </Tabs.TabPane>
+              <Tabs.TabPane tab={`Vehicles (${employeeAssignments.vehicles.length})`} key="vehicles">
+                <Table 
+                  dataSource={employeeAssignments.vehicles} 
+                  rowKey="id" 
+                  size="small"
+                  pagination={{ pageSize: 10 }}
+                  columns={[
+                    { title: 'Vehicle ID', dataIndex: 'vehicle_id', key: 'vehicle_id', width: 120, render: (t: string) => <span style={{ fontWeight: 600 }}>{t}</span> },
+                    { title: 'Vehicle Name', dataIndex: 'vehicle_name', key: 'vehicle_name', width: 200 },
+                    { title: 'Type', dataIndex: 'vehicle_type', key: 'vehicle_type', width: 120 },
+                    { title: 'Start Date', dataIndex: 'start_date', key: 'start_date', width: 120, render: (t: string) => t ? new Date(t).toLocaleDateString() : '-' },
+                    { title: 'End Date', dataIndex: 'end_date', key: 'end_date', width: 120, render: (t: string) => t ? new Date(t).toLocaleDateString() : 'Active' },
+                    { title: 'Purpose', dataIndex: 'purpose', key: 'purpose', ellipsis: true },
+                  ]}
+                />
+              </Tabs.TabPane>
+            </Tabs>
           </>
         )}
       </Modal>

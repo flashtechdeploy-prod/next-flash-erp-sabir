@@ -51,6 +51,8 @@ export const restrictedInventoryItems = pgTable('restricted_inventory_items', {
   make_model: text('make_model'),
   caliber: text('caliber'),
   storage_location: text('storage_location'),
+  license_number: text('license_number'),
+  weapon_region: text('weapon_region'),
   requires_maintenance: boolean('requires_maintenance').default(false),
   requires_cleaning: boolean('requires_cleaning').default(false),
   status: text('status').default('active'),
