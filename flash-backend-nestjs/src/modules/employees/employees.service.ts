@@ -2,7 +2,7 @@ import { Injectable, NotFoundException, Inject, Logger } from '@nestjs/common';
 import { DRIZZLE } from '../../db/drizzle.module';
 import * as schema from '../../db/schema';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
-import { eq, like, or, and, sql, desc, asc, SQL } from 'drizzle-orm';
+import { eq, like, or, and, sql, desc, asc, SQL, ilike } from 'drizzle-orm';
 import { CloudStorageService } from '../../common/storage/cloud-storage.service';
 import {
   CreateEmployeeDto,
@@ -40,33 +40,44 @@ export class EmployeesService {
     if (deployed_at)
       filters.push(eq(schema.employees.deployed_at, deployed_at));
     
-    if (fss_number) filters.push(like(schema.employees.fss_number, `%${fss_number}%`));
-    if (full_name) filters.push(like(schema.employees.full_name, `%${full_name}%`));
-    if (cnic) filters.push(like(schema.employees.cnic, `%${cnic}%`));
-    if (query.father_name) filters.push(like(schema.employees.father_name, `%${query.father_name}%`));
-    if (query.date_of_birth) filters.push(like(schema.employees.date_of_birth, `%${query.date_of_birth}%`));
-    if (query.department) filters.push(like(schema.employees.department, `%${query.department}%`));
-    if (query.designation) filters.push(like(schema.employees.designation, `%${query.designation}%`));
-    if (query.enrolled_as) filters.push(like(schema.employees.enrolled_as, `%${query.enrolled_as}%`));
-    if (query.date_of_enrolment) filters.push(like(schema.employees.date_of_enrolment, `%${query.date_of_enrolment}%`));
+    if (fss_number) filters.push(or(
+        ilike(schema.employees.fss_number, `%${fss_number}%`),
+        ilike(schema.employees.fss_no, `%${fss_number}%`)
+    ) as SQL);
+    if (full_name) filters.push(ilike(schema.employees.full_name, `%${full_name}%`));
+    if (cnic) filters.push(or(
+        ilike(schema.employees.cnic, `%${cnic}%`),
+        ilike(schema.employees.cnic_no, `%${cnic}%`)
+    ) as SQL);
+    if (query.father_name) filters.push(ilike(schema.employees.father_name, `%${query.father_name}%`));
+    if (query.date_of_birth) filters.push(or(
+        ilike(schema.employees.date_of_birth, `%${query.date_of_birth}%`),
+        ilike(schema.employees.dob, `%${query.date_of_birth}%`)
+    ) as SQL);
+    if (query.department) filters.push(ilike(schema.employees.department, `%${query.department}%`));
+    if (query.designation) filters.push(ilike(schema.employees.designation, `%${query.designation}%`));
+    if (query.enrolled_as) filters.push(ilike(schema.employees.enrolled_as, `%${query.enrolled_as}%`));
+    if (query.date_of_enrolment) filters.push(ilike(schema.employees.date_of_enrolment, `%${query.date_of_enrolment}%`));
     
     if (query.mobile_number) {
         filters.push(or(
-            like(schema.employees.mobile_number, `%${query.mobile_number}%`),
-            like(schema.employees.mobile_no, `%${query.mobile_number}%`),
-            like(schema.employees.phone, `%${query.mobile_number}%`),
-            like(schema.employees.personal_phone_number, `%${query.mobile_number}%`)
+            ilike(schema.employees.mobile_number, `%${query.mobile_number}%`),
+            ilike(schema.employees.mobile_no, `%${query.mobile_number}%`),
+            ilike(schema.employees.phone, `%${query.mobile_number}%`),
+            ilike(schema.employees.personal_phone_number, `%${query.mobile_number}%`)
         ) as SQL);
     }
 
     if (search) {
       filters.push(
         or(
-          like(schema.employees.full_name, `%${search}%`),
-          like(schema.employees.employee_id, `%${search}%`),
-          like(schema.employees.cnic, `%${search}%`),
-          like(schema.employees.fss_number, `%${search}%`),
-          like(schema.employees.phone, `%${search}%`),
+          ilike(schema.employees.full_name, `%${search}%`),
+          ilike(schema.employees.employee_id, `%${search}%`),
+          ilike(schema.employees.cnic, `%${search}%`),
+          ilike(schema.employees.cnic_no, `%${search}%`),
+          ilike(schema.employees.fss_number, `%${search}%`),
+          ilike(schema.employees.fss_no, `%${search}%`),
+          ilike(schema.employees.phone, `%${search}%`),
         ),
       );
     }
@@ -78,7 +89,7 @@ export class EmployeesService {
     )
       .limit(limit)
       .offset(skip)
-      .orderBy(desc(schema.employees.fss_number));
+      .orderBy(desc(sql`CAST(COALESCE(${schema.employees.fss_number}, ${schema.employees.fss_no}, '0') AS INTEGER)`));
 
     if (with_total) {
       const results = await (this.db

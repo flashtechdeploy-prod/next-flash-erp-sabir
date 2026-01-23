@@ -60,6 +60,7 @@ export class EmployeesController {
   @Delete('all')
   @ApiOperation({ summary: 'Delete all employees (Dangerous)' })
   @HttpCode(HttpStatus.NO_CONTENT)
+  @Public()
   async removeAll() {
     return this.employeesService.removeAll();
   }
