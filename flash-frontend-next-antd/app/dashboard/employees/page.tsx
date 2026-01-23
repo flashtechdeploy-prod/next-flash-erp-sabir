@@ -12,6 +12,11 @@ import {
   message,
   Popconfirm,
   Tag,
+  Form,
+  InputNumber,
+  Dropdown,
+  Menu,
+  MenuProps,
 } from 'antd';
 import {
   PlusOutlined,
@@ -19,8 +24,10 @@ import {
   DeleteOutlined,
   SearchOutlined,
   ReloadOutlined,
+  InboxOutlined,
+  DownOutlined,
 } from '@ant-design/icons';
-import { employeeApi } from '@/lib/api';
+import { employeeApi, generalInventoryApi, restrictedInventoryApi } from '@/lib/api';
 import EmployeeForm from './EmployeeForm';
 
 const { Search } = Input;
@@ -63,6 +70,17 @@ export default function EmployeesPage() {
     enrolled_as: '',
     date_of_enrolment: '',
   });
+
+  // Inventory assignment state
+  const [generalItemDrawerVisible, setGeneralItemDrawerVisible] = useState(false);
+  const [restrictedItemDrawerVisible, setRestrictedItemDrawerVisible] = useState(false);
+  const [selectedEmployeeForAssignment, setSelectedEmployeeForAssignment] = useState<Employee | null>(null);
+  const [generalItems, setGeneralItems] = useState<Record<string, unknown>[]>([]);
+  const [restrictedItems, setRestrictedItems] = useState<Record<string, unknown>[]>([]);
+  const [restrictedSerialUnits, setRestrictedSerialUnits] = useState<Record<string, unknown>[]>([]);
+  const [selectedRestrictedItem, setSelectedRestrictedItem] = useState<Record<string, unknown> | null>(null);
+  const [generalItemForm] = Form.useForm();
+  const [restrictedItemForm] = Form.useForm();
 
   const fetchEmployees = async (page = pagination.current, pageSize = pagination.pageSize) => {
     setLoading(true);
@@ -195,6 +213,132 @@ export default function EmployeesPage() {
     fetchEmployees();
   };
 
+  // Inventory assignment handlers
+  const handleAssignGeneralItem = async (employee: Employee) => {
+    setSelectedEmployeeForAssignment(employee);
+    generalItemForm.resetFields();
+    setGeneralItemDrawerVisible(true);
+
+    // Load general inventory items
+    const response = await generalInventoryApi.getItems();
+    if (!response.error && response.data) {
+      const items = Array.isArray(response.data) ? response.data : [];
+      setGeneralItems(items);
+    }
+  };
+
+  const handleAssignRestrictedItem = async (employee: Employee) => {
+    setSelectedEmployeeForAssignment(employee);
+    restrictedItemForm.resetFields();
+    setRestrictedItemDrawerVisible(true);
+
+    // Load restricted inventory items
+    const response = await restrictedInventoryApi.getItems();
+    if (!response.error && response.data) {
+      const items = Array.isArray(response.data) ? response.data : [];
+      setRestrictedItems(items);
+    }
+  };
+
+  const handleRestrictedItemChange = async (itemCode: string) => {
+    const item = restrictedItems.find((i: any) => i.item_code === itemCode);
+    setSelectedRestrictedItem(item || null);
+
+    // If item is serial tracked, load serial units
+    if (item && item.is_serial_tracked) {
+      const response = await restrictedInventoryApi.getSerialUnits(itemCode);
+      if (!response.error && response.data) {
+        const units = Array.isArray(response.data) ? response.data : [];
+        // Filter only available units
+        const availableUnits = units.filter((u: any) => u.status === 'in_stock');
+        setRestrictedSerialUnits(availableUnits);
+      }
+    } else {
+      setRestrictedSerialUnits([]);
+    }
+  };
+
+  const handleSubmitGeneralItemAssignment = async () => {
+    try {
+      const values = await generalItemForm.validateFields();
+      const fssNumber = selectedEmployeeForAssignment?.fss_number || selectedEmployeeForAssignment?.fss_no;
+
+      if (!fssNumber) {
+        message.error('Employee FSS number not found');
+        return;
+      }
+
+      const assignmentData = {
+        quantity: values.quantity,
+        employee_id: String(fssNumber),
+        notes: values.notes || '',
+      };
+
+      const response = await generalInventoryApi.issueItem(values.item_code, assignmentData);
+
+      if (response.error) {
+        message.error(response.error);
+        return;
+      }
+
+      message.success('General item assigned successfully');
+      setGeneralItemDrawerVisible(false);
+      generalItemForm.resetFields();
+    } catch (error) {
+      console.error('General item assignment error:', error);
+      message.error('Failed to assign general item');
+    }
+  };
+
+  const handleSubmitRestrictedItemAssignment = async () => {
+    try {
+      const values = await restrictedItemForm.validateFields();
+      const fssNumber = selectedEmployeeForAssignment?.fss_number || selectedEmployeeForAssignment?.fss_no;
+
+      if (!fssNumber) {
+        message.error('Employee FSS number not found');
+        return;
+      }
+
+      // Check if it's serial tracked
+      if (selectedRestrictedItem?.is_serial_tracked) {
+        // Issue by serial number
+        const response = await restrictedInventoryApi.issueSerial(values.serial_unit_id, String(fssNumber));
+
+        if (response.error) {
+          message.error(response.error);
+          return;
+        }
+
+        message.success('Restricted item (serial) assigned successfully');
+      } else {
+        // Issue by quantity (ammunition/consumables)
+        const assignmentData = {
+          quantity: values.quantity,
+          employee_id: String(fssNumber),
+          notes: values.notes || '',
+        };
+
+        const response = await restrictedInventoryApi.issueItem(values.item_code, assignmentData);
+
+        if (response.error) {
+          message.error(response.error);
+          return;
+        }
+
+        message.success('Restricted item assigned successfully');
+      }
+
+      setRestrictedItemDrawerVisible(false);
+      restrictedItemForm.resetFields();
+      setSelectedRestrictedItem(null);
+      setRestrictedSerialUnits([]);
+    } catch (error) {
+      console.error('Restricted item assignment error:', error);
+      message.error('Failed to assign restricted item');
+    }
+  };
+
   const getColumnSearchProps = (dataIndex: keyof typeof filters, placeholder: string) => ({
     filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }: any) => (
       <div style={{ padding: 8 }} onKeyDown={(e) => e.stopPropagation()}>
@@ -297,87 +441,106 @@ export default function EmployeesPage() {
       key: 'rank',
       width: 100,
     },
-    {
-      title: 'Unit',
-      dataIndex: 'unit',
-      key: 'unit',
-      width: 100,
-    },
-    {
-      title: 'Designation',
-      dataIndex: 'designation',
-      key: 'designation',
-      width: 150,
-      ...getColumnSearchProps('designation', 'Designation'),
-    },
-    {
-      title: 'Department',
-      dataIndex: 'department',
-      key: 'department',
-      width: 150,
-      ...getColumnSearchProps('department', 'Department'),
-    },
-    {
-      title: 'Enrolled As',
-      dataIndex: 'enrolled_as',
-      key: 'enrolled_as',
-      width: 120,
-      ...getColumnSearchProps('enrolled_as', 'Enrolled As'),
-    },
-    {
-      title: 'Joining Date',
-      dataIndex: 'date_of_enrolment',
-      key: 'date_of_enrolment',
-      width: 120,
-      ...getColumnSearchProps('date_of_enrolment', 'Joining Date'),
-    },
-    {
-      title: 'Deployed At',
-      dataIndex: 'deployed_at',
-      key: 'deployed_at',
-      width: 150,
-    },
-    {
-      title: 'Status',
-      dataIndex: 'status',
-      key: 'status',
-      width: 100,
-      fixed: 'right' as const,
-      render: (status: string) => {
-        const color =
-          status === 'Active' ? 'green' : status === 'Inactive' ? 'red' : 'orange';
-        return <Tag color={color}>{status || 'Unknown'}</Tag>;
-      },
-    },
+    // {
+    //   title: 'Unit',
+    //   dataIndex: 'unit',
+    //   key: 'unit',
+    //   width: 100,
+    // },
+    // {
+    //   title: 'Designation',
+    //   dataIndex: 'designation',
+    //   key: 'designation',
+    //   width: 150,
+    //   ...getColumnSearchProps('designation', 'Designation'),
+    // },
+    // {
+    //   title: 'Department',
+    //   dataIndex: 'department',
+    //   key: 'department',
+    //   width: 150,
+    //   ...getColumnSearchProps('department', 'Department'),
+    // },
+    // {
+    //   title: 'Enrolled As',
+    //   dataIndex: 'enrolled_as',
+    //   key: 'enrolled_as',
+    //   width: 120,
+    //   ...getColumnSearchProps('enrolled_as', 'Enrolled As'),
+    // },
+    // {
+    //   title: 'Joining Date',
+    //   dataIndex: 'date_of_enrolment',
+    //   key: 'date_of_enrolment',
+    //   width: 120,
+    //   ...getColumnSearchProps('date_of_enrolment', 'Joining Date'),
+    // },
+    // {
+    //   title: 'Status',
+    //   dataIndex: 'status',
+    //   key: 'status',
+    //   width: 100,
+    //   fixed: 'right' as const,
+    //   render: (status: string) => {
+    //     const color =
+    //       status === 'Active' ? 'green' : status === 'Inactive' ? 'red' : 'orange';
+    //     return <Tag color={color}>{status || 'Unknown'}</Tag>;
+    //   },
+    // },
     {
       title: 'Actions',
       key: 'actions',
-      width: 150,
+      width: 200,
       fixed: 'right' as const,
-      render: (_: unknown, record: Employee) => (
-        <Space>
-          <Button
-            type="link"
-            onClick={() => router.push(`/dashboard/employees/${record.employee_id}`)}
-          >
-            View
-          </Button>
-          <Button
-            type="link"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
-          />
-          <Popconfirm
-            title="Delete employee?"
-            description="This action cannot be undone."
-            onConfirm={() => handleDelete(record.employee_id)}
-            okText="Yes"
-            cancelText="No"
-          >
-            <Button type="link" danger icon={<DeleteOutlined />} />
-          </Popconfirm>
-        </Space>
-      ),
+      render: (_: unknown, record: Employee) => {
+        const inventoryMenuItems: MenuProps['items'] = [
+          {
+            key: 'general',
+            label: 'General Item',
+            icon: <InboxOutlined />,
+            onClick: () => handleAssignGeneralItem(record),
+          },
+          {
+            key: 'restricted',
+            label: 'Restricted Item',
+            icon: <InboxOutlined />,
+            onClick: () => handleAssignRestrictedItem(record),
+            danger: true,
+          },
+        ];
+
+        return (
+          <Space size="small">
+            <Button
+              type="link"
+              size="small"
+              onClick={() => router.push(`/dashboard/employees/${record.employee_id}`)}
+            >
+              View
+            </Button>
+            <Button
+              type="link"
+              size="small"
+              icon={<EditOutlined />}
+              onClick={() => handleEdit(record)}
+            />
+            <Dropdown menu={{ items: inventoryMenuItems }} trigger={['click']}>
+              <Button type="link" size="small" icon={<InboxOutlined />}>
+                Assign <DownOutlined />
+              </Button>
+            </Dropdown>
+            <Popconfirm
+              title="Delete employee?"
+              description="This action cannot be undone."
+              onConfirm={() => handleDelete(record.employee_id)}
+              okText="Yes"
+              cancelText="No"
+            >
+              <Button type="link" size="small" danger icon={<DeleteOutlined />} />
+            </Popconfirm>
+          </Space>
+        );
+      },
     },
   ];
 
@@ -447,6 +610,138 @@ export default function EmployeesPage() {
           onSubmit={handleFormSubmit}
           onCancel={() => setDrawerVisible(false)}
         />
+      </Drawer>
+
+      {/* General Item Assignment Drawer */}
+      <Drawer
+        title={`Assign General Item - ${selectedEmployeeForAssignment?.full_name || selectedEmployeeForAssignment?.name || ''}`}
+        open={generalItemDrawerVisible}
+        onClose={() => setGeneralItemDrawerVisible(false)}
+        width={600}
+        destroyOnClose
+        footer={
+          <div style={{ textAlign: 'right' }}>
+            <Space>
+              <Button onClick={() => setGeneralItemDrawerVisible(false)}>Cancel</Button>
+              <Button type="primary" onClick={handleSubmitGeneralItemAssignment}>
+                Assign Item
+              </Button>
+            </Space>
+          </div>
+        }
+      >
+        <Form form={generalItemForm} layout="vertical">
+          <div style={{ background: '#f0f2f5', padding: '12px', borderRadius: '4px', marginBottom: '16px' }}>
+            <div><strong>Employee:</strong> {selectedEmployeeForAssignment?.full_name || selectedEmployeeForAssignment?.name}</div>
+            <div><strong>FSS Number:</strong> {selectedEmployeeForAssignment?.fss_number || selectedEmployeeForAssignment?.fss_no}</div>
+          </div>
+
+          <Form.Item
+            name="item_code"
+            label="General Item"
+            rules={[{ required: true, message: 'Please select an item' }]}
+          >
+            <Select
+              placeholder="Select general inventory item"
+              showSearch
+              filterOption={(input, option) =>
+                String(option?.label || '').toLowerCase().includes(input.toLowerCase())
+              }
+              options={generalItems.map((item: any) => ({
+                label: `${item.item_code} - ${item.name || item.item_name}`,
+                value: item.item_code,
+              }))}
+            />
+          </Form.Item>
+
+          <Form.Item
+            name="quantity"
+            label="Quantity"
+            rules={[{ required: true, message: 'Please enter quantity' }]}
+          >
+            <InputNumber style={{ width: '100%' }} min={1} placeholder="Enter quantity" />
+          </Form.Item>
+
+          <Form.Item name="notes" label="Notes">
+            <Input.TextArea rows={3} placeholder="Additional notes (optional)" />
+          </Form.Item>
+        </Form>
+      </Drawer>
+
+      {/* Restricted Item Assignment Drawer */}
+      <Drawer
+        title={`Assign Restricted Item - ${selectedEmployeeForAssignment?.full_name || selectedEmployeeForAssignment?.name || ''}`}
+        open={restrictedItemDrawerVisible}
+        onClose={() => setRestrictedItemDrawerVisible(false)}
+        width={600}
+        destroyOnClose
+        footer={
+          <div style={{ textAlign: 'right' }}>
+            <Space>
+              <Button onClick={() => setRestrictedItemDrawerVisible(false)}>Cancel</Button>
+              <Button type="primary" onClick={handleSubmitRestrictedItemAssignment}>
+                Assign Item
+              </Button>
+            </Space>
+          </div>
+        }
+      >
+        <Form form={restrictedItemForm} layout="vertical">
+          <div style={{ background: '#fff1f0', padding: '12px', borderRadius: '4px', marginBottom: '16px', border: '1px solid #ffccc7' }}>
+            <div><strong>Employee:</strong> {selectedEmployeeForAssignment?.full_name || selectedEmployeeForAssignment?.name}</div>
+            <div><strong>FSS Number:</strong> {selectedEmployeeForAssignment?.fss_number || selectedEmployeeForAssignment?.fss_no}</div>
+          </div>
+
+          <Form.Item
+            name="item_code"
+            label="Restricted Item"
+            rules={[{ required: true, message: 'Please select an item' }]}
+          >
+            <Select
+              placeholder="Select restricted inventory item"
+              showSearch
+              onChange={handleRestrictedItemChange}
+              filterOption={(input, option) =>
+                String(option?.label || '').toLowerCase().includes(input.toLowerCase())
+              }
+              options={restrictedItems.map((item: any) => ({
+                label: `${item.item_code} - ${item.name} (${item.category})`,
+                value: item.item_code,
+              }))}
+            />
+          </Form.Item>
+
+          {selectedRestrictedItem?.is_serial_tracked ? (
+            <Form.Item
+              name="serial_unit_id"
+              label="Serial Number"
+              rules={[{ required: true, message: 'Please select a serial number' }]}
+            >
+              <Select
+                placeholder="Select available serial number"
+                options={restrictedSerialUnits.map((unit: any) => ({
+                  label: unit.serial_number,
+                  value: unit.id,
+                }))}
+                notFoundContent={restrictedSerialUnits.length === 0 ? 'No available units' : undefined}
+              />
+            </Form.Item>
+          ) : (
+            <>
+              <Form.Item
+                name="quantity"
+                label="Quantity"
+                rules={[{ required: true, message: 'Please enter quantity' }]}
+              >
+                <InputNumber style={{ width: '100%' }} min={1} placeholder="Enter quantity" />
+              </Form.Item>
+
+              <Form.Item name="notes" label="Notes">
+                <Input.TextArea rows={3} placeholder="Additional notes (optional)" />
+              </Form.Item>
+            </>
+          )}
+        </Form>
       </Drawer>
 
       <style jsx global>{`
