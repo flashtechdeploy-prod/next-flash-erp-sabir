@@ -1,4 +1,18 @@
-Employee ,fss_no,rank,full_name,father_name,Status,un,Rank,Blood Gp,Status,unit,Rank,cnic,dob,cnic_expire,Documents held,Documents Reciving  /Handed Over To,Photo on Docu,EOBI #,,,Insurance,Social Security,mobile_number,Home Contact Number,Verified by SHO,Verified by khidmat markaz,Domicile,Verified by SSP,Enrolled,Re Enrolled,Village,Post Office,Thana,Tehsil,District,Duty Location,Police Trg Ltr & Date,Vacanation Cert,Vol #,Payment's,,,,,,,,,,,,,,
+Employee ,fss_no,rank,full_name,father_name,Status,Unit,Rank,Blood Gp,Status,Unit,Rank,cnic,dob,cnic_expiry_date,"
+documents_held
+",Documents Reciving  /Handed Over To,Photo on Docu,EOBI #,,,Insurance,"
+
+social_security",mobile_number,Home Contact Number,"sho_verification_date
+",verified_by_khidmat_markaz,Domicile,"
+ssp_verification_date","enrolled
+",re_enrolled,"
+permanent_village","permanent_post_office
+","permanent_thana
+","
+permanent_tehsil","
+permanent_district
+","duty_location
+",Police Trg Ltr & Date,Vacanation Cert,Vol #,Payment's,,,,,,,,,,,,,,
 ,,,,,,,,,,,,,,,,,,Number,Date of Entry,Card,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
 ,447,Supvr,Muhammad Riaz,Pehlawan Khan,Army,54 Baloch,Hav,,,,,37402-2979201-3,1-Jan-1951,For Life,Duplicate CNIC,,1 - Pic,Pen issued,,,Overage,CMH,0347-5344399,,2/Jun/2007,,,,23-Jul-2003,,Soha,Panjar,Kahuta,Kahuta,Rawalpindi,Islamabad,,,,,,,,,,,,,,,,,,
 ,630,Guard,Umri Khan,Musharaf,Civil,,,,,,,15201-8276858-9,1-Jan-1984,Exp,CNIC Original,,1 - Pic,4700J295865,5-Dec-03,Held,Yes,Yes,0346-5320737,,,,,2/Feb/2023,5-Dec-2003,,Overak,Garam Chashma,Chitral,Chitral,Chitral,Islamabad,,,,,,,,,,,,,,,,,,

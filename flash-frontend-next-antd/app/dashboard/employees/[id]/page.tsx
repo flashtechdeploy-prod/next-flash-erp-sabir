@@ -220,7 +220,7 @@ export default function EmployeeDetailPage() {
         const fullUrl = getFullFileUrl(doc.file_path as string);
         const isImage = (doc.file_path as string)?.match(/\.(jpg|jpeg|png|gif|webp)$/i);
         const isPdf = (doc.file_path as string)?.match(/\.pdf$/i);
-        
+
         if (isImage) {
           return `
             <div style="margin-bottom: 20px; page-break-inside: avoid; border: 1px solid #ddd; padding: 10px; border-radius: 4px;">
@@ -602,16 +602,16 @@ export default function EmployeeDetailPage() {
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
-    
+
     const fileName = `employee-${employee.employee_id}-${new Date().toISOString().split('T')[0]}.csv`;
     link.setAttribute('href', url);
     link.setAttribute('download', fileName);
     link.style.visibility = 'hidden';
-    
+
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    
+
     message.success('CSV exported successfully');
   };
 
@@ -826,11 +826,11 @@ export default function EmployeeDetailPage() {
               </div>
               <div>
                 <div style={{ opacity: 0.8, fontSize: '12px' }}>Mobile</div>
-                <div style={{ fontWeight: 'bold' }}>{String(employee.phone || employee.mobile_no || '-')}</div>
+                <div style={{ fontWeight: 'bold' }}>{String(employee.phone || employee.mobile_no || employee.mobile_number || '-')}</div>
               </div>
               <div>
                 <div style={{ opacity: 0.8, fontSize: '12px' }}>District</div>
-                <div style={{ fontWeight: 'bold' }}>{String(employee.district || '-')}</div>
+                <div style={{ fontWeight: 'bold' }}>{String(employee.district || employee.permanent_district || '-')}</div>
               </div>
             </div>
           </div>
@@ -873,7 +873,7 @@ export default function EmployeeDetailPage() {
               <Field label="Gender" value={employee.gender} />
               <Field label="Height" value={employee.height} />
               <Field label="Education" value={employee.education} />
-              <Field label="Mobile" value={employee.phone || employee.mobile_no} />
+              <Field label="Mobile" value={employee.phone || employee.mobile_no || employee.mobile_number} />
               <Field label="Email" value={employee.email} />
             </div>
           </div>
@@ -905,7 +905,7 @@ export default function EmployeeDetailPage() {
                 <div className="field-value">
                   {[employee.permanent_village, employee.permanent_post_office,
                   employee.permanent_thana, employee.permanent_tehsil, employee.permanent_district]
-                    .filter(Boolean).join(', ') || '-'}
+                    .filter(Boolean).join(', ') || (employee.permanent_address as string) || '-'}
                 </div>
               </div>
               <div className="field address-field">
@@ -941,7 +941,7 @@ export default function EmployeeDetailPage() {
               <Field label="Al-Khidmat Verification" value={employee.verified_by_khidmat_markaz} />
               <Field label="Agreement Date" value={employee.agreement_date} />
               <Field label="Social Security #" value={employee.social_security} />
-              <Field label="Documents Held" value={employee.original_document_held} />
+              <Field label="Documents Held" value={employee.original_document_held || employee.documents_held} />
               <div className="field address-field">
                 <div className="field-label"><strong>Insurance:</strong></div>
                 <div className="field-value">{String(employee.insurance || '-')}</div>

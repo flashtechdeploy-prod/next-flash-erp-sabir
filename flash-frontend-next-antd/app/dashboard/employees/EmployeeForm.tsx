@@ -74,13 +74,29 @@ export default function EmployeeForm({
     if (!initialValues) return { status: 'Active', profile_photo: [] };
 
     const values = { ...initialValues };
+
+    // Handle aliases first so they get converted to dayjs in the loop below
+    if (!values.date_of_birth && values.dob) {
+      values.date_of_birth = values.dob;
+    }
+    if (!values.cnic_expiry_date && values.cnic_expiry) {
+      values.cnic_expiry_date = values.cnic_expiry;
+    }
+    if (!values.phone && values.mobile_number) {
+      values.phone = values.mobile_number;
+    }
+    if (!values.phone && values.mobile_no) {
+      values.phone = values.mobile_no;
+    }
+
     const dateFields = ['cnic_expiry_date', 'date_of_birth', 'date_of_enrolment',
       'date_of_re_enrolment', 'agreement_date', 'sho_verification_date', 'ssp_verification_date', 'verified_by_khidmat_markaz'];
 
     dateFields.forEach(field => {
       const val = values[field];
       if (val && typeof val === 'string') {
-        values[field] = dayjs(val);
+        const d = dayjs(val);
+        values[field] = d.isValid() ? d : null;
       }
     });
 
@@ -429,7 +445,7 @@ export default function EmployeeForm({
             <DatePicker style={{ width: '100%' }} />
           </Form.Item>
         </Col>
-        
+
         <Col span={6}>
           <Form.Item label="Documents Held" name="original_document_held">
             <Input placeholder="CNIC, Certificates" />

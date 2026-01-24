@@ -1,0 +1,20 @@
+﻿[Row 1] fss_no candidate: "fss_no" | Content: Employee ,fss_no,rank,full_name,father_name
+[Row 2] fss_no candidate: "" | Content: ,,,,
+[Row 3] fss_no candidate: "447" | Content: ,447,Supvr,Muhammad Riaz,Pehlawan Khan
+[Row 4] fss_no candidate: "630" | Content: ,630,Guard,Umri Khan,Musharaf
+[Row 5] fss_no candidate: "1067" | Content: ,1067,Guard,Muhammad Ilyas,Ghulam Muhammad
+[Row 6] fss_no candidate: "1399" | Content: ,1399,Guard,Muhammad Shafique,Muhammad Saddique
+[Row 7] fss_no candidate: "1609" | Content: ,1609,Dvr,Muhammad Imran,Mehboob Ellahi
+[Row 8] fss_no candidate: "1614" | Content: ,1614,Guard,Nasir Hameed,Muhammad Sadiq
+[Row 9] fss_no candidate: "1806" | Content: ,1806,Guard,Hayat Ullah,Zarmola Khan
+[Row 10] fss_no candidate: "1897" | Content: ,1897,Guard,Arshad Mehmood,Mehram Khan
+[Row 11] fss_no candidate: "1904" | Content: ,1904,Supvr,Rafaqat Ali,Muhammad Afsar
+[Row 12] fss_no candidate: "2175" | Content: ,2175,Guard,Said Rasool,Rangeen Khan
+[Row 13] fss_no candidate: "2192" | Content: ,2192,Guard,Mehmood Hussain Anjum,Sardar Muhammad Yasin Khan
+[Row 14] fss_no candidate: "2216" | Content: ,2216,Supvr,Iftikhar Hussain,Sajawal Khan
+[Row 15] fss_no candidate: "2370" | Content: ,2370,Guard,Ghulam Sarwar,Ammer Khan
+[Row 16] fss_no candidate: "2478" | Content: ,2478,Guard,Mir Zaman,Azmat Khan
+[Row 17] fss_no candidate: "2684" | Content: ,2684,Guard,Anar Khan,Lal Khan
+[Row 18] fss_no candidate: "2806" | Content: ,2806,Guard,Malik Ghulam Murtaza,Malik Barkat Ali
+[Row 19] fss_no candidate: "2862" | Content: ,2862,Guard,Naeem Khan,Baqa Muhammad Khan
+[Row 20] fss_no candidate: "2897" | Content: ,2897,Guard,Arshad Mehmood,Bashir Ahmed
