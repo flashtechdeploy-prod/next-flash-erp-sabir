@@ -1,7 +1,7 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { UsersService } from '../users/users.service';
 import { CreateUserDto, LoginDto } from '../users/dto/user.dto';
+import { UsersService } from '../users/users.service';
 
 export interface JwtPayload {
   sub: any;
@@ -71,8 +71,13 @@ export class AuthService {
     return { ...user, sub: (user as any).id, type: 'user' };
   }
 
-  async getCurrentUser(userId: number) {
-    return this.usersService.findOne(userId);
+  async getCurrentUser(payload: JwtPayload) {
+    if (payload.type === 'employee') {
+      const [employee] = await this.usersService.findEmployeeById(payload.sub);
+      if (!employee) throw new UnauthorizedException('Employee not found');
+      return employee;
+    }
+    return this.usersService.findOne(payload.sub);
   }
 
   async getMyPermissions(userId: number) {

@@ -1,48 +1,44 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import {
-  Table,
-  Button,
-  Space,
-  DatePicker,
-  Select,
-  Card,
-  message,
-  Statistic,
-  Row,
-  Col,
-  Drawer,
-  Form,
-  InputNumber,
-  Input,
-  Modal,
-  Tag,
-  Badge,
-  Checkbox,
-  Switch,
-  Tooltip,
-} from 'antd';
+import { attendanceApi, commonApi } from '@/lib/api';
 import {
   CalendarOutlined,
   CheckCircleOutlined,
-  CloseCircleOutlined,
   ClockCircleOutlined,
-  SaveOutlined,
-  ReloadOutlined,
-  HistoryOutlined,
-  DeleteOutlined,
+  CloseCircleOutlined,
   EnvironmentOutlined,
   EyeOutlined,
-  UserOutlined,
-  CheckCircleTwoTone,
-  ClockCircleTwoTone,
-  CloseCircleTwoTone,
-  MessageOutlined,
   FileTextOutlined,
+  HistoryOutlined,
+  ReloadOutlined,
+  SaveOutlined,
+  UploadOutlined,
+  UserOutlined
 } from '@ant-design/icons';
-import { attendanceApi, employeeApi } from '@/lib/api';
+import {
+  Button,
+  Card,
+  Checkbox,
+  Col,
+  DatePicker,
+  Drawer,
+  Form,
+  Input,
+  InputNumber,
+  message,
+  Modal,
+  Row,
+  Select,
+  Space,
+  Statistic,
+  Switch,
+  Table,
+  Tag,
+  Tooltip,
+  Upload
+} from 'antd';
 import dayjs, { Dayjs } from 'dayjs';
+import { useEffect, useState } from 'react';
 
 const { TextArea } = Input;
 
@@ -143,9 +139,9 @@ export default function AttendancePage() {
     setSaving(true);
     const dateStr = selectedDate.format('YYYY-MM-DD');
 
-    // Only send records that have been marked
+    // Only send records that have been marked with a valid status
     const recordsToSave = attendance
-      .filter(r => r.status !== 'unmarked')
+      .filter(r => r.status && r.status !== 'unmarked')
       .map(r => ({
         employee_id: r.employee_id,
         status: r.status,
@@ -153,7 +149,9 @@ export default function AttendancePage() {
         overtime_minutes: r.overtime_minutes,
         late_minutes: r.late_minutes,
         fine_amount: r.fine_amount,
-        leave_type: r.leave_type, // Include leave_type for automatic leave period creation
+        leave_type: r.leave_type,
+        location: r.location,
+        picture: r.picture,
       }));
 
     const response = await attendanceApi.bulkUpsert(dateStr, recordsToSave);
@@ -247,7 +245,6 @@ export default function AttendancePage() {
           fontSize: '12px',
           cursor: 'pointer',
         }}
-        onClick={() => handleStatusChange(status)}
       >
         {statusType === 'present' ? 'P' : statusType === 'late' ? 'Late' : statusType === 'absent' ? 'A' : 'L'}
       </div>
@@ -345,7 +342,7 @@ export default function AttendancePage() {
       align: 'center' as const,
       render: (_: unknown, record: AttendanceRecord) => (
         <div onClick={() => handleStatusChange(record.employee_id, 'present')} style={{ cursor: 'pointer' }}>
-          {getStatusBadge(record.status, 'present', record)}
+          {getStatusBadge(record.status, 'present')}
         </div>
       ),
     },
@@ -356,7 +353,7 @@ export default function AttendancePage() {
       align: 'center' as const,
       render: (_: unknown, record: AttendanceRecord) => (
         <div onClick={() => handleStatusChange(record.employee_id, 'late')} style={{ cursor: 'pointer' }}>
-          {getStatusBadge(record.status, 'late', record)}
+          {getStatusBadge(record.status, 'late')}
         </div>
       ),
     },
@@ -367,7 +364,7 @@ export default function AttendancePage() {
       align: 'center' as const,
       render: (_: unknown, record: AttendanceRecord) => (
         <div onClick={() => handleStatusChange(record.employee_id, 'absent')} style={{ cursor: 'pointer' }}>
-          {getStatusBadge(record.status, 'absent', record)}
+          {getStatusBadge(record.status, 'absent')}
         </div>
       ),
     },
@@ -378,7 +375,7 @@ export default function AttendancePage() {
       align: 'center' as const,
       render: (_: unknown, record: AttendanceRecord) => (
         <div onClick={() => handleStatusChange(record.employee_id, 'leave')} style={{ cursor: 'pointer' }}>
-          {getStatusBadge(record.status, 'leave', record)}
+          {getStatusBadge(record.status, 'leave')}
         </div>
       ),
     },
@@ -495,7 +492,7 @@ export default function AttendancePage() {
     {
       title: 'Note',
       key: 'note',
-      width: 200,
+      width: 150,
       render: (_: unknown, record: AttendanceRecord) => (
         <Input
           value={record.note || ''}
@@ -512,6 +509,24 @@ export default function AttendancePage() {
           size="small"
           style={{ width: '100%' }}
         />
+      ),
+    },
+    {
+      title: 'Actions',
+      key: 'actions',
+      width: 120,
+      fixed: 'right' as const,
+      align: 'center' as const,
+      render: (_: unknown, record: AttendanceRecord) => (
+        <Button
+          type="primary"
+          size="small"
+          icon={<EyeOutlined />}
+          onClick={() => handleEdit(record)}
+          className="rounded-lg shadow-sm"
+        >
+          Details
+        </Button>
       ),
     },
   ];
@@ -656,7 +671,7 @@ export default function AttendancePage() {
           }}
           className="premium-table"
           bordered={false}
-          scroll={{ y: 600 }}
+          scroll={{ y: 600, x: 'max-content' }}
           rowClassName={(record) => record.picture ? 'self-marked-row pointer-row' : 'pointer-row'}
         />
       </Card>
@@ -725,7 +740,42 @@ export default function AttendancePage() {
             <InputNumber style={{ width: '100%' }} min={0} placeholder="0" />
           </Form.Item>
           <Form.Item label="Note" name="note">
-            <TextArea rows={3} placeholder="Any additional notes..." />
+            <TextArea rows={2} placeholder="Any additional notes..." />
+          </Form.Item>
+
+          <Form.Item label="Location (Optional)" name="location">
+            <Input placeholder="e.g. 33.6844, 73.0479 or Site Name" />
+          </Form.Item>
+
+          <Form.Item label="Picture / Selfie (Optional)" name="picture">
+            <div className="flex flex-col gap-2">
+              {editingRecord?.picture && (
+                <img
+                  src={editingRecord.picture}
+                  alt="Current"
+                  className="w-24 h-24 object-cover rounded-lg border mb-2"
+                />
+              )}
+              <Upload
+                maxCount={1}
+                beforeUpload={async (file) => {
+                  const formData = new FormData();
+                  formData.append('file', file);
+                  message.loading('Uploading picture...');
+                  const res = await commonApi.upload(formData);
+                  if (res.data) {
+                    const url = (res.data as any).url || (res.data as any).path;
+                    form.setFieldValue('picture', url);
+                    message.success('Picture uploaded');
+                  } else {
+                    message.error('Upload failed');
+                  }
+                  return false;
+                }}
+              >
+                <Button icon={<UploadOutlined />}>Upload New Picture</Button>
+              </Upload>
+            </div>
           </Form.Item>
         </Form>
       </Drawer>

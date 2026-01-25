@@ -766,3 +766,7 @@ export const companySettingsApi = {
   update: (data: any) => api.uploadFile('/api/company-settings', data, 'PUT'),
 };
 
+export const commonApi = {
+  upload: (formData: FormData) => api.uploadFile('/api/uploads', formData),
+};
+

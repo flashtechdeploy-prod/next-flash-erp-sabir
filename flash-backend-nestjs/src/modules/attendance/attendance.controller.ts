@@ -1,31 +1,31 @@
 import {
-  Controller,
-  Get,
-  Put,
-  Body,
-  Query,
-  Param,
-  UseGuards,
-  HttpException,
-  HttpStatus,
-  Post,
-  UseInterceptors,
-  UploadedFile,
+    Body,
+    Controller,
+    Get,
+    HttpException,
+    HttpStatus,
+    Param,
+    Post,
+    Put,
+    Query,
+    UploadedFile,
+    UseGuards,
+    UseInterceptors,
 } from '@nestjs/common';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiBearerAuth,
-  ApiQuery,
-  ApiBody,
-  ApiResponse,
-} from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { AttendanceService } from './attendance.service';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { BulkUpsertAttendanceDto, AttendanceRecordDto, MarkSelfAttendanceDto } from './attendance.dto';
+import {
+    ApiBearerAuth,
+    ApiBody,
+    ApiOperation,
+    ApiQuery,
+    ApiResponse,
+    ApiTags,
+} from '@nestjs/swagger';
 import { CurrentUser } from 'src/modules/auth/decorators/current-user.decorator';
 import { JwtPayload } from '../auth/auth.service';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { BulkUpsertAttendanceDto, MarkSelfAttendanceDto } from './attendance.dto';
+import { AttendanceService } from './attendance.service';
 
 @ApiTags('Attendance')
 @ApiBearerAuth()
@@ -95,7 +95,8 @@ export class AttendanceController {
 
     // Use the employee ID from the JWT payload
     const employeeId = user.sub;
-    const date = new Date().toISOString().split('T')[0];
+    // Get date in Pakistan timezone (UTC+5)
+    const date = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Karachi' }).format(new Date());
     
     return this.service.markSelf(employeeId, date, record, file);
   }
@@ -168,7 +169,8 @@ export class AttendanceController {
   @ApiOperation({ summary: "Get current employee's attendance status for today" })
   @ApiResponse({ status: 200, description: "Returns today's attendance record or null" })
   async getMyStatus(@CurrentUser() user: JwtPayload) {
-    const date = new Date().toISOString().split('T')[0];
+    // Get date in Pakistan timezone (UTC+5)
+    const date = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Karachi' }).format(new Date());
     const employeeId = user.sub;
     return this.service.getEmployeeStatus(employeeId, date);
   }

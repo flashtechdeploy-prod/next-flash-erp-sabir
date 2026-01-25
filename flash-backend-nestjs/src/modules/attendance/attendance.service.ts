@@ -1,9 +1,9 @@
-import { Injectable, Inject, HttpException, HttpStatus } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
+import { and, asc, between, desc, eq, sql } from 'drizzle-orm';
+import { NodePgDatabase } from 'drizzle-orm/node-postgres';
+import { CloudStorageService } from '../../common/storage/cloud-storage.service';
 import { DRIZZLE } from '../../db/drizzle.module';
 import * as schema from '../../db/schema';
-import { NodePgDatabase } from 'drizzle-orm/node-postgres';
-import { eq, and, between, asc, desc, sql } from 'drizzle-orm';
-import { CloudStorageService } from '../../common/storage/cloud-storage.service';
 
 interface AttendanceRecord {
   employee_id: string;
@@ -385,10 +385,6 @@ export class AttendanceService {
           ),
         );
 
-      if (existing) {
-        throw new HttpException('Attendance already marked for today', HttpStatus.BAD_REQUEST);
-      }
-
       const data = {
         employee_id: employeeId,
         date: date,
@@ -405,7 +401,15 @@ export class AttendanceService {
         updated_at: new Date(),
       };
 
-      await this.db.insert(schema.attendance).values(data);
+      if (existing) {
+        // Update existing record
+        await this.db.update(schema.attendance)
+          .set(data)
+          .where(eq(schema.attendance.id, existing.id));
+      } else {
+        // Insert new record
+        await this.db.insert(schema.attendance).values(data);
+      }
 
       // Auto-create leave periods if status is leave
       if (record.status === 'leave' && record.leave_type) {

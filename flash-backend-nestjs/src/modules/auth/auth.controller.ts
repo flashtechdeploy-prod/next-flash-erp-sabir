@@ -1,19 +1,18 @@
 
-import { Body, Controller, Post, Get, UseGuards, HttpException, HttpStatus, Logger } from '@nestjs/common';
+import { Body, Controller, Get, HttpException, HttpStatus, Inject, Logger, Post, UseGuards } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { Inject } from '@nestjs/common';
-import { AuthService, JwtPayload } from './auth.service';
-import { employees } from '../../db/schema/employees';
-import { DRIZZLE } from '../../db/drizzle.module';
-import { NodePgDatabase } from 'drizzle-orm/node-postgres';
+import { ApiBearerAuth, ApiBody, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import * as bcrypt from 'bcryptjs';
-import { eq, and } from 'drizzle-orm';
-import { ApiBody, ApiOperation, ApiResponse, ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { eq } from 'drizzle-orm';
+import { NodePgDatabase } from 'drizzle-orm/node-postgres';
+import { DRIZZLE } from '../../db/drizzle.module';
+import { employees } from '../../db/schema/employees';
+import { LoginDto } from '../users/dto/user.dto';
+import { AuthService, JwtPayload } from './auth.service';
+import { CurrentUser } from './decorators/current-user.decorator';
 import { EmployeeLoginDto } from './dto/employee-login.dto';
 import { SetPasswordDto } from './dto/set-password.dto';
-import { LoginDto } from '../users/dto/user.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
-import { CurrentUser } from './decorators/current-user.decorator';
 
 
 @Controller('auth')
@@ -31,7 +30,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Get current user profile' })
   @ApiBearerAuth()
   async getMe(@CurrentUser() user: JwtPayload) {
-    return this.authService.getCurrentUser(user.sub);
+    return this.authService.getCurrentUser(user);
   }
 
   @Post('login')
