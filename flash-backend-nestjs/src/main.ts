@@ -17,6 +17,7 @@ async function bootstrap() {
   // Enable CORS
   const corsOrigins = process.env.CORS_ORIGINS?.split(',') || [
     'http://localhost:3000',
+    'http://localhost:8081', // Expo dev server
   ];
   app.enableCors({
     origin: corsOrigins,
