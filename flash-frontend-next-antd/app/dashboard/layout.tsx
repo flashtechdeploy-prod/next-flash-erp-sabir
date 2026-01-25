@@ -178,10 +178,10 @@ export default function DashboardLayout({
 
   return (
     <Layout className="min-h-screen">
-      <Sider 
-        trigger={null} 
-        collapsible 
-        collapsed={collapsed} 
+      <Sider
+        trigger={null}
+        collapsible
+        collapsed={collapsed}
         theme="dark"
         width={250}
         style={{
@@ -193,8 +193,14 @@ export default function DashboardLayout({
           bottom: 0,
         }}
       >
-        <div className="h-16 flex items-center justify-center text-white text-xl font-bold border-b border-gray-700">
-          {collapsed ? 'FS' : 'Flash Security'}
+        <div className="h-24 flex items-center justify-center border-b border-gray-700 py-4">
+          <div className="bg-white p-2 rounded-xl shadow-lg flex items-center justify-center" style={{ width: collapsed ? 48 : 120, height: collapsed ? 48 : 64, transition: 'all 0.2s' }}>
+            <img
+              src="/images/flash-logo.jpg"
+              alt="Flash Logo"
+              style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+            />
+          </div>
         </div>
         <Menu
           theme="dark"
@@ -211,12 +217,12 @@ export default function DashboardLayout({
         />
       </Sider>
       <Layout style={{ marginLeft: collapsed ? 80 : 250, transition: 'all 0.2s' }}>
-        <Header 
+        <Header
           className="bg-white px-6 flex items-center justify-between shadow-sm"
-          style={{ 
-            position: 'sticky', 
-            top: 0, 
-            zIndex: 1, 
+          style={{
+            position: 'sticky',
+            top: 0,
+            zIndex: 1,
             width: '100%',
             padding: '0 24px',
           }}
@@ -242,8 +248,8 @@ export default function DashboardLayout({
             </Dropdown>
           </Space>
         </Header>
-        <Content 
-          style={{ 
+        <Content
+          style={{
             margin: '24px',
             padding: '24px',
             background: '#f0f2f5',

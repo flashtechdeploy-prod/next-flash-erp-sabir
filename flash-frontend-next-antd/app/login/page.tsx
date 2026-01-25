@@ -23,7 +23,16 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-100">
       <Card className="w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-800">Flash Security</h1>
+          <div className="flex justify-center mb-4">
+            <div className="bg-white p-3 rounded-2xl shadow-md border border-gray-100 flex items-center justify-center w-32 h-32 overflow-hidden">
+              <img
+                src="/images/flash-logo.jpg"
+                alt="Flash Logo"
+                className="w-full h-full object-contain"
+              />
+            </div>
+          </div>
+          <h1 className="text-3xl font-bold text-gray-800">Flash Tech ERP</h1>
           <p className="text-gray-600 mt-2">Management System</p>
         </div>
 
