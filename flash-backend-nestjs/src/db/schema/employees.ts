@@ -15,6 +15,8 @@ export const employees = pgTable('employees', {
   // Primary Keys
   id: serial('id').primaryKey(),
   employee_id: text('employee_id').unique().notNull(),
+  // Login fields
+  password: text('password'),
 
   // Basic Identification
   full_name: text('full_name'),
@@ -43,9 +45,11 @@ export const employees = pgTable('employees', {
   languages_spoken: text('languages_spoken'),
   languages_proficiency: text('languages_proficiency'),
 
-  // Contact Information
+  // Added missing fields from database
   email: text('email'),
   phone: text('phone'),
+
+  // Contact Information
   mobile_number: text('mobile_number'),
   mobile_no: text('mobile_no'),
   personal_phone_number: text('personal_phone_number'),

@@ -2,7 +2,7 @@ import { Injectable, NotFoundException, Inject, Logger } from '@nestjs/common';
 import { DRIZZLE } from '../../db/drizzle.module';
 import * as schema from '../../db/schema';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
-import { eq, like, or, and, sql, desc, asc, SQL, ilike } from 'drizzle-orm';
+import { eq, or, and, sql, desc, SQL, ilike } from 'drizzle-orm';
 import { CloudStorageService } from '../../common/storage/cloud-storage.service';
 import {
   CreateEmployeeDto,
@@ -61,10 +61,9 @@ export class EmployeesService {
     
     if (query.mobile_number) {
         filters.push(or(
-            ilike(schema.employees.mobile_number, `%${query.mobile_number}%`),
-            ilike(schema.employees.mobile_no, `%${query.mobile_number}%`),
-            ilike(schema.employees.phone, `%${query.mobile_number}%`),
-            ilike(schema.employees.personal_phone_number, `%${query.mobile_number}%`)
+          ilike(schema.employees.mobile_number, `%${query.mobile_number}%`),
+          ilike(schema.employees.mobile_no, `%${query.mobile_number}%`),
+          ilike(schema.employees.personal_phone_number, `%${query.mobile_number}%`)
         ) as SQL);
     }
 
@@ -77,7 +76,7 @@ export class EmployeesService {
           ilike(schema.employees.cnic_no, `%${search}%`),
           ilike(schema.employees.fss_number, `%${search}%`),
           ilike(schema.employees.fss_no, `%${search}%`),
-          ilike(schema.employees.phone, `%${search}%`),
+          ilike(schema.employees.personal_phone_number, `%${search}%`),
         ),
       );
     }

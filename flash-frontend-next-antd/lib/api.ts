@@ -241,6 +241,7 @@ export const attendanceApi = {
   },
   bulkUpsert: (date: string, records: Array<Record<string, unknown>>) =>
     api.put("/api/attendance", { date, records }),
+  getFullDaySheet: (date: string) => api.get(`/api/attendance/full-day-sheet?date=${date}`),
 };
 
 // Client Management API

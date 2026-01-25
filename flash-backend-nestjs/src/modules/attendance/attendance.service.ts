@@ -1,8 +1,9 @@
-import { Injectable, Inject } from '@nestjs/common';
+import { Injectable, Inject, HttpException, HttpStatus } from '@nestjs/common';
 import { DRIZZLE } from '../../db/drizzle.module';
 import * as schema from '../../db/schema';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
-import { eq, and, between, asc, desc } from 'drizzle-orm';
+import { eq, and, between, asc, desc, sql } from 'drizzle-orm';
+import { CloudStorageService } from '../../common/storage/cloud-storage.service';
 
 interface AttendanceRecord {
   employee_id: string;
@@ -14,6 +15,8 @@ interface AttendanceRecord {
   late_deduction?: number | null;
   leave_type?: string | null;
   fine_amount?: number | null;
+  location?: string | null;
+  picture?: string | null;
 }
 
 @Injectable()
@@ -21,6 +24,7 @@ export class AttendanceService {
   constructor(
     @Inject(DRIZZLE)
     private db: NodePgDatabase<typeof schema>,
+    private cloudStorageService: CloudStorageService,
   ) {}
 
   async findByDate(date: string) {
@@ -29,7 +33,7 @@ export class AttendanceService {
         .select({
           id: schema.attendance.id,
           employee_id: schema.attendance.employee_id,
-          fss_id: schema.employees.fss_number,
+          fss_id: schema.employees.fss_no,
           employee_name: schema.employees.full_name,
           date: schema.attendance.date,
           status: schema.attendance.status,
@@ -40,13 +44,14 @@ export class AttendanceService {
           late_deduction: schema.attendance.late_deduction,
           leave_type: schema.attendance.leave_type,
           fine_amount: schema.attendance.fine_amount,
+          location: schema.attendance.location,
+          picture: schema.attendance.picture,
           created_at: schema.attendance.created_at,
         })
         .from(schema.attendance)
         .leftJoin(schema.employees, eq(schema.attendance.employee_id, schema.employees.employee_id))
         .where(eq(schema.attendance.date, date))
         .orderBy(asc(schema.attendance.employee_id));
-      
       return { date, records, count: records.length };
     } catch (error) {
       console.error('Error fetching attendance by date:', error);
@@ -60,7 +65,7 @@ export class AttendanceService {
         .select({
           id: schema.attendance.id,
           employee_id: schema.attendance.employee_id,
-          fss_id: schema.employees.fss_number,
+          fss_id: schema.employees.fss_no,
           employee_name: schema.employees.full_name,
           date: schema.attendance.date,
           status: schema.attendance.status,
@@ -91,7 +96,7 @@ export class AttendanceService {
         .select({
           id: schema.attendance.id,
           employee_id: schema.attendance.employee_id,
-          fss_id: schema.employees.fss_number,
+          fss_id: schema.employees.fss_no,
           employee_name: schema.employees.full_name,
           date: schema.attendance.date,
           status: schema.attendance.status,
@@ -152,6 +157,8 @@ export class AttendanceService {
           late_deduction: record.late_deduction || null,
           leave_type: record.leave_type || null,
           fine_amount: record.fine_amount || null,
+          location: record.location || null,
+          picture: record.picture || null,
         };
 
         if (existing) {
@@ -321,6 +328,7 @@ export class AttendanceService {
         .select({
           id: schema.attendance.id,
           employee_id: schema.attendance.employee_id,
+          fss_id: schema.employees.fss_no,
           employee_name: schema.employees.full_name,
           department: schema.employees.department,
           designation: schema.employees.designation,
@@ -340,6 +348,183 @@ export class AttendanceService {
       return { date, records, count: records.length };
     } catch (error) {
       console.error('Error fetching attendance with employees:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Mark attendance for a single employee (self-service)
+   */
+  async markSelf(employeeId: string, date: string, record: AttendanceRecord, file?: Express.Multer.File) {
+    try {
+      let pictureUrl = record.picture;
+
+      // Handle file upload if provided
+      if (file) {
+        console.log(`Uploading selfie to B2: ${file.originalname}`);
+        const uploadResult = await this.cloudStorageService.uploadFile(
+          file.buffer,
+          file.originalname,
+          file.mimetype,
+          'attendance/selfie'
+        );
+        pictureUrl = uploadResult.url;
+        console.log(`Selfie uploaded successfully: ${pictureUrl}`);
+      } else {
+        console.log('No selfie file provided to AttendanceService');
+      }
+
+      // Check if already marked today
+      const [existing] = await this.db
+        .select({ id: schema.attendance.id })
+        .from(schema.attendance)
+        .where(
+          and(
+            eq(schema.attendance.employee_id, employeeId),
+            eq(schema.attendance.date, date),
+          ),
+        );
+
+      if (existing) {
+        throw new HttpException('Attendance already marked for today', HttpStatus.BAD_REQUEST);
+      }
+
+      const data = {
+        employee_id: employeeId,
+        date: date,
+        status: record.status,
+        note: record.note || null,
+        overtime_minutes: record.overtime_minutes || null,
+        overtime_rate: record.overtime_rate || null,
+        late_minutes: record.late_minutes || null,
+        late_deduction: record.late_deduction || null,
+        leave_type: record.leave_type || null,
+        fine_amount: record.fine_amount || null,
+        location: record.location || null,
+        picture: pictureUrl || null,
+        updated_at: new Date(),
+      };
+
+      await this.db.insert(schema.attendance).values(data);
+
+      // Auto-create leave periods if status is leave
+      if (record.status === 'leave' && record.leave_type) {
+        await this.autoCreateLeavePeriods([{
+          employee_id: employeeId,
+          date: date,
+          leave_type: record.leave_type,
+          note: record.note,
+        }]);
+      }
+
+      return { success: true, message: 'Attendance marked successfully' };
+    } catch (error) {
+      console.error(`Error marking self attendance for ${employeeId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get attendance for a specific employee on a specific date
+   */
+  async getEmployeeStatus(employeeId: string, date: string) {
+    const [record] = await this.db
+      .select()
+      .from(schema.attendance)
+      .where(
+        and(
+          eq(schema.attendance.employee_id, employeeId),
+          eq(schema.attendance.date, date),
+        ),
+      );
+    return record || null;
+  }
+
+  /**
+   * Get attendance statistics for an employee for the current month
+   */
+  async getEmployeeStats(employeeId: string) {
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+
+    const records = await this.db
+      .select({
+        status: schema.attendance.status,
+      })
+      .from(schema.attendance)
+      .where(
+        and(
+          eq(schema.attendance.employee_id, employeeId),
+          between(schema.attendance.date, startOfMonth, endOfMonth),
+        ),
+      );
+
+    const stats = {
+      present: 0,
+      late: 0,
+      absent: 0,
+      leave: 0,
+    };
+
+    records.forEach((r) => {
+      if (r.status in stats) {
+        stats[r.status as keyof typeof stats]++;
+      }
+    });
+
+    return stats;
+  }
+
+  /**
+   * Get attendance history for an employee
+   */
+  async getEmployeeHistory(employeeId: string, limit = 30) {
+    return this.db
+      .select()
+      .from(schema.attendance)
+      .where(eq(schema.attendance.employee_id, employeeId))
+      .orderBy(desc(schema.attendance.date), desc(schema.attendance.created_at))
+      .limit(limit);
+  }
+
+  /**
+   * Optimized full day sheet for admin dashboard
+   * Joins active employees with attendance for a specific date
+   */
+  async getFullDaySheet(date: string) {
+    try {
+      const records = await this.db
+        .select({
+          employee_id: schema.employees.employee_id,
+          employee_name: schema.employees.full_name,
+          fss_id: schema.employees.fss_no,
+          // Attendance fields (using attendance table if entry exists)
+          id: schema.attendance.id,
+          status: schema.attendance.status,
+          note: schema.attendance.note,
+          overtime_minutes: schema.attendance.overtime_minutes,
+          late_minutes: schema.attendance.late_minutes,
+          fine_amount: schema.attendance.fine_amount,
+          leave_type: schema.attendance.leave_type,
+          location: schema.attendance.location,
+          picture: schema.attendance.picture,
+          date: sql<string>`${date}`,
+        })
+        .from(schema.employees)
+        .leftJoin(
+          schema.attendance,
+          and(
+            eq(schema.employees.employee_id, schema.attendance.employee_id),
+            eq(schema.attendance.date, date),
+          ),
+        )
+        .where(eq(schema.employees.status, 'Active'))
+        .orderBy(desc(sql`CAST(NULLIF(${schema.employees.fss_no}, '') AS INTEGER)`));
+
+      return records;
+    } catch (error) {
+      console.error('Error fetching full day sheet:', error);
       throw error;
     }
   }

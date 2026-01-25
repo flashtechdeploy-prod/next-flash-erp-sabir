@@ -32,6 +32,14 @@ import {
   ReloadOutlined,
   HistoryOutlined,
   DeleteOutlined,
+  EnvironmentOutlined,
+  EyeOutlined,
+  UserOutlined,
+  CheckCircleTwoTone,
+  ClockCircleTwoTone,
+  CloseCircleTwoTone,
+  MessageOutlined,
+  FileTextOutlined,
 } from '@ant-design/icons';
 import { attendanceApi, employeeApi } from '@/lib/api';
 import dayjs, { Dayjs } from 'dayjs';
@@ -52,6 +60,8 @@ interface AttendanceRecord {
   leave_type?: string;
   long_leave_days?: number;
   is_long_leave?: boolean;
+  picture?: string;
+  location?: string;
 }
 
 export default function AttendancePage() {
@@ -67,72 +77,37 @@ export default function AttendancePage() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [employeeHistory, setEmployeeHistory] = useState<AttendanceRecord[]>([]);
   const [selectedEmployee, setSelectedEmployee] = useState<{ id: string; name: string } | null>(null);
+  const [searchText, setSearchText] = useState('');
 
-  const fetchEmployees = async () => {
-    const response = await employeeApi.getAll({ status: 'Active' });
-    if (response.error) {
-      message.error(response.error);
-      return;
-    }
-    setEmployees((response.data as { employees?: Array<Record<string, unknown>> })?.employees || (response.data as Array<Record<string, unknown>>) || []);
-  };
-
-  const fetchAttendance = async (date: Dayjs) => {
+  const fetchFullSheet = async (date: Dayjs) => {
     setLoading(true);
     const dateStr = date.format('YYYY-MM-DD');
-    const response = await attendanceApi.getByDate(dateStr);
+    console.log(`Optimized load: Fetching full attendance for ${dateStr}...`);
+
+    const response = await attendanceApi.getFullDaySheet(dateStr);
     setLoading(false);
 
     if (response.error) {
+      console.error('Fetch error:', response.error);
       message.error(response.error);
       return;
     }
 
-    // Backend returns { date, records }, so we need to access records
-    const responseData = response.data as { date?: string; records?: AttendanceRecord[] } | AttendanceRecord[];
-    const records = Array.isArray(responseData) ? responseData : (responseData?.records || []);
-    
-    console.log('Fetched attendance records:', records);
-    // Merge with employees to show all active employees
-    const attendanceMap = new Map(records.map(r => [r.employee_id, r]));
-    const getFss = (obj: unknown): string | undefined => {
-      if (!obj || typeof obj !== 'object') return undefined;
-      const rec = obj as Record<string, unknown>;
-      return (rec.fss_id as string) || (rec.fss_number as string);
-    };
-    const allRecords = employees.map(emp => {
-      const existing = attendanceMap.get(emp.employee_id as string);
-      const fssFromEmp = getFss(emp);
-      if (existing) {
-        const fssFromExisting = getFss(existing);
-        return {
-          ...existing,
-          fss_id: fssFromExisting || fssFromEmp,
-        };
-      }
+    const data = response.data as AttendanceRecord[];
+    console.log(`Loaded ${data.length} employees instantly.`);
+    setAttendance(data);
 
-      return {
-        employee_id: emp.employee_id as string,
-        employee_name: (emp.full_name || emp.name) as string,
-        fss_id: fssFromEmp,
-        date: dateStr,
-        status: 'unmarked',
-      } as AttendanceRecord;
-    });
-
-    setAttendance(allRecords);
+    // Map minimal employee data for local filtering/lookups if needed
+    setEmployees(data.map(r => ({
+      employee_id: r.employee_id,
+      full_name: r.employee_name,
+      fss_no: r.fss_id
+    })));
   };
 
   useEffect(() => {
-    fetchEmployees();
-  }, []);
-
-  useEffect(() => {
-    if (employees.length > 0) {
-      fetchAttendance(selectedDate);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedDate, employees.length]);
+    fetchFullSheet(selectedDate);
+  }, [selectedDate]);
 
   const handleStatusChange = (employeeId: string, status: string) => {
     setAttendance(prev =>
@@ -152,7 +127,7 @@ export default function AttendancePage() {
 
   const handleEditSubmit = (values: Record<string, unknown>) => {
     if (!editingRecord) return;
-    
+
     setAttendance(prev =>
       prev.map(record =>
         record.employee_id === editingRecord.employee_id
@@ -167,7 +142,7 @@ export default function AttendancePage() {
   const handleSaveAll = async () => {
     setSaving(true);
     const dateStr = selectedDate.format('YYYY-MM-DD');
-    
+
     // Only send records that have been marked
     const recordsToSave = attendance
       .filter(r => r.status !== 'unmarked')
@@ -190,7 +165,7 @@ export default function AttendancePage() {
     }
 
     message.success('Attendance saved successfully. Leave periods auto-created for leave days.');
-    fetchAttendance(selectedDate);
+    fetchFullSheet(selectedDate);
   };
 
   const handleViewHistory = async (employeeId: string) => {
@@ -205,7 +180,7 @@ export default function AttendancePage() {
     // Fetch last 30 days of attendance
     const toDate = dayjs().format('YYYY-MM-DD');
     const fromDate = dayjs().subtract(30, 'days').format('YYYY-MM-DD');
-    
+
     const response = await attendanceApi.getByEmployee(employeeId, fromDate, toDate);
     setHistoryLoading(false);
 
@@ -254,7 +229,7 @@ export default function AttendancePage() {
       absent: '#ffcccb',
       leave: '#b0e0e6',
     };
-    
+
     if (!isActive) {
       return <span style={{ color: '#999', fontSize: '12px' }}>{statusType === 'present' ? 'P' : statusType === 'late' ? 'Late' : statusType === 'absent' ? 'A' : 'L'}</span>;
     }
@@ -294,9 +269,14 @@ export default function AttendancePage() {
       dataIndex: 'fss_id',
       key: 'fss_id',
       width: 80,
+      sorter: (a: AttendanceRecord, b: AttendanceRecord) => {
+        const idA = parseInt(a.fss_id || '0', 10);
+        const idB = parseInt(b.fss_id || '0', 10);
+        return idA - idB;
+      },
       render: (_: unknown, record: AttendanceRecord) => {
         const emp = employees.find(e => e.employee_id === record.employee_id);
-        const fssId = (emp?.fss_id || emp?.fss_number || record.fss_id) as string;
+        const fssId = (record.fss_id || (emp as any)?.fss_no || (emp as any)?.fss_number) as string;
         return fssId || '-';
       },
     },
@@ -311,13 +291,61 @@ export default function AttendancePage() {
       },
     },
     {
-      title: 'P',
+      title: 'Selfie',
+      key: 'selfie',
+      width: 70,
+      align: 'center' as const,
+      render: (_: unknown, record: AttendanceRecord) => {
+        if (!record.picture) return '-';
+        return (
+          <Tooltip title="View Full Selfie">
+            <div
+              style={{ cursor: 'pointer' }}
+              onClick={() => Modal.info({
+                title: 'Attendance Selfie',
+                content: <img src={record.picture} alt="Selfie" style={{ width: '100%', marginTop: 10 }} />,
+                width: 500,
+                maskClosable: true
+              })}
+            >
+              <img
+                src={record.picture}
+                alt="Selfie"
+                style={{ width: 32, height: 32, borderRadius: 4, objectFit: 'cover', border: '1px solid #ddd' }}
+              />
+            </div>
+          </Tooltip>
+        );
+      },
+    },
+    {
+      title: 'Loc',
+      key: 'location_map',
+      width: 50,
+      align: 'center' as const,
+      render: (_: unknown, record: AttendanceRecord) => {
+        if (!record.location) return '-';
+        return (
+          <Tooltip title="View GPS Location">
+            <EnvironmentOutlined
+              style={{ color: '#1890ff', fontSize: 16, cursor: 'pointer' }}
+              onClick={() => {
+                const loc = JSON.parse(record.location!);
+                window.open(`https://www.google.com/maps/search/?api=1&query=${loc.latitude},${loc.longitude}`, '_blank');
+              }}
+            />
+          </Tooltip>
+        );
+      },
+    },
+    {
+      title: 'Status: P',
       key: 'present',
-      width: 60,
+      width: 80,
       align: 'center' as const,
       render: (_: unknown, record: AttendanceRecord) => (
         <div onClick={() => handleStatusChange(record.employee_id, 'present')} style={{ cursor: 'pointer' }}>
-          {getStatusBadge(record.status, 'present')}
+          {getStatusBadge(record.status, 'present', record)}
         </div>
       ),
     },
@@ -328,29 +356,29 @@ export default function AttendancePage() {
       align: 'center' as const,
       render: (_: unknown, record: AttendanceRecord) => (
         <div onClick={() => handleStatusChange(record.employee_id, 'late')} style={{ cursor: 'pointer' }}>
-          {getStatusBadge(record.status, 'late')}
+          {getStatusBadge(record.status, 'late', record)}
         </div>
       ),
     },
     {
       title: 'A',
       key: 'absent',
-      width: 60,
+      width: 80,
       align: 'center' as const,
       render: (_: unknown, record: AttendanceRecord) => (
         <div onClick={() => handleStatusChange(record.employee_id, 'absent')} style={{ cursor: 'pointer' }}>
-          {getStatusBadge(record.status, 'absent')}
+          {getStatusBadge(record.status, 'absent', record)}
         </div>
       ),
     },
     {
-      title: 'L',
+      title: 'Leave',
       key: 'leave',
-      width: 60,
+      width: 80,
       align: 'center' as const,
       render: (_: unknown, record: AttendanceRecord) => (
         <div onClick={() => handleStatusChange(record.employee_id, 'leave')} style={{ cursor: 'pointer' }}>
-          {getStatusBadge(record.status, 'leave')}
+          {getStatusBadge(record.status, 'leave', record)}
         </div>
       ),
     },
@@ -489,55 +517,147 @@ export default function AttendancePage() {
   ];
 
   return (
-    <div>
-      <div className="flex justify-between items-center mb-6">
+    <div style={{ padding: '24px', background: '#f8fafc', minHeight: '100vh' }}>
+      <div className="flex justify-between items-start mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-            <CalendarOutlined /> Attendance
+          <h1 className="text-3xl font-extrabold text-slate-800 flex items-center gap-3 mb-2">
+            <div className="p-2 bg-blue-500 rounded-xl shadow-lg shadow-blue-200">
+              <CalendarOutlined style={{ color: 'white' }} />
+            </div>
+            Attendance Center
           </h1>
-          <p className="text-gray-500 mt-1">Mark daily attendance</p>
+          <div className="flex items-center gap-4 text-slate-500">
+            <span className="flex items-center gap-1"><UserOutlined /> Total Staff: <b>{summary.total}</b></span>
+            <span className="h-4 w-px bg-slate-200" />
+            <span className="flex items-center gap-1"><CheckCircleOutlined className="text-green-500" /> Auto-Synced with App</span>
+          </div>
         </div>
-        <Space>
+        <div className="glass-card p-2 rounded-2xl flex items-center gap-2 shadow-sm border border-white">
           <DatePicker
             value={selectedDate}
             onChange={(date) => date && setSelectedDate(date)}
             format="YYYY-MM-DD"
             size="large"
+            bordered={false}
+            className="hover:bg-slate-50 transition-colors rounded-xl"
+            style={{ width: 160 }}
           />
-          <Button
-            icon={<ReloadOutlined />}
-            onClick={() => fetchAttendance(selectedDate)}
-            size="large"
-          >
-            Refresh
-          </Button>
           <Button
             type="primary"
             icon={<SaveOutlined />}
             onClick={handleSaveAll}
             loading={saving}
             size="large"
+            className="shadow-md shadow-blue-100 rounded-xl px-8"
           >
-            Save All
+            Save Changes
+          </Button>
+        </div>
+      </div>
+
+      <Row gutter={[24, 24]} className="mb-8">
+        <Col xs={12} sm={6} lg={4}>
+          <Card className="summary-stat-card bg-white border-none shadow-sm rounded-2xl">
+            <Statistic
+              title="Present"
+              value={summary.present}
+              valueStyle={{ color: '#52c41a' }}
+              prefix={<CheckCircleOutlined />}
+            />
+          </Card>
+        </Col>
+        <Col xs={12} sm={6} lg={4}>
+          <Card className="summary-stat-card bg-white border-none shadow-sm rounded-2xl">
+            <Statistic
+              title="Late"
+              value={summary.late}
+              valueStyle={{ color: '#faad14' }}
+              prefix={<ClockCircleOutlined />}
+            />
+          </Card>
+        </Col>
+        <Col xs={12} sm={6} lg={4}>
+          <Card className="summary-stat-card bg-white border-none shadow-sm rounded-2xl">
+            <Statistic
+              title="Absent"
+              value={summary.absent}
+              valueStyle={{ color: '#ff4d4f' }}
+              prefix={<CloseCircleOutlined />}
+            />
+          </Card>
+        </Col>
+        <Col xs={12} sm={6} lg={4}>
+          <Card className="summary-stat-card bg-white border-none shadow-sm rounded-2xl">
+            <Statistic
+              title="Leave"
+              value={summary.leave}
+              valueStyle={{ color: '#1890ff' }}
+              prefix={<CalendarOutlined />}
+            />
+          </Card>
+        </Col>
+        <Col xs={12} sm={12} lg={8}>
+          <Card className="summary-stat-card bg-blue-600 border-none shadow-lg rounded-2xl text-white">
+            <div className="flex justify-between items-center text-white">
+              <div>
+                <div className="text-blue-100 mb-1">Marking Progress</div>
+                <div className="text-2xl font-bold">
+                  {summary.total - summary.unmarked} / {summary.total}
+                </div>
+              </div>
+              <div style={{ opacity: 0.2 }}><FileTextOutlined style={{ fontSize: 40 }} /></div>
+            </div>
+          </Card>
+        </Col>
+      </Row>
+
+      <div className="flex justify-between items-center mb-6">
+        <Input.Search
+          placeholder="Quick search: Name, FSS No, or Remarks..."
+          allowClear
+          size="large"
+          className="search-input-modern"
+          onChange={(e) => setSearchText(e.target.value)}
+          style={{ maxWidth: 500 }}
+        />
+        <Space>
+          <Button
+            icon={<ReloadOutlined />}
+            onClick={() => fetchFullSheet(selectedDate)}
+            size="large"
+            className="rounded-xl"
+          >
+            Refresh
           </Button>
         </Space>
       </div>
 
-      <Card style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.08)', border: 'none' }}>
+      <Card className="glass-card shadow-xl border-none rounded-3xl overflow-hidden p-0">
         <Table
           columns={columns}
-          dataSource={attendance}
+          dataSource={attendance.filter(record => {
+            if (!searchText) return true;
+            const searchLower = searchText.toLowerCase();
+            return (
+              (record.fss_id || '').toString().toLowerCase().includes(searchLower) ||
+              (record.employee_name || '').toLowerCase().includes(searchLower) ||
+              (record.note || '').toLowerCase().includes(searchLower)
+            );
+          })}
           rowKey="employee_id"
           loading={loading}
-          size="small"
-          pagination={{ 
+          size="middle"
+          pagination={{
             pageSize: 20,
             showSizeChanger: true,
             showTotal: (total, range) => `${range[0]}-${range[1]} of ${total}`,
             pageSizeOptions: ['10', '20', '50', '100'],
+            position: ['bottomCenter'],
           }}
-          className="attendance-table"
+          className="premium-table"
           bordered={false}
+          scroll={{ y: 600 }}
+          rowClassName={(record) => record.picture ? 'self-marked-row pointer-row' : 'pointer-row'}
         />
       </Card>
 
@@ -559,7 +679,7 @@ export default function AttendancePage() {
       >
         <Form form={form} layout="vertical" onFinish={handleEditSubmit}>
           <Form.Item label="Status" name="status">
-            <Select 
+            <Select
               onChange={(value) => {
                 if (value !== 'leave') {
                   form.setFieldValue('leave_type', undefined);
@@ -570,17 +690,17 @@ export default function AttendancePage() {
                 { label: 'Late', value: 'late' },
                 { label: 'Absent', value: 'absent' },
                 { label: 'Leave', value: 'leave' },
-              ]} 
+              ]}
             />
           </Form.Item>
-          <Form.Item 
-            noStyle 
+          <Form.Item
+            noStyle
             shouldUpdate={(prevValues, currentValues) => prevValues.status !== currentValues.status}
           >
             {({ getFieldValue }) =>
               getFieldValue('status') === 'leave' ? (
-                <Form.Item 
-                  label="Leave Type" 
+                <Form.Item
+                  label="Leave Type"
                   name="leave_type"
                   rules={[{ required: true, message: 'Please select leave type' }]}
                 >
@@ -636,7 +756,7 @@ export default function AttendancePage() {
               key: 'date',
               width: 120,
               render: (date: string) => dayjs(date).format('MMM DD, YYYY'),
-              sorter: (a: AttendanceRecord, b: AttendanceRecord) => 
+              sorter: (a: AttendanceRecord, b: AttendanceRecord) =>
                 dayjs(a.date).unix() - dayjs(b.date).unix(),
               defaultSortOrder: 'descend',
             },
@@ -724,47 +844,68 @@ export default function AttendancePage() {
       </Modal>
 
       <style jsx global>{`
-        .attendance-table .ant-table {
-          font-size: 13px;
-          border: none;
+        .glass-card {
+           background: rgba(255, 255, 255, 0.9);
+           backdrop-filter: blur(10px);
+           -webkit-backdrop-filter: blur(10px);
         }
-        .attendance-table .ant-table-thead > tr > th {
-          font-size: 12px;
-          font-weight: 600;
-          padding: 12px 8px;
-          background: #f5f5f5;
-          border-bottom: 1px solid #e8e8e8;
-          color: #333;
+        
+        .summary-stat-card .ant-card-body {
+           padding: 16px 20px;
         }
-        .attendance-table .ant-table-tbody > tr > td {
-          padding: 12px 8px;
-          font-size: 12px;
-          border-bottom: 1px solid #f0f0f0;
-        }
-        .attendance-table .ant-table-tbody > tr:hover > td {
-          background: #fafafa;
-        }
-        .attendance-table .ant-select {
-          font-size: 12px;
-        }
-        .attendance-table .ant-input-number {
-          width: 100% !important;
-        }
-        .compact-table .ant-table {
-          font-size: 12px;
-        }
-        .compact-table .ant-table-thead > tr > th {
+
+        .premium-table .ant-table-thead > tr > th {
+          background: #fdfdfd;
+          font-weight: 700;
+          color: #64748b;
           font-size: 11px;
-          font-weight: 600;
-          padding: 8px 8px;
-          background: #fafafa;
+          text-transform: uppercase;
+          letter-spacing: 0.025em;
+          border-bottom: 2px solid #f1f5f9;
         }
-        .compact-table .ant-table-tbody > tr > td {
-          padding: 6px 8px;
-          font-size: 12px;
+
+        .premium-table .ant-table-tbody > tr > td {
+          padding: 16px 8px;
+          border-bottom: 1px solid #f1f5f9;
         }
-        .compact-table .ant-select {
-          font-size: 12px;
+
+        .premium-table .ant-table-row:hover > td {
+          background-color: #f8fafc !important;
+        }
+        
+        .pointer-row {
+          cursor: pointer;
+        }
+
+        .self-marked-row {
+          background-color: #f0fdf4 !important;
+        }
+        
+        .self-marked-row:hover > td {
+          background-color: #f0fdf4 !important;
+        }
+
+        .status-dot-inactive {
+           transition: all 0.2s ease;
+        }
+        
+        .search-input-modern .ant-input-affix-wrapper {
+           border-radius: 12px;
+           padding: 8px 16px;
+           box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05);
+           border: 1px solid #e2e8f0;
+        }
+        
+        .search-input-modern .ant-input-search-button {
+           border-radius: 0 12px 12px 0 !important;
+        }
+
+        .ant-table-pagination.ant-pagination {
+           margin: 16px 0 !important;
+           background: white;
+           padding: 12px;
+           border-radius: 12px;
+           box-shadow: 0 -4px 6px -1px rgb(0 0 0 / 0.02);
         }
       `}</style>
     </div>

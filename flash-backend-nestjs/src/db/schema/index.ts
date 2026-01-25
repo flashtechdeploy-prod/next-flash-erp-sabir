@@ -1,5 +1,6 @@
 export * from './auth';
 export * from './employees';
+export { attendance } from './attendance';
 export * from './vehicles';
 export * from './hr';
 export * from './finance';

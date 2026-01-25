@@ -1,67 +1,137 @@
-import {
-  Controller,
-  Post,
-  Get,
-  Body,
-  UseGuards,
-  Request,
-  HttpCode,
-  HttpStatus,
-} from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
-import { AuthService } from './auth.service';
-import {
-  CreateUserDto,
-  LoginDto,
-  TokenResponseDto,
-} from '../users/dto/user.dto';
-import { JwtAuthGuard } from './guards/jwt-auth.guard';
 
-@ApiTags('Auth')
+import { Body, Controller, Post, Get, UseGuards, HttpException, HttpStatus, Logger } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
+import { Inject } from '@nestjs/common';
+import { AuthService, JwtPayload } from './auth.service';
+import { employees } from '../../db/schema/employees';
+import { DRIZZLE } from '../../db/drizzle.module';
+import { NodePgDatabase } from 'drizzle-orm/node-postgres';
+import * as bcrypt from 'bcryptjs';
+import { eq, and } from 'drizzle-orm';
+import { ApiBody, ApiOperation, ApiResponse, ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { EmployeeLoginDto } from './dto/employee-login.dto';
+import { SetPasswordDto } from './dto/set-password.dto';
+import { LoginDto } from '../users/dto/user.dto';
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { CurrentUser } from './decorators/current-user.decorator';
+
+
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  private logger = new Logger(AuthController.name);
 
-  @Post('register')
-  @ApiOperation({ summary: 'Register a new user' })
-  @HttpCode(HttpStatus.CREATED)
-  async register(@Body() createUserDto: CreateUserDto) {
-    const user = await this.authService.register(createUserDto);
-    const { password: _password, ...result } = user;
-    return result;
+  constructor(
+    @Inject(DRIZZLE) private db: NodePgDatabase<any>,
+    private readonly jwtService: JwtService,
+    private readonly authService: AuthService,
+  ) {}
+
+  @UseGuards(JwtAuthGuard)
+  @Get('me')
+  @ApiOperation({ summary: 'Get current user profile' })
+  @ApiBearerAuth()
+  async getMe(@CurrentUser() user: JwtPayload) {
+    return this.authService.getCurrentUser(user.sub);
   }
 
   @Post('login')
-  @ApiOperation({ summary: 'Login and get access token' })
+  @ApiOperation({ summary: 'Admin/Standard user login' })
   @ApiBody({ type: LoginDto })
-  @HttpCode(HttpStatus.OK)
-  async login(@Body() loginDto: LoginDto): Promise<TokenResponseDto> {
+  async login(@Body() loginDto: LoginDto) {
     return this.authService.login(loginDto);
   }
 
-  @Get('me')
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get current user information' })
-  async getMe(@Request() req) {
-    const user = await this.authService.getCurrentUser(req.user.id);
-    const { password: _password, ...result } = user;
-    return result;
+  @Post('list-fss-numbers')
+  async listFssNumbers() {
+    const employeesList = await this.db.select({ fss_no: employees.fss_no, employee_id: employees.employee_id }).from(employees);
+    return employeesList;
   }
 
-  @Get('me/permissions')
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get current user permissions' })
-  async getMyPermissions(@Request() req) {
-    return this.authService.getMyPermissions(req.user.id);
+  @Post('employee-login')
+  @ApiBody({ type: EmployeeLoginDto })
+  async employeeLogin(@Body() body: EmployeeLoginDto) {
+    this.logger.log('Received login request body: ' + JSON.stringify({ ...body, password: '***' }));
+
+    const { fss_no, password } = body || {};
+  if (!fss_no) {
+    this.logger.warn('Missing FSS number: ' + JSON.stringify(body));
+    throw new HttpException('Missing FSS number', HttpStatus.BAD_REQUEST);
   }
 
-  @Get('me/roles')
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get current user roles' })
-  async getMyRoles(@Request() req) {
-    return this.authService.getMyRoles(req.user.id);
+  // Fetch employee from DB
+  const [employee] = await this.db
+    .select()
+    .from(employees)
+    .where(eq(employees.fss_no, fss_no));
+
+  // Check if employee exists
+  if (!employee) {
+    this.logger.warn(`No employee found for FSS number: ${fss_no}`);
+    throw new HttpException('Invalid FSS number', HttpStatus.UNAUTHORIZED);
   }
+
+    // Verify password
+    if (employee.password) {
+      const isPasswordValid = await bcrypt.compare(password, employee.password);
+      if (!isPasswordValid) {
+        this.logger.warn(`Invalid password for FSS number: ${fss_no}`);
+        throw new HttpException('Invalid credentials', HttpStatus.UNAUTHORIZED);
+      }
+    } else {
+      // If no password set, we might want to prevent login or allow default
+      // For now, let's assume password is required if we are moving to password-based login
+      this.logger.warn(`No password set for FSS number: ${fss_no}`);
+      throw new HttpException('No password set for this account', HttpStatus.UNAUTHORIZED);
+    }
+
+    // Log fetched employee
+    this.logger.log('Employee fetched: ' + JSON.stringify({ ...employee, password: '***' }));
+
+    // Create JWT payload
+    const payload = { 
+      sub: employee.employee_id, 
+      fss_no: employee.fss_no,
+      type: 'employee'
+    };
+  const token = this.jwtService.sign(payload);
+
+  this.logger.log(`Login successful for employee_id: ${employee.employee_id}`);
+  return { token, employee_id: employee.employee_id, fss_no: employee.fss_no };
 }
+
+  @Post('set-password')
+  @ApiOperation({ summary: 'Set or update employee password' })
+  @ApiBody({ type: SetPasswordDto })
+  @ApiResponse({ status: 200, description: 'Password set successfully' })
+  async setPassword(@Body() body: SetPasswordDto) {
+    const { fss_no, password } = body;
+
+    // Fetch employee
+    const [employee] = await this.db
+      .select({ id: employees.id, employee_id: employees.employee_id })
+      .from(employees)
+      .where(eq(employees.fss_no, fss_no));
+
+    if (!employee) {
+      throw new HttpException('Employee not found', HttpStatus.NOT_FOUND);
+    }
+
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Update database
+    await this.db
+      .update(employees)
+      .set({ 
+        password: hashedPassword,
+        updated_at: new Date()
+      })
+      .where(eq(employees.id, employee.id));
+
+    this.logger.log(`Password set successfully for FSS: ${fss_no}`);
+    return { success: true, message: 'Password set successfully' };
+  }
+
+
+}
+

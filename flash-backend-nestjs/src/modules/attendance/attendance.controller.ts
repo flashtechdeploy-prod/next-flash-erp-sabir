@@ -8,6 +8,9 @@ import {
   UseGuards,
   HttpException,
   HttpStatus,
+  Post,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -17,9 +20,12 @@ import {
   ApiBody,
   ApiResponse,
 } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { AttendanceService } from './attendance.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { BulkUpsertAttendanceDto } from './attendance.dto';
+import { BulkUpsertAttendanceDto, AttendanceRecordDto, MarkSelfAttendanceDto } from './attendance.dto';
+import { CurrentUser } from 'src/modules/auth/decorators/current-user.decorator';
+import { JwtPayload } from '../auth/auth.service';
 
 @ApiTags('Attendance')
 @ApiBearerAuth()
@@ -59,6 +65,39 @@ export class AttendanceController {
     }
     
     return this.service.bulkUpsert(body.date, body.records);
+  }
+
+  @Post('mark-self')
+  @UseInterceptors(FileInterceptor('picture'))
+  @ApiOperation({ summary: 'Mark attendance for self (employee)' })
+  @ApiBody({ type: MarkSelfAttendanceDto })
+  @ApiResponse({ status: 200, description: 'Attendance marked successfully' })
+  async markSelf(
+    @CurrentUser() user: JwtPayload,
+    @Body() body: any, // Use any because multipart body comes as strings
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    console.log('--- Received mark-self request ---');
+    console.log('User:', user.sub);
+    console.log('File received:', file ? `${file.originalname} (${file.size} bytes)` : 'NONE');
+
+    if (user.type !== 'employee') {
+      throw new HttpException('Only employees can mark their own attendance', HttpStatus.FORBIDDEN);
+    }
+    
+    // Convert string fields from multipart back to correct types if needed
+    const record: any = {
+      status: body.status,
+      note: body.note,
+      location: body.location,
+      leave_type: body.leave_type,
+    };
+
+    // Use the employee ID from the JWT payload
+    const employeeId = user.sub;
+    const date = new Date().toISOString().split('T')[0];
+    
+    return this.service.markSelf(employeeId, date, record, file);
   }
 
   @Get('range')
@@ -123,5 +162,37 @@ export class AttendanceController {
       throw new HttpException('Date parameter is required', HttpStatus.BAD_REQUEST);
     }
     return this.service.getAttendanceWithEmployees(date);
+  }
+
+  @Get('my-status')
+  @ApiOperation({ summary: "Get current employee's attendance status for today" })
+  @ApiResponse({ status: 200, description: "Returns today's attendance record or null" })
+  async getMyStatus(@CurrentUser() user: JwtPayload) {
+    const date = new Date().toISOString().split('T')[0];
+    const employeeId = user.sub;
+    return this.service.getEmployeeStatus(employeeId, date);
+  }
+
+  @Get('my-stats')
+  @ApiOperation({ summary: "Get current employee's attendance statistics for the current month" })
+  @ApiResponse({ status: 200, description: 'Returns attendance counts by status' })
+  async getMyStats(@CurrentUser() user: JwtPayload) {
+    const employeeId = user.sub;
+    return this.service.getEmployeeStats(employeeId);
+  }
+
+  @Get('my-history')
+  @ApiOperation({ summary: "Get current employee's attendance history" })
+  @ApiResponse({ status: 200, description: 'Returns last 30 attendance records' })
+  async getMyHistory(@CurrentUser() user: JwtPayload) {
+    const employeeId = user.sub;
+    return this.service.getEmployeeHistory(employeeId);
+  }
+
+  @Get('full-day-sheet')
+  @ApiOperation({ summary: 'Get full attendance sheet (employee join) for a date' })
+  @ApiResponse({ status: 200, description: 'Returns all active employees merged with attendance' })
+  async getFullDaySheet(@Query('date') date: string) {
+    return this.service.getFullDaySheet(date);
   }
 }

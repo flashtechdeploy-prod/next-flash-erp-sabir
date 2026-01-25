@@ -213,4 +213,11 @@ export class UsersService {
 
     return roles.map((r) => r.name);
   }
+
+  async findEmployeeById(employeeId: string) {
+    return this.db
+      .select()
+      .from(schema.employees)
+      .where(eq(schema.employees.employee_id, employeeId));
+  }
 }

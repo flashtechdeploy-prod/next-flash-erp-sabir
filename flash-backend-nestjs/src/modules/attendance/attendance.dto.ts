@@ -20,6 +20,16 @@ export class AttendanceRecordDto {
   @IsString()
   note?: string;
 
+  @ApiPropertyOptional({ description: 'GPS location (lat,lng JSON)' })
+  @IsOptional()
+  @IsString()
+  location?: string;
+
+  @ApiPropertyOptional({ description: 'Selfie or picture URL' })
+  @IsOptional()
+  @IsString()
+  picture?: string;
+
   @ApiPropertyOptional({ description: 'Overtime minutes worked' })
   @IsOptional()
   @IsNumber()
@@ -52,6 +62,34 @@ export class AttendanceRecordDto {
   @IsOptional()
   @IsNumber()
   fine_amount?: number;
+}
+
+export class MarkSelfAttendanceDto {
+  @ApiProperty({ 
+    description: 'Attendance status',
+    enum: ['present', 'late', 'absent', 'leave']
+  })
+  @IsString()
+  @IsIn(['present', 'late', 'absent', 'leave'])
+  status: string;
+
+  @ApiPropertyOptional({ description: 'Note or remarks' })
+  @IsOptional()
+  @IsString()
+  note?: string;
+
+  @ApiPropertyOptional({ description: 'GPS location (lat,lng JSON)' })
+  @IsOptional()
+  @IsString()
+  location?: string;
+
+  @ApiPropertyOptional({ 
+    description: 'Type of leave (required if status is leave)',
+    enum: ['sick', 'casual', 'annual', 'unpaid', 'emergency']
+  })
+  @IsOptional()
+  @IsString()
+  leave_type?: string;
 }
 
 export class BulkUpsertAttendanceDto {

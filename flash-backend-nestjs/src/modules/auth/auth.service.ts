@@ -4,9 +4,11 @@ import { UsersService } from '../users/users.service';
 import { CreateUserDto, LoginDto } from '../users/dto/user.dto';
 
 export interface JwtPayload {
-  sub: number;
-  email: string;
-  is_superuser: boolean;
+  sub: any;
+  email?: string;
+  fss_no?: string;
+  is_superuser?: boolean;
+  type?: 'user' | 'employee';
 }
 
 @Injectable()
@@ -54,11 +56,19 @@ export class AuthService {
   }
 
   async validateUser(payload: JwtPayload) {
+    if (payload.type === 'employee') {
+      const [employee] = await this.usersService.findEmployeeById(payload.sub);
+      if (!employee || employee.status !== 'Active') {
+        throw new UnauthorizedException();
+      }
+      return { ...employee, sub: employee.employee_id, type: 'employee' };
+    }
+
     const user = await this.usersService.findOne(payload.sub);
     if (!user || !(user as any).is_active) {
       throw new UnauthorizedException();
     }
-    return user;
+    return { ...user, sub: (user as any).id, type: 'user' };
   }
 
   async getCurrentUser(userId: number) {
