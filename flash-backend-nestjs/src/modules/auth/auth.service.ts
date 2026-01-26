@@ -68,7 +68,7 @@ export class AuthService {
     if (!user || !(user as any).is_active) {
       throw new UnauthorizedException();
     }
-    return { ...user, sub: (user as any).id, type: 'user' };
+    return { ...user, sub: (user as any).id, type: 'user', is_superuser: (user as any).is_admin };
   }
 
   async getCurrentUser(payload: JwtPayload) {

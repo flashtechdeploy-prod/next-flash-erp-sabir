@@ -98,12 +98,18 @@ export class AuthController {
   return { token, employee_id: employee.employee_id, fss_no: employee.fss_no };
 }
 
+  @UseGuards(JwtAuthGuard)
   @Post('set-password')
   @ApiOperation({ summary: 'Set or update employee password' })
+  @ApiBearerAuth()
   @ApiBody({ type: SetPasswordDto })
   @ApiResponse({ status: 200, description: 'Password set successfully' })
-  async setPassword(@Body() body: SetPasswordDto) {
+  async setPassword(@Body() body: SetPasswordDto, @CurrentUser() user: any) {
     const { fss_no, password } = body;
+
+    if (!user.is_superuser && user.fss_no !== fss_no) {
+      throw new HttpException('You do not have permission to set this password', HttpStatus.FORBIDDEN);
+    }
 
     // Fetch employee
     const [employee] = await this.db

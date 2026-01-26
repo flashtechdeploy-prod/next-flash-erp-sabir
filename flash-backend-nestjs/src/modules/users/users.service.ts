@@ -24,12 +24,12 @@ export class UsersService {
   ) {}
 
   async findAll(skip = 0, limit = 100) {
-    return this.db
+    const result = await this.db
       .select()
       .from(schema.users)
       .offset(skip)
-      .limit(limit)
-      .execute(); // use execute() explicitly if needed, or just await
+      .limit(limit);
+    return result.map(u => ({ ...u, is_superuser: u.is_admin }));
   }
 
   async findOne(id: number) {
@@ -40,7 +40,7 @@ export class UsersService {
     if (!user) {
       throw new NotFoundException(`User with ID ${id} not found`);
     }
-    return user;
+    return { ...user, is_superuser: user.is_admin };
   }
 
   async findByEmail(email: string) {

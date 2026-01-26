@@ -11,8 +11,8 @@ export class SuperUserGuard implements CanActivate {
     const request = context.switchToHttp().getRequest();
     const user = request.user;
 
-    if (!user?.is_superuser) {
-      throw new ForbiddenException('This action requires superuser privileges');
+    if (!user?.is_superuser && !user?.is_admin) {
+      throw new ForbiddenException('This action requires admin or superuser privileges');
     }
 
     return true;

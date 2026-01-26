@@ -8,9 +8,9 @@ import {
 } from 'antd';
 import {
   ArrowLeftOutlined, EditOutlined, DeleteOutlined, UploadOutlined,
-  FilePdfOutlined, EyeOutlined, DownloadOutlined, PrinterOutlined, ExportOutlined
+  FilePdfOutlined, EyeOutlined, DownloadOutlined, PrinterOutlined, ExportOutlined, LockOutlined
 } from '@ant-design/icons';
-import { employeeApi, companySettingsApi } from '@/lib/api';
+import { employeeApi, companySettingsApi, authApi } from '@/lib/api';
 import EmployeeForm, { DOCUMENT_CATEGORIES } from '../EmployeeForm';
 
 import { getFullFileUrl } from '@/lib/utils';
@@ -38,7 +38,9 @@ export default function EmployeeDetailPage() {
   const [previewFile, setPreviewFile] = useState<string>('');
   const [printModalVisible, setPrintModalVisible] = useState(false);
   const [printWithDocuments, setPrintWithDocuments] = useState(true);
+  const [passwordModalVisible, setPasswordModalVisible] = useState(false);
   const [uploadForm] = Form.useForm();
+  const [passwordForm] = Form.useForm();
 
   const [companySettings, setCompanySettings] = useState<any>(null);
 
@@ -204,6 +206,24 @@ export default function EmployeeDetailPage() {
       setPreviewFile(fullUrl);
       setPreviewVisible(true);
     }
+  };
+
+  const handleSetPassword = async (values: any) => {
+    if (!employee?.fss_no) {
+      message.error('Employee FSS number not found');
+      return;
+    }
+    const response = await authApi.setPassword({
+      fss_no: employee.fss_no as string,
+      password: values.password
+    });
+    if (response.error) {
+      message.error(response.error);
+      return;
+    }
+    message.success('Password updated successfully');
+    setPasswordModalVisible(false);
+    passwordForm.resetFields();
   };
 
 
@@ -849,6 +869,9 @@ export default function EmployeeDetailPage() {
             <Button icon={<EditOutlined />} onClick={() => setEditDrawerVisible(true)} type="primary" style={{ minWidth: '120px' }}>
               Edit
             </Button>
+            <Button icon={<LockOutlined />} onClick={() => setPasswordModalVisible(true)} style={{ minWidth: '120px' }}>
+              Password
+            </Button>
             <Popconfirm title="Delete employee?" onConfirm={handleDelete}>
               <Button danger icon={<DeleteOutlined />} style={{ minWidth: '120px' }}>
                 Delete
@@ -1082,6 +1105,51 @@ export default function EmployeeDetailPage() {
             </Radio>
           </Radio.Group>
         </div>
+      </Modal>
+
+      <Modal
+        title="Set Employee Password"
+        open={passwordModalVisible}
+        onCancel={() => {
+          setPasswordModalVisible(false);
+          passwordForm.resetFields();
+        }}
+        onOk={() => passwordForm.submit()}
+        okText="Update Password"
+      >
+        <div style={{ marginBottom: '16px' }}>
+          Update login credentials for <strong>{employee?.full_name as string}</strong> (FSS: {employee?.fss_no as string})
+        </div>
+        <Form form={passwordForm} layout="vertical" onFinish={handleSetPassword}>
+          <Form.Item
+            name="password"
+            label="New Password"
+            rules={[
+              { required: true, message: 'Please enter a password' },
+              { min: 6, message: 'Password must be at least 6 characters' }
+            ]}
+          >
+            <Input.Password placeholder="At least 6 characters" />
+          </Form.Item>
+          <Form.Item
+            name="confirmPassword"
+            label="Confirm Password"
+            dependencies={['password']}
+            rules={[
+              { required: true, message: 'Please confirm password' },
+              ({ getFieldValue }) => ({
+                validator(_, value) {
+                  if (!value || getFieldValue('password') === value) {
+                    return Promise.resolve();
+                  }
+                  return Promise.reject(new Error('Passwords do not match'));
+                },
+              }),
+            ]}
+          >
+            <Input.Password placeholder="Confirm new password" />
+          </Form.Item>
+        </Form>
       </Modal>
 
       <style jsx>{`

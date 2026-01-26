@@ -17,6 +17,7 @@ import {
   Dropdown,
   Menu,
   MenuProps,
+  Modal,
 } from 'antd';
 import {
   PlusOutlined,
@@ -26,8 +27,9 @@ import {
   ReloadOutlined,
   InboxOutlined,
   DownOutlined,
+  LockOutlined,
 } from '@ant-design/icons';
-import { employeeApi, generalInventoryApi, restrictedInventoryApi } from '@/lib/api';
+import { employeeApi, generalInventoryApi, restrictedInventoryApi, authApi } from '@/lib/api';
 import EmployeeForm from './EmployeeForm';
 
 const { Search } = Input;
@@ -50,6 +52,8 @@ export default function EmployeesPage() {
   const [loading, setLoading] = useState(false);
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
+  const [passwordModalVisible, setPasswordModalVisible] = useState(false);
+  const [selectedEmployeeForPassword, setSelectedEmployeeForPassword] = useState<Employee | null>(null);
   const [pagination, setPagination] = useState({
     current: 1,
     pageSize: 20,
@@ -80,6 +84,7 @@ export default function EmployeesPage() {
   const [selectedRestrictedItem, setSelectedRestrictedItem] = useState<Record<string, unknown> | null>(null);
   const [generalItemForm] = Form.useForm();
   const [restrictedItemForm] = Form.useForm();
+  const [passwordForm] = Form.useForm();
 
   const fetchEmployees = async (page = pagination.current, pageSize = pagination.pageSize) => {
     setLoading(true);
@@ -210,6 +215,24 @@ export default function EmployeesPage() {
     );
     setDrawerVisible(false);
     fetchEmployees();
+  };
+
+  const handleSetPassword = async (values: any) => {
+    if (!selectedEmployeeForPassword?.fss_no) {
+      message.error('Employee FSS number not found');
+      return;
+    }
+    const response = await authApi.setPassword({
+      fss_no: selectedEmployeeForPassword.fss_no,
+      password: values.password
+    });
+    if (response.error) {
+      message.error(response.error);
+      return;
+    }
+    message.success('Password updated successfully');
+    setPasswordModalVisible(false);
+    passwordForm.resetFields();
   };
 
   // Inventory assignment handlers
@@ -506,6 +529,18 @@ export default function EmployeesPage() {
             onClick: () => handleAssignRestrictedItem(record),
             danger: true,
           },
+          {
+            type: 'divider',
+          },
+          {
+            key: 'password',
+            label: 'Set Password',
+            icon: <LockOutlined />,
+            onClick: () => {
+              setSelectedEmployeeForPassword(record);
+              setPasswordModalVisible(true);
+            },
+          },
         ];
 
         return (
@@ -742,6 +777,52 @@ export default function EmployeesPage() {
           )}
         </Form>
       </Drawer>
+
+      {/* Password Modal */}
+      <Modal
+        title="Set Employee Password"
+        open={passwordModalVisible}
+        onCancel={() => {
+          setPasswordModalVisible(false);
+          passwordForm.resetFields();
+        }}
+        onOk={() => passwordForm.submit()}
+        okText="Update Password"
+      >
+        <div style={{ marginBottom: '16px' }}>
+          Update login credentials for <strong>{selectedEmployeeForPassword?.full_name || selectedEmployeeForPassword?.name}</strong> (FSS: {selectedEmployeeForPassword?.fss_no})
+        </div>
+        <Form form={passwordForm} layout="vertical" onFinish={handleSetPassword}>
+          <Form.Item
+            name="password"
+            label="New Password"
+            rules={[
+              { required: true, message: 'Please enter a password' },
+              { min: 6, message: 'Password must be at least 6 characters' }
+            ]}
+          >
+            <Input.Password placeholder="At least 6 characters" />
+          </Form.Item>
+          <Form.Item
+            name="confirmPassword"
+            label="Confirm Password"
+            dependencies={['password']}
+            rules={[
+              { required: true, message: 'Please confirm password' },
+              ({ getFieldValue }) => ({
+                validator(_, value) {
+                  if (!value || getFieldValue('password') === value) {
+                    return Promise.resolve();
+                  }
+                  return Promise.reject(new Error('Passwords do not match'));
+                },
+              }),
+            ]}
+          >
+            <Input.Password placeholder="Confirm new password" />
+          </Form.Item>
+        </Form>
+      </Modal>
 
       <style jsx global>{`
         .compact-table .ant-table {
