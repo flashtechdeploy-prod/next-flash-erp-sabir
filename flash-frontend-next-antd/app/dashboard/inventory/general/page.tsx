@@ -60,7 +60,7 @@ export default function GeneralInventoryPage() {
       const response = await employeeApi.getAll();
       console.log('Employees response:', response);
       let employeeList: Record<string, unknown>[] = [];
-      
+
       if (Array.isArray(response)) {
         employeeList = response;
       } else if (response?.data) {
@@ -70,7 +70,7 @@ export default function GeneralInventoryPage() {
           employeeList = response.data.employees;
         }
       }
-      
+
       console.log('Loaded employees:', employeeList);
       setEmployees(employeeList);
     } catch (error) {
@@ -86,13 +86,13 @@ export default function GeneralInventoryPage() {
         generalInventoryApi.getItems(),
         generalInventoryApi.getTransactions(),
       ]);
-      
+
       console.log('Items response:', itemsResponse);
       console.log('Transactions response:', transResponse);
-      
+
       const itemsList = itemsResponse.data ? (Array.isArray(itemsResponse.data) ? itemsResponse.data : []) : [];
       const transList = transResponse.data ? (Array.isArray(transResponse.data) ? transResponse.data : []) : [];
-      
+
       setItems(itemsList);
       setTransactions(transList);
     } catch {
@@ -165,10 +165,10 @@ export default function GeneralInventoryPage() {
     try {
       const values = await transactionForm.validateFields();
       const itemCode = String(selectedItem?.item_code);
-      
+
       // Extract only the data needed for API (exclude transaction_type)
       const { transaction_type, ...transactionData } = values;
-      
+
       switch (transaction_type) {
         case 'issue':
           await generalInventoryApi.issueItem(itemCode, transactionData);
@@ -186,7 +186,7 @@ export default function GeneralInventoryPage() {
           await generalInventoryApi.adjustItem(itemCode, transactionData);
           break;
       }
-      
+
       message.success('Transaction recorded');
       setTransactionDrawerVisible(false);
       loadData();
@@ -242,7 +242,8 @@ export default function GeneralInventoryPage() {
     { title: 'Name', dataIndex: 'name', key: 'name', width: 180, render: (t: string) => <span style={{ fontSize: '11px' }}>{t}</span> },
     { title: 'Category', dataIndex: 'category', key: 'category', width: 110, render: (t: string) => <Tag color="blue" style={{ fontSize: '11px' }}>{t}</Tag> },
     { title: 'Quantity in Stock', dataIndex: 'quantity_on_hand', key: 'quantity_on_hand', width: 110, render: (_: number, record: Record<string, unknown>) => <span style={{ fontSize: '11px', fontWeight: 600 }}>{getQty(record)}</span> },
-    { title: 'Total Quantity', key: 'total_quantity', width: 110, render: (_: unknown, record: Record<string, unknown>) => {
+    {
+      title: 'Total Quantity', key: 'total_quantity', width: 110, render: (_: unknown, record: Record<string, unknown>) => {
         const code = String(record.item_code || '');
         const stock = getQty(record);
         const issued = issuedByItem[code] || 0;
@@ -250,22 +251,24 @@ export default function GeneralInventoryPage() {
         return <span style={{ fontSize: '11px' }}>{totalQty}</span>;
       }
     },
-    { title: 'Total Issues', key: 'total_issues', width: 100, render: (_: unknown, record: Record<string, unknown>) => {
+    {
+      title: 'Total Issues', key: 'total_issues', width: 100, render: (_: unknown, record: Record<string, unknown>) => {
         const code = String(record.item_code || '');
         const issued = issuedByItem[code] || 0;
         return <span style={{ fontSize: '11px', fontWeight: 600 }}>{issued}</span>;
       }
     },
-    { title: 'Available', key: 'available', width: 100, render: (_: unknown, record: Record<string, unknown>) => {
+    {
+      title: 'Available', key: 'available', width: 100, render: (_: unknown, record: Record<string, unknown>) => {
         const code = String(record.item_code || '');
         const available = getQty(record);
         return <span style={{ fontSize: '11px', fontWeight: 600 }}>{available}</span>;
       }
     },
     { title: 'Min Stock', dataIndex: 'min_quantity', key: 'min_quantity', width: 90, render: (v: number) => <span style={{ fontSize: '11px' }}>{v}</span> },
-    { 
-      title: 'Status', 
-      key: 'status', 
+    {
+      title: 'Status',
+      key: 'status',
       width: 90,
       render: (_: unknown, record: Record<string, unknown>) => {
         const stock = Number(record.quantity_on_hand || 0);
@@ -294,23 +297,23 @@ export default function GeneralInventoryPage() {
 
   const transactionColumns = [
     { title: 'FSS No.', dataIndex: 'employee_id', key: 'employee_id', width: 100, render: (t: string) => <span style={{ fontSize: '11px', fontWeight: 600 }}>{t}</span> },
-    { 
-      title: 'Emp Name', 
-      dataIndex: 'employee_id', 
-      key: 'emp_name', 
+    {
+      title: 'Emp Name',
+      dataIndex: 'employee_id',
+      key: 'emp_name',
       width: 150,
       render: (empId: string) => {
-        const emp = employees.find((e: Record<string, unknown>) => 
-          String(e.fss_number || e.fss_no || e.id || '') === String(empId)
+        const emp = employees.find((e: Record<string, unknown>) =>
+          String(e.fss_no || e.id || '') === String(empId)
         );
         return <span style={{ fontSize: '11px' }}>{emp ? (String(emp.full_name || emp.name || '') || (String(emp.first_name || '') + ' ' + String(emp.last_name || '')).trim()) : empId || '-'}</span>;
       }
     },
     { title: 'Item', dataIndex: 'item_code', key: 'item_code', width: 100, render: (t: string) => <span style={{ fontSize: '11px', fontWeight: 600 }}>{t}</span> },
-    { 
-      title: 'Type', 
-      dataIndex: 'action', 
-      key: 'action', 
+    {
+      title: 'Type',
+      dataIndex: 'action',
+      key: 'action',
       width: 100,
       render: (type: string) => {
         const colors: Record<string, string> = { issue: 'blue', return: 'green', lost: 'red', damaged: 'orange', adjust: 'purple' };
@@ -360,11 +363,11 @@ export default function GeneralInventoryPage() {
       <Row gutter={16} style={{ marginBottom: '24px' }}>
         <Col span={6}>
           <Card>
-            <Statistic 
-              title={<span style={{ fontSize: '12px' }}>Total Quantity</span>} 
-              value={totalStock} 
-              valueStyle={{ fontSize: '20px', color: '#1890ff' }} 
-              prefix={<InboxOutlined />} 
+            <Statistic
+              title={<span style={{ fontSize: '12px' }}>Total Quantity</span>}
+              value={totalStock}
+              valueStyle={{ fontSize: '20px', color: '#1890ff' }}
+              prefix={<InboxOutlined />}
             />
           </Card>
         </Col>
@@ -430,9 +433,9 @@ export default function GeneralInventoryPage() {
               placeholder="Select FSS number"
               notFoundContent={employees.length === 0 ? 'No employees found' : undefined}
               options={employees
-                .filter((emp) => emp.fss_number || emp.fss_no)
+                .filter((emp) => emp.fss_no)
                 .map((emp) => {
-                  const fss = emp.fss_number || emp.fss_no;
+                  const fss = emp.fss_no;
                   return {
                     value: fss,
                     label: `${fss} - ${emp.full_name || emp.name || 'Unknown'}`,
@@ -477,7 +480,7 @@ export default function GeneralInventoryPage() {
                   categories.map(cat => (
                     <Tag key={cat} color="blue" style={{ padding: '6px 12px', fontSize: '12px' }}>
                       {cat}
-                      <DeleteOutlined 
+                      <DeleteOutlined
                         onClick={() => {
                           Modal.confirm({
                             title: 'Delete Category?',
@@ -489,7 +492,7 @@ export default function GeneralInventoryPage() {
                         }}
                         style={{ marginLeft: '8px', cursor: 'pointer' }}
                       />
-                      <EditOutlined 
+                      <EditOutlined
                         onClick={() => handleEditCategory(cat)}
                         style={{ marginLeft: '8px', cursor: 'pointer' }}
                       />

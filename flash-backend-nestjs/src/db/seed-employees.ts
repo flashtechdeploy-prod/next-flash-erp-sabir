@@ -75,7 +75,6 @@ const ALLOWED_FIELDS: Array<keyof EmployeeInsert> = [
   'interviewed_by',
   'introduced_by',
   'fss_no',
-  'fss_number',
   'rank',
   'rank2',
   'service_rank',

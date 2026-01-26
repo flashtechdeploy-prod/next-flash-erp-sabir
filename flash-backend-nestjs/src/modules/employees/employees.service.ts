@@ -30,7 +30,7 @@ export class EmployeesService {
   async findAll(query: EmployeeQueryDto) {
     const skip = Number(query.skip) || 0;
     const limit = Number(query.limit) || 100;
-    const { search, status, unit, rank, deployed_at, with_total, fss_number, full_name, cnic } = query;
+    const { search, status, unit, rank, deployed_at, with_total, fss_no, full_name, cnic } = query;
 
     const filters: SQL[] = [];
 
@@ -40,10 +40,7 @@ export class EmployeesService {
     if (deployed_at)
       filters.push(eq(schema.employees.deployed_at, deployed_at));
     
-    if (fss_number) filters.push(or(
-        ilike(schema.employees.fss_number, `%${fss_number}%`),
-        ilike(schema.employees.fss_no, `%${fss_number}%`)
-    ) as SQL);
+    if (fss_no) filters.push(ilike(schema.employees.fss_no, `%${fss_no}%`));
     if (full_name) filters.push(ilike(schema.employees.full_name, `%${full_name}%`));
     if (cnic) filters.push(or(
         ilike(schema.employees.cnic, `%${cnic}%`),
@@ -74,7 +71,6 @@ export class EmployeesService {
           ilike(schema.employees.employee_id, `%${search}%`),
           ilike(schema.employees.cnic, `%${search}%`),
           ilike(schema.employees.cnic_no, `%${search}%`),
-          ilike(schema.employees.fss_number, `%${search}%`),
           ilike(schema.employees.fss_no, `%${search}%`),
           ilike(schema.employees.personal_phone_number, `%${search}%`),
         ),
@@ -88,7 +84,7 @@ export class EmployeesService {
     )
       .limit(limit)
       .offset(skip)
-      .orderBy(desc(sql`CAST(COALESCE(${schema.employees.fss_number}, ${schema.employees.fss_no}, '0') AS INTEGER)`));
+      .orderBy(desc(sql`CAST(COALESCE(${schema.employees.fss_no}, '0') AS INTEGER)`));
 
     if (with_total) {
       const results = await (this.db

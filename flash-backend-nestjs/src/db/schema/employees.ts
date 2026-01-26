@@ -99,7 +99,6 @@ export const employees = pgTable('employees', {
 
   // Service Details
   fss_no: text('fss_no'),
-  fss_number: text('fss_number'),
   rank: text('rank'),
   rank2: text('rank2'),
   service_rank: text('service_rank'),

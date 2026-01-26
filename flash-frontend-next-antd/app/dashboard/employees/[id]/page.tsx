@@ -881,7 +881,7 @@ export default function EmployeeDetailPage() {
           <div className="section">
             <div className="section-title">Service Details</div>
             <div className="field-grid">
-              <Field label="FSS Number" value={employee.fss_number || employee.fss_no} />
+              <Field label="FSS Number" value={employee.fss_no} />
               <Field label="Rank" value={employee.rank} />
               <Field label="Unit" value={employee.unit} />
               <Field label="Status" value={employee.status} />

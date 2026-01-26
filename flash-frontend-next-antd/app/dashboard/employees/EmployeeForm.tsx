@@ -247,7 +247,7 @@ export default function EmployeeForm({
           </Form.Item>
         </Col>
         <Col span={6}>
-          <Form.Item label="FSS Number" name="fss_number">
+          <Form.Item label="FSS Number" name="fss_no">
             <Input placeholder="FSS-2024-001" />
           </Form.Item>
         </Col>

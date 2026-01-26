@@ -251,6 +251,7 @@ export default function AttendancePage() {
     );
   };
 
+  console.log(employees)
   const columns = [
     {
       title: '-',
@@ -273,7 +274,7 @@ export default function AttendancePage() {
       },
       render: (_: unknown, record: AttendanceRecord) => {
         const emp = employees.find(e => e.employee_id === record.employee_id);
-        const fssId = (record.fss_id || (emp as any)?.fss_no || (emp as any)?.fss_number) as string;
+        const fssId = (record.fss_id || (emp as any)?.fss_no) as string;
         return fssId || '-';
       },
     },

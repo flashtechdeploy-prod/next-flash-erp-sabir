@@ -36,7 +36,6 @@ interface Employee extends Record<string, unknown> {
   employee_id: string;
   full_name?: string;
   name?: string;
-  fss_number?: string;
   fss_no?: string;
   cnic_no?: string;
   cnic?: string;
@@ -59,7 +58,7 @@ export default function EmployeesPage() {
   const [filters, setFilters] = useState({
     search: '',
     status: '',
-    fss_number: '',
+    fss_no: '',
     full_name: '',
     cnic: '',
     father_name: '',
@@ -92,7 +91,7 @@ export default function EmployeesPage() {
 
     if (filters.search) params.search = filters.search;
     if (filters.status) params.status = filters.status;
-    if (filters.fss_number) params.fss_number = filters.fss_number;
+    if (filters.fss_no) params.fss_no = filters.fss_no;
     if (filters.full_name) params.full_name = filters.full_name;
     if (filters.cnic) params.cnic = filters.cnic;
     if (filters.father_name) params.father_name = filters.father_name;
@@ -125,7 +124,7 @@ export default function EmployeesPage() {
   useEffect(() => {
     fetchEmployees();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.search, filters.status, filters.fss_number, filters.full_name, filters.cnic, filters.father_name, filters.date_of_birth, filters.mobile_number, filters.department, filters.designation, filters.enrolled_as, filters.date_of_enrolment]);
+  }, [filters.search, filters.status, filters.fss_no, filters.full_name, filters.cnic, filters.father_name, filters.date_of_birth, filters.mobile_number, filters.department, filters.designation, filters.enrolled_as, filters.date_of_enrolment]);
 
   const handleCreate = () => {
     setEditingEmployee(null);
@@ -261,7 +260,7 @@ export default function EmployeesPage() {
   const handleSubmitGeneralItemAssignment = async () => {
     try {
       const values = await generalItemForm.validateFields();
-      const fssNumber = selectedEmployeeForAssignment?.fss_number || selectedEmployeeForAssignment?.fss_no;
+      const fssNumber = selectedEmployeeForAssignment?.fss_no;
 
       if (!fssNumber) {
         message.error('Employee FSS number not found');
@@ -293,7 +292,7 @@ export default function EmployeesPage() {
   const handleSubmitRestrictedItemAssignment = async () => {
     try {
       const values = await restrictedItemForm.validateFields();
-      const fssNumber = selectedEmployeeForAssignment?.fss_number || selectedEmployeeForAssignment?.fss_no;
+      const fssNumber = selectedEmployeeForAssignment?.fss_no;
 
       if (!fssNumber) {
         message.error('Employee FSS number not found');
@@ -387,13 +386,13 @@ export default function EmployeesPage() {
   const columns = [
     {
       title: 'FSS Number',
-      dataIndex: 'fss_number',
-      key: 'fss_number',
+      dataIndex: 'fss_no',
+      key: 'fss_no',
       width: 120,
       fixed: 'left' as const,
       render: (_: unknown, record: Employee) =>
-        record.fss_number || record.fss_no || record.cnic || '-',
-      ...getColumnSearchProps('fss_number', 'FSS No'),
+        record.fss_no || record.cnic || '-',
+      ...getColumnSearchProps('fss_no', 'FSS No'),
     },
     {
       title: 'Name',
@@ -633,7 +632,7 @@ export default function EmployeesPage() {
         <Form form={generalItemForm} layout="vertical">
           <div style={{ background: '#f0f2f5', padding: '12px', borderRadius: '4px', marginBottom: '16px' }}>
             <div><strong>Employee:</strong> {selectedEmployeeForAssignment?.full_name || selectedEmployeeForAssignment?.name}</div>
-            <div><strong>FSS Number:</strong> {selectedEmployeeForAssignment?.fss_number || selectedEmployeeForAssignment?.fss_no}</div>
+            <div><strong>FSS Number:</strong> {selectedEmployeeForAssignment?.fss_no}</div>
           </div>
 
           <Form.Item
@@ -689,7 +688,7 @@ export default function EmployeesPage() {
         <Form form={restrictedItemForm} layout="vertical">
           <div style={{ background: '#fff1f0', padding: '12px', borderRadius: '4px', marginBottom: '16px', border: '1px solid #ffccc7' }}>
             <div><strong>Employee:</strong> {selectedEmployeeForAssignment?.full_name || selectedEmployeeForAssignment?.name}</div>
-            <div><strong>FSS Number:</strong> {selectedEmployeeForAssignment?.fss_number || selectedEmployeeForAssignment?.fss_no}</div>
+            <div><strong>FSS Number:</strong> {selectedEmployeeForAssignment?.fss_no}</div>
           </div>
 
           <Form.Item

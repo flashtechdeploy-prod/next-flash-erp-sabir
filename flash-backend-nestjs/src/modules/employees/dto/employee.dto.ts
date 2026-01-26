@@ -91,7 +91,6 @@ export class CreateEmployeeDto {
   @ApiPropertyOptional() @IsString() @IsOptional() introduced_by?: string;
 
   // Service Details
-  @ApiPropertyOptional() @IsString() @IsOptional() fss_number?: string;
   @ApiPropertyOptional() @IsString() @IsOptional() fss_no?: string;
   @ApiPropertyOptional() @IsString() @IsOptional() rank?: string;
   @ApiPropertyOptional() @IsString() @IsOptional() unit?: string;
@@ -215,7 +214,7 @@ export class EmployeeQueryDto {
   @ApiPropertyOptional() @IsString() @IsOptional() unit?: string;
   @ApiPropertyOptional() @IsString() @IsOptional() rank?: string;
   @ApiPropertyOptional() @IsString() @IsOptional() deployed_at?: string;
-  @ApiPropertyOptional() @IsString() @IsOptional() fss_number?: string;
+  @ApiPropertyOptional() @IsString() @IsOptional() fss_no?: string;
   @ApiPropertyOptional() @IsString() @IsOptional() full_name?: string;
   @ApiPropertyOptional() @IsString() @IsOptional() cnic?: string;
   @ApiPropertyOptional() @IsString() @IsOptional() father_name?: string;

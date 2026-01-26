@@ -41,7 +41,7 @@ export default function LeaveManagementPage() {
   const getFss = (obj: unknown): string | undefined => {
     if (!obj || typeof obj !== 'object') return undefined;
     const rec = obj as Record<string, unknown>;
-    return (rec.fss_id as string) || (rec.fss_number as string);
+    return (rec.fss_id as string) || (rec.fss_no as string);
   };
 
   const loadEmployees = async () => {
@@ -72,13 +72,13 @@ export default function LeaveManagementPage() {
         setLoading(false);
         return;
       }
-      
-    
+
+
       // Backend returns { leaves, pagination }, so access data.leaves
-      const data = Array.isArray(res.data) 
-        ? res.data 
+      const data = Array.isArray(res.data)
+        ? res.data
         : (res.data as { leaves?: Array<Record<string, unknown>> })?.leaves || [];
-      
+
       console.log('Raw leave data:', data);
       // Calculate days and enrich with employee info
       const enriched = data.map((leave: Record<string, unknown>) => {
@@ -88,7 +88,7 @@ export default function LeaveManagementPage() {
         const emp = employees.find(e => e.employee_id === leave.employee_id);
         const fssId = getFss(emp) || getFss(leave);
         const employeeName = (emp?.full_name || emp?.name) as string | undefined;
-        
+
         return {
           ...leave,
           days,
@@ -97,7 +97,7 @@ export default function LeaveManagementPage() {
           employee_name: employeeName,
         } as LeaveRecord;
       });
-      
+
       setLeaves(enriched);
     } catch (error) {
       message.error('Failed to load leave records');
@@ -189,10 +189,10 @@ export default function LeaveManagementPage() {
   };
 
   const columns = [
-    { 
-      title: 'FSS ID', 
-      dataIndex: 'fss_id', 
-      key: 'fss_id', 
+    {
+      title: 'FSS ID',
+      dataIndex: 'fss_id',
+      key: 'fss_id',
       width: 110,
       render: (_: string, record: LeaveRecord) => {
         const emp = employees.find(e => e.employee_id === record.employee_id);
@@ -200,10 +200,10 @@ export default function LeaveManagementPage() {
         return <span style={{ fontSize: '11px' }}>{fssId || ''}</span>;
       }
     },
-    { 
-      title: 'Employee Name', 
-      dataIndex: 'employee_name', 
-      key: 'employee_name', 
+    {
+      title: 'Employee Name',
+      dataIndex: 'employee_name',
+      key: 'employee_name',
       width: 180,
       render: (_: string, record: LeaveRecord) => {
         const emp = employees.find(e => e.employee_id === record.employee_id);
@@ -211,31 +211,31 @@ export default function LeaveManagementPage() {
         return <span style={{ fontSize: '11px' }}>{name || '-'}</span>;
       }
     },
-    { 
-      title: 'From Date', 
-      dataIndex: 'from_date', 
-      key: 'from_date', 
+    {
+      title: 'From Date',
+      dataIndex: 'from_date',
+      key: 'from_date',
       width: 110,
       render: (date: string) => <span style={{ fontSize: '11px' }}>{dayjs(date).format('DD MMM YYYY')}</span>
     },
-    { 
-      title: 'To Date', 
-      dataIndex: 'to_date', 
-      key: 'to_date', 
+    {
+      title: 'To Date',
+      dataIndex: 'to_date',
+      key: 'to_date',
       width: 110,
       render: (date: string) => <span style={{ fontSize: '11px' }}>{dayjs(date).format('DD MMM YYYY')}</span>
     },
-    { 
-      title: 'Days', 
-      dataIndex: 'days', 
-      key: 'days', 
+    {
+      title: 'Days',
+      dataIndex: 'days',
+      key: 'days',
       width: 60,
       render: (days: number) => <span style={{ fontSize: '11px', fontWeight: 600 }}>{days}</span>
     },
-    { 
-      title: 'Leave Type', 
-      dataIndex: 'leave_type', 
-      key: 'leave_type', 
+    {
+      title: 'Leave Type',
+      dataIndex: 'leave_type',
+      key: 'leave_type',
       width: 120,
       render: (type: string) => {
         const colors: Record<string, string> = {
@@ -248,17 +248,17 @@ export default function LeaveManagementPage() {
         return <Tag color={colors[type] || 'default'} style={{ fontSize: '11px' }}>{type.toUpperCase()}</Tag>;
       }
     },
-    { 
-      title: 'Reason', 
-      dataIndex: 'reason', 
+    {
+      title: 'Reason',
+      dataIndex: 'reason',
       key: 'reason',
       ellipsis: true,
       render: (text: string) => <span style={{ fontSize: '11px' }}>{text}</span>
     },
-    { 
-      title: 'Status', 
-      dataIndex: 'status', 
-      key: 'status', 
+    {
+      title: 'Status',
+      dataIndex: 'status',
+      key: 'status',
       width: 100,
       render: (status: string) => (
         <Tag color={status === 'approved' ? 'green' : status === 'pending' ? 'orange' : 'red'} style={{ fontSize: '11px' }}>
@@ -272,9 +272,9 @@ export default function LeaveManagementPage() {
       width: 150,
       render: (_: unknown, record: LeaveRecord) => (
         <Space size="small">
-          <Button 
-            type="link" 
-            size="small" 
+          <Button
+            type="link"
+            size="small"
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
             style={{ padding: '0 4px' }}
@@ -287,9 +287,9 @@ export default function LeaveManagementPage() {
             okText="Yes"
             cancelText="No"
           >
-            <Button 
-              type="link" 
-              danger 
+            <Button
+              type="link"
+              danger
               size="small"
               icon={<DeleteOutlined />}
               style={{ padding: '0 4px' }}
@@ -302,7 +302,7 @@ export default function LeaveManagementPage() {
     },
   ];
 
-  const filteredLeaves = leaves.filter(leave => 
+  const filteredLeaves = leaves.filter(leave =>
     leave.employee_id.toLowerCase().includes(searchText.toLowerCase()) ||
     (leave.fss_id || '').toLowerCase().includes(searchText.toLowerCase()) ||
     (leave.employee_name || '').toLowerCase().includes(searchText.toLowerCase()) ||
@@ -409,10 +409,10 @@ export default function LeaveManagementPage() {
         }
       >
         <Form form={form} layout="vertical" onFinish={handleSubmit}>
-          <div style={{ 
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', 
-            color: 'white', 
-            padding: '12px 16px', 
+          <div style={{
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            color: 'white',
+            padding: '12px 16px',
             marginBottom: '24px',
             borderRadius: '4px',
             fontSize: '14px',
