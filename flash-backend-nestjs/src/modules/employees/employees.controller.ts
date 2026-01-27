@@ -45,6 +45,7 @@ import {
 export class EmployeesController {
   constructor(private readonly employeesService: EmployeesService) {}
 
+  @Public()
   @Get()
   @ApiOperation({ summary: 'List employees with pagination and filters' })
   async findAll(@Query() query: EmployeeQueryDto) {
@@ -234,6 +235,18 @@ export class EmployeesController {
     @Param('warning_id', ParseIntPipe) warningId: number,
   ) {
     return this.employeesService.deleteWarning(employeeDbId, warningId);
+  }
+
+  @Post('fix-legacy-ids')
+  @ApiOperation({ summary: 'Migrate SEC- IDs to FSE- format' })
+  async fixLegacyIds() {
+    return this.employeesService.fixLegacyEmployeeIds();
+  }
+
+  @Post('fix-id-by-db-id/:dbId')
+  @ApiOperation({ summary: 'Migrate specific employee ID by DB ID' })
+  async fixIdByDbId(@Param('dbId', ParseIntPipe) dbId: number) {
+    return this.employeesService.fixEmployeeIdByDbId(dbId);
   }
 
   // Warning documents

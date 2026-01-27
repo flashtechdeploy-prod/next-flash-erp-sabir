@@ -359,6 +359,7 @@ export const clientApi = {
       data,
     ),
   getAvailableGuards: () => api.get("/api/client-management/guards/available"),
+  getActiveAssignments: () => api.get("/api/client-management/assignments/active"),
 };
 
 // Payroll API

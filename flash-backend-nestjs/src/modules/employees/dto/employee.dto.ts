@@ -213,6 +213,7 @@ export class EmployeeQueryDto {
   @ApiPropertyOptional() @IsString() @IsOptional() status?: string;
   @ApiPropertyOptional() @IsString() @IsOptional() unit?: string;
   @ApiPropertyOptional() @IsString() @IsOptional() rank?: string;
+  @ApiPropertyOptional() @IsString() @IsOptional() served_in?: string;
   @ApiPropertyOptional() @IsString() @IsOptional() deployed_at?: string;
   @ApiPropertyOptional() @IsString() @IsOptional() fss_no?: string;
   @ApiPropertyOptional() @IsString() @IsOptional() full_name?: string;

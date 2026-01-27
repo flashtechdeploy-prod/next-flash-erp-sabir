@@ -21,7 +21,10 @@ export class EmployeesService {
     private cloudStorageService: CloudStorageService,
   ) {}
 
-  private generateEmployeeId(): string {
+  private generateEmployeeId(fss_no?: string): string {
+    if (fss_no) {
+      return `FSE-${fss_no}`;
+    }
     const timestamp = Date.now().toString(36).toUpperCase();
     const random = Math.random().toString(36).substring(2, 6).toUpperCase();
     return `SEC-${timestamp}${random}`;
@@ -30,13 +33,14 @@ export class EmployeesService {
   async findAll(query: EmployeeQueryDto) {
     const skip = Number(query.skip) || 0;
     const limit = Number(query.limit) || 100;
-    const { search, status, unit, rank, deployed_at, with_total, fss_no, full_name, cnic } = query;
+    const { search, status, unit, rank, served_in, deployed_at, with_total, fss_no, full_name, cnic } = query;
 
     const filters: SQL[] = [];
 
     if (status) filters.push(eq(schema.employees.status, status));
     if (unit) filters.push(eq(schema.employees.unit, unit));
     if (rank) filters.push(eq(schema.employees.rank, rank));
+    if (served_in) filters.push(eq(schema.employees.served_in, served_in));
     if (deployed_at)
       filters.push(eq(schema.employees.deployed_at, deployed_at));
     
@@ -147,7 +151,7 @@ export class EmployeesService {
   async create(createDto: CreateEmployeeDto) {
     const data: any = {
       ...createDto,
-      employee_id: this.generateEmployeeId(),
+      employee_id: this.generateEmployeeId(createDto.fss_no),
       status:
         (createDto as any).status ||
         (createDto as any).employment_status ||
@@ -376,9 +380,17 @@ export class EmployeesService {
             continue;
           }
 
-          obj[k] = normalize(v);
+      obj[k] = normalize(v);
         }
       }
+      
+      // Post-process employee_id to ensure FSE- format if fss_no is present
+      if (obj.fss_no && (!obj.employee_id || obj.employee_id.startsWith('SEC-'))) {
+        obj.employee_id = `FSE-${obj.fss_no}`;
+      } else if (!obj.employee_id) {
+        obj.employee_id = this.generateEmployeeId();
+      }
+
       return obj;
     });
 
@@ -671,5 +683,117 @@ export class EmployeesService {
         ),
       );
     return { message: 'Warning document deleted' };
+  }
+
+  async fixLegacyEmployeeIds() {
+    const allEmployees = await this.db.select().from(schema.employees);
+    const updated = [];
+    const skipped = [];
+
+    const toFix = allEmployees.filter(emp => {
+      if (!emp.fss_no) return false;
+      const targetId = `FSE-${emp.fss_no}`;
+      return emp.employee_id !== targetId;
+    });
+
+    console.log(`[ID MIGRATION] Start: Found ${toFix.length} employees needing ID update out of ${allEmployees.length} total.`);
+
+    for (const emp of toFix) {
+      try {
+        await this.fixEmployeeIdByDbId(emp.id);
+        updated.push({ oldId: emp.employee_id, newId: `FSE-${emp.fss_no}` });
+        console.log(`[ID MIGRATION] Successfully updated ${emp.employee_id} -> FSE-${emp.fss_no}`);
+      } catch (e) {
+        console.error(`[ID MIGRATION] Failed to update ${emp.employee_id}: ${e.message}`);
+        skipped.push({ oldId: emp.employee_id, reason: e.message });
+      }
+    }
+
+    console.log(`[ID MIGRATION] Finished: ${updated.length} updated, ${skipped.length} skipped.`);
+    return { updated_count: updated.length, updated, skipped_count: skipped.length, skipped };
+  }
+
+  async fixEmployeeIdByDbId(dbId: number) {
+    const [emp] = await this.db
+      .select()
+      .from(schema.employees)
+      .where(eq(schema.employees.id, dbId));
+    
+    if (!emp) throw new NotFoundException(`Employee with DB ID ${dbId} not found`);
+
+    if (!emp.fss_no) throw new Error('Employee has no FSS number');
+
+    const newIdString = `FSE-${emp.fss_no}`;
+    const oldIdString = emp.employee_id;
+
+    try {
+      await this.db.transaction(async (tx) => {
+        // 1. Check if newId already exists
+        const [exists] = await tx
+          .select()
+          .from(schema.employees)
+          .where(eq(schema.employees.employee_id, newIdString));
+        
+        if (exists) {
+          throw new Error(`Target ID ${newIdString} already exists`);
+        }
+
+        // 2. Clone the employee record with the new ID
+        const empToInsert: any = {};
+        Object.keys(emp).forEach(key => {
+          if (key !== 'id') empToInsert[key] = (emp as any)[key];
+        });
+        empToInsert.employee_id = newIdString;
+
+        const [newEmp] = await tx.insert(schema.employees).values(empToInsert).returning();
+        const newDbId = newEmp.id;
+
+        // 3. Update related records by employee_id (text)
+        await tx.update(schema.employeeFiles)
+          .set({ employee_id: newIdString })
+          .where(eq(schema.employeeFiles.employee_id, oldIdString));
+          
+        await tx.update(schema.employeeWarnings)
+          .set({ employee_id: newIdString })
+          .where(eq(schema.employeeWarnings.employee_id, oldIdString));
+
+        await tx.update(schema.attendance)
+          .set({ employee_id: newIdString })
+          .where(eq(schema.attendance.employee_id, oldIdString));
+
+        await tx.update(schema.leavePeriods)
+          .set({ employee_id: newIdString })
+          .where(eq(schema.leavePeriods.employee_id, oldIdString));
+
+        await tx.update(schema.payrollPaymentStatus)
+          .set({ employee_id: newIdString })
+          .where(eq(schema.payrollPaymentStatus.employee_id, oldIdString));
+
+        await tx.update(schema.advances)
+          .set({ employee_id: newIdString })
+          .where(eq(schema.advances.employee_id, oldIdString));
+
+        // 4. Update related records by id (database serial)
+        await tx.update(schema.payrollSheetEntries)
+          .set({ employee_db_id: newDbId })
+          .where(eq(schema.payrollSheetEntries.employee_db_id, dbId));
+
+        await tx.update(schema.employee_advances)
+          .set({ employee_db_id: newDbId })
+          .where(eq(schema.employee_advances.employee_db_id, dbId));
+
+        await tx.update(schema.employee_advance_deductions)
+          .set({ employee_db_id: newDbId })
+          .where(eq(schema.employee_advance_deductions.employee_db_id, dbId));
+
+        // 5. Delete the OLD employee record
+        await tx.delete(schema.employees).where(eq(schema.employees.id, dbId));
+      });
+    } catch (e) {
+      console.error(`[COMPREHENSIVE FIX ERROR] ${e.message}`);
+      throw e;
+    }
+
+    return { success: true, oldId: oldIdString, newId: newIdString };
   }
 }

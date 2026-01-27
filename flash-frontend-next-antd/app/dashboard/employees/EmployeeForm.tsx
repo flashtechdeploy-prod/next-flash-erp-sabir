@@ -112,6 +112,14 @@ export default function EmployeeForm({
       values.profile_photo = [];
     }
 
+    // Migration: If rank contains a service name and served_in is empty, move it
+    const services = ['Army', 'Navy', 'PAF', 'Police', 'FC', 'MJD', 'Civil'];
+    if (!values.served_in && values.rank && services.includes(values.rank as string)) {
+      values.served_in = values.rank;
+      // Clear rank if it was used for service status, so the Rank field starts empty (or ready for actual rank)
+      values.rank = null;
+    }
+
     return values;
   };
 
@@ -229,7 +237,7 @@ export default function EmployeeForm({
       <Divider>Service Details</Divider>
       <Row gutter={16}>
         <Col span={6}>
-          <Form.Item label="Person Status" name="rank" rules={[{ required: true, message: 'Person Status is required' }]}>
+          <Form.Item label="Person Status" name="served_in" rules={[{ required: true, message: 'Person Status is required' }]}>
             <Select placeholder="Select Military/Service Status" options={[
               { label: 'Army', value: 'Army' },
               { label: 'Navy', value: 'Navy' },
@@ -263,7 +271,7 @@ export default function EmployeeForm({
         </Col>
         <Col span={6}>
           <Form.Item label="Rank" name="rank">
-            <Input placeholder="Guard/Supervisor" />
+            <Input placeholder="Enter Rank" />
           </Form.Item>
         </Col>
         <Col span={6}>

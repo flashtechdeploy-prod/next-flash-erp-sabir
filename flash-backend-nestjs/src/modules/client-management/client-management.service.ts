@@ -458,4 +458,27 @@ export class ClientManagementService {
       throw error;
     }
   }
+
+  async listAllActiveAssignments() {
+    return this.db
+      .select({
+        assignment_id: schema.site_guard_assignments.id,
+        employee_id: schema.site_guard_assignments.employee_id,
+        site_id: schema.client_sites.id,
+        site_name: schema.client_sites.name,
+        client_id: schema.clients.id,
+        client_name: schema.clients.name,
+        shift: schema.site_guard_assignments.shift,
+      })
+      .from(schema.site_guard_assignments)
+      .innerJoin(
+        schema.client_sites,
+        eq(schema.site_guard_assignments.site_id, schema.client_sites.id),
+      )
+      .innerJoin(
+        schema.clients,
+        eq(schema.client_sites.client_id, schema.clients.id),
+      )
+      .where(eq(schema.site_guard_assignments.status, 'active'));
+  }
 }

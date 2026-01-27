@@ -209,7 +209,7 @@ export const employeeFiles = pgTable('employee_files', {
   id: serial('id').primaryKey(),
   employee_id: text('employee_id')
     .notNull()
-    .references(() => employees.employee_id, { onDelete: 'cascade' }),
+    .references(() => employees.employee_id, { onDelete: 'cascade', onUpdate: 'cascade' }),
 
   category: text('category').notNull(),
   sub_category: text('sub_category'),
@@ -231,7 +231,7 @@ export const employeeWarnings = pgTable('employee_warnings', {
   id: serial('id').primaryKey(),
   employee_id: text('employee_id')
     .notNull()
-    .references(() => employees.employee_id, { onDelete: 'cascade' }),
+    .references(() => employees.employee_id, { onDelete: 'cascade', onUpdate: 'cascade' }),
   warning_number: text('warning_number'),
   warning_date: text('warning_date'),
   subject: text('subject'),

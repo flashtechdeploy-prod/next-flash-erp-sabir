@@ -244,6 +244,12 @@ export class ClientManagementController {
     return this.service.ejectGuard(siteId, assignmentId, dto);
   }
 
+  @Get('assignments/active')
+  @ApiOperation({ summary: 'List all active guard assignments with client info' })
+  async getActiveAssignments() {
+    return this.service.listAllActiveAssignments();
+  }
+
   @Get('guards/available')
   @ApiOperation({ summary: 'Get available guards' })
   async getAvailableGuards() {

@@ -839,10 +839,14 @@ export default function EmployeeDetailPage() {
             <div style={{ fontSize: '14px', opacity: 0.9, marginBottom: '8px' }}>
               Employee ID: <strong>{employee.employee_id as string}</strong>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', fontSize: '13px', opacity: 0.95 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', fontSize: '13px', opacity: 0.95 }}>
               <div>
-                <div style={{ opacity: 0.8, fontSize: '12px' }}>Designation</div>
-                <div style={{ fontWeight: 'bold' }}>{String(employee?.enrolled_as || employee.designation || 'Guard')}</div>
+                <div style={{ opacity: 0.8, fontSize: '12px' }}>Designation / Rank</div>
+                <div style={{ fontWeight: 'bold' }}>{String(employee?.enrolled_as || employee.designation || 'Guard')} {employee.rank ? `/ ${employee.rank}` : ''}</div>
+              </div>
+              <div>
+                <div style={{ opacity: 0.8, fontSize: '12px' }}>Person Status</div>
+                <div style={{ fontWeight: 'bold' }}>{String(employee.served_in || '-')}</div>
               </div>
               <div>
                 <div style={{ opacity: 0.8, fontSize: '12px' }}>Mobile</div>
@@ -905,6 +909,7 @@ export default function EmployeeDetailPage() {
             <div className="section-title">Service Details</div>
             <div className="field-grid">
               <Field label="FSS Number" value={employee.fss_no} />
+              <Field label="Person Status" value={employee.served_in} />
               <Field label="Rank" value={employee.rank} />
               <Field label="Unit" value={employee.unit} />
               <Field label="Status" value={employee.status} />

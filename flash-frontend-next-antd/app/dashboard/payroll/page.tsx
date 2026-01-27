@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Table, Button, DatePicker, Space, Tag, Drawer, message, Popconfirm, Card, Statistic, Row, Col } from 'antd';
-import { PrinterOutlined, DollarOutlined, CheckCircleOutlined, ClockCircleOutlined } from '@ant-design/icons';
-import { employeeApi, attendanceApi, payrollApi } from '@/lib/api';
+import { Table, Button, DatePicker, Space, Tag, Drawer, Popconfirm, Card, Statistic, App, Collapse, Spin, Empty } from 'antd';
+import { PrinterOutlined, DollarOutlined, CheckCircleOutlined, ClockCircleOutlined, UserOutlined } from '@ant-design/icons';
+import { employeeApi, attendanceApi, payrollApi, clientApi } from '@/lib/api';
 import dayjs, { Dayjs } from 'dayjs';
 import { useReactToPrint } from 'react-to-print';
 
@@ -27,11 +27,24 @@ interface PayrollEmployee extends Record<string, unknown> {
   deductions: number;
   netSalary: number;
   paymentStatus: string;
+  client_id?: number | null;
+  client_name?: string;
+  site_name?: string;
 }
 
 export default function PayrollPage() {
+  return (
+    <App>
+      <PayrollContent />
+    </App>
+  );
+}
+
+function PayrollContent() {
+  const { message } = App.useApp();
   const [month, setMonth] = useState<Dayjs>(dayjs());
   const [payrollData, setPayrollData] = useState<PayrollEmployee[]>([]);
+  const [clients, setClients] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [payslipDrawerVisible, setPayslipDrawerVisible] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<PayrollEmployee | null>(null);
@@ -52,49 +65,86 @@ export default function PayrollPage() {
       const fromDate = month.startOf('month').format('YYYY-MM-DD');
       const toDate = month.endOf('month').format('YYYY-MM-DD');
 
-      const [empRes, attRes] = await Promise.all([
-        employeeApi.getAll({ limit: '1000' }), // Get all employees for calculation
+      const [empRes, attRes, assignRes, clientRes] = await Promise.all([
+        employeeApi.getAll({ limit: '1000' }),
         attendanceApi.getByRange(fromDate, toDate),
+        clientApi.getActiveAssignments(),
+        clientApi.getAll(),
       ]);
 
-      const empData = (empRes.data as any)?.employees || [];
-      const attData = (attRes.data as any) || [];
+      const empData = Array.isArray(empRes.data) ? empRes.data : (empRes.data as any)?.employees || [];
+      const attData = Array.isArray(attRes.data) ? attRes.data : [];
+      const assignData = Array.isArray(assignRes.data) ? assignRes.data : [];
+      const clientData = Array.isArray(clientRes.data) ? clientRes.data : [];
+
+      setClients(clientData);
 
       const activeEmployees = empData.filter((e: Record<string, unknown>) =>
         e.status === 'Active' || e.status === 'active'
       );
 
-      // Calculate payroll for each employee
+      const empAssignmentMap = new Map();
+      assignData.forEach((a: any) => {
+        empAssignmentMap.set(String(a.employee_id), a);
+      });
+
+      // Optimized Attendance Grouping (O(M))
+      const attGroupMap = new Map<string, any[]>();
+      attData.forEach((a: any) => {
+        const eid = String(a.employee_id);
+        if (!attGroupMap.has(eid)) attGroupMap.set(eid, []);
+        attGroupMap.get(eid)?.push(a);
+      });
+
+      const workingDays = month.daysInMonth();
+
+      // Optimized Employee Processing (O(N))
       const calculated: PayrollEmployee[] = activeEmployees.map((emp: Record<string, unknown>) => {
-        const empAttendance = attData.filter((a: Record<string, unknown>) => a.employee_id === emp.employee_id);
+        const employeeId = String(emp.employee_id);
+        const empAttendance = attGroupMap.get(employeeId) || [];
 
-        const presentDays = empAttendance.filter((a: Record<string, unknown>) => a.status === 'present' || a.status === 'late').length;
-        const lateDays = empAttendance.filter((a: Record<string, unknown>) => a.status === 'late').length;
-        const absentDays = empAttendance.filter((a: Record<string, unknown>) => a.status === 'absent').length;
-        const leaveDays = empAttendance.filter((a: Record<string, unknown>) => a.status === 'leave').length;
+        // Single-pass calculation for attendance metrics
+        let presentDays = 0;
+        let absentDays = 0;
+        let leaveDays = 0;
+        let lateDays = 0;
+        let totalFines = 0;
+        let totalOvertimeMinutes = 0;
 
-        const totalOvertimeMinutes = empAttendance.reduce((sum: number, a: Record<string, unknown>) => sum + (Number(a.overtime_minutes) || 0), 0);
-        const totalFines = empAttendance.reduce((sum: number, a: Record<string, unknown>) => sum + (Number(a.fine_amount) || 0) + (Number(a.late_deduction) || 0), 0);
+        empAttendance.forEach((a: Record<string, unknown>) => {
+          const status = String(a.status).toLowerCase();
+          if (status === 'present' || status === 'late') presentDays++;
+          if (status === 'absent') absentDays++;
+          if (status === 'leave') leaveDays++;
+          if (status === 'late') lateDays++;
+
+          totalFines += (Number(a.fine_amount) || 0) + (Number(a.late_deduction) || 0);
+          totalOvertimeMinutes += (Number(a.overtime_minutes) || 0);
+        });
 
         const basicSalary = parseFloat(String(emp.basic_salary || '0'));
-        const allowances = parseFloat(String(emp.allowances || '0'));
         const totalSalary = parseFloat(String(emp.total_salary || basicSalary.toString()));
-
-        const workingDays = month.daysInMonth();
         const perDaySalary = totalSalary / workingDays;
 
         const grossSalary = (presentDays + leaveDays) * perDaySalary;
-        const overtimePay = (totalOvertimeMinutes / 60) * (perDaySalary / 8); // Assuming 8-hour workday
+        const overtimePay = (totalOvertimeMinutes / 60) * (perDaySalary / 8);
         const deductions = totalFines + (absentDays * perDaySalary);
         const netSalary = grossSalary + overtimePay - deductions;
+
+        const assignment = empAssignmentMap.get(employeeId);
 
         return {
           ...emp,
           id: Number(emp.id),
-          employee_id: String(emp.employee_id),
+          employee_id: employeeId,
           full_name: String(emp.full_name),
-          department: String(emp.department),
-          designation: String(emp.designation),
+          department: String(emp.department || "-"),
+          account_no: String(emp.account_no || '-'),
+          designation: String(emp.designation || "-"),
+          mobile_no: String(emp.mobile_no || emp.mobile_number || "-"),
+          client_id: assignment?.client_id || null,
+          client_name: assignment?.client_name || "Unassigned",
+          site_name: assignment?.site_name || "N/A",
           presentDays,
           lateDays,
           absentDays,
@@ -102,7 +152,7 @@ export default function PayrollPage() {
           totalOvertimeMinutes,
           totalFines,
           basicSalary,
-          allowances,
+          allowances: parseFloat(String(emp.allowances || '0')),
           totalSalary,
           grossSalary: Math.round(grossSalary),
           overtimePay: Math.round(overtimePay),
@@ -119,7 +169,7 @@ export default function PayrollPage() {
     } finally {
       setLoading(false);
     }
-  }, [month]);
+  }, [month, message]);
 
   useEffect(() => {
     loadData();
@@ -145,104 +195,69 @@ export default function PayrollPage() {
   };
 
   const columns = [
-    { title: 'ID', dataIndex: 'employee_id', key: 'employee_id', width: 80 },
+    { title: 'ID', dataIndex: 'fss_no', key: 'fss_no', width: 80 },
     { title: 'Name', dataIndex: 'full_name', key: 'full_name', width: 150 },
-    { title: 'Department', dataIndex: 'department', key: 'department', width: 120 },
+    { title: 'Site', dataIndex: 'site_name', key: 'site_name', width: 120 },
     { title: 'Designation', dataIndex: 'designation', key: 'designation', width: 120 },
     {
-      title: 'Present',
+      title: 'P',
       dataIndex: 'presentDays',
       key: 'presentDays',
-      width: 70,
-      render: (val: number) => <span style={{ fontSize: '11px' }}>{val}</span>
+      width: 50,
     },
     {
-      title: 'Absent',
+      title: 'A',
       dataIndex: 'absentDays',
       key: 'absentDays',
-      width: 70,
-      render: (val: number) => <span style={{ fontSize: '11px', color: val > 0 ? '#ff4d4f' : undefined }}>{val}</span>
+      width: 50,
+      render: (val: number) => <span style={{ color: val > 0 ? '#ff4d4f' : undefined }}>{val}</span>
     },
     {
-      title: 'Leave',
-      dataIndex: 'leaveDays',
-      key: 'leaveDays',
-      width: 70,
-      render: (val: number) => <span style={{ fontSize: '11px' }}>{val}</span>
-    },
-    {
-      title: 'Basic Salary',
+      title: 'Basic Slry',
       dataIndex: 'basicSalary',
       key: 'basicSalary',
-      width: 100,
-      render: (val: number) => <span style={{ fontSize: '11px' }}>Rs. {val.toLocaleString()}</span>
-    },
-    {
-      title: 'Gross',
-      dataIndex: 'grossSalary',
-      key: 'grossSalary',
-      width: 100,
-      render: (val: number) => <span style={{ fontSize: '11px' }}>Rs. {val.toLocaleString()}</span>
+      width: 110,
+      render: (val: number) => `Rs. ${val.toLocaleString()}`
     },
     {
       title: 'OT Pay',
       dataIndex: 'overtimePay',
       key: 'overtimePay',
-      width: 90,
-      render: (val: number) => <span style={{ fontSize: '11px', color: '#52c41a' }}>Rs. {val.toLocaleString()}</span>
+      width: 100,
+      render: (val: number) => <span style={{ color: '#52c41a' }}>Rs. {val.toLocaleString()}</span>
     },
     {
       title: 'Deductions',
       dataIndex: 'deductions',
       key: 'deductions',
-      width: 100,
-      render: (val: number) => <span style={{ fontSize: '11px', color: '#ff4d4f' }}>Rs. {val.toLocaleString()}</span>
+      width: 110,
+      render: (val: number) => <span style={{ color: '#ff4d4f' }}>Rs. {val.toLocaleString()}</span>
     },
     {
       title: 'Net Salary',
       dataIndex: 'netSalary',
       key: 'netSalary',
-      width: 110,
-      render: (val: number) => <span style={{ fontSize: '11px', fontWeight: 600 }}>Rs. {val.toLocaleString()}</span>
-    },
-    {
-      title: 'Status',
-      dataIndex: 'paymentStatus',
-      key: 'paymentStatus',
-      width: 90,
-      render: (status: string) => (
-        <Tag color={status === 'paid' ? 'green' : 'orange'} style={{ fontSize: '11px' }}>
-          {status === 'paid' ? 'Paid' : 'Unpaid'}
-        </Tag>
-      ),
+      width: 120,
+      render: (val: number) => <span style={{ fontWeight: 600 }}>Rs. {val.toLocaleString()}</span>
     },
     {
       title: 'Actions',
       key: 'actions',
-      width: 180,
+      width: 150,
       render: (_: unknown, record: PayrollEmployee) => (
         <Space size="small">
           <Button
             type="link"
             size="small"
             onClick={() => handleViewPayslip(record)}
-            style={{ fontSize: '11px', padding: '0 4px' }}
+            style={{ padding: '0 4px' }}
           >
             Payslip
           </Button>
           {record.paymentStatus !== 'paid' && (
-            <Popconfirm
-              title="Mark as paid?"
-              onConfirm={() => handleMarkPaid(record)}
-              okText="Yes"
-              cancelText="No"
-            >
-              <Button
-                type="link"
-                size="small"
-                style={{ fontSize: '11px', padding: '0 4px', color: '#52c41a' }}
-              >
-                Mark Paid
+            <Popconfirm title="Mark paid?" onConfirm={() => handleMarkPaid(record)}>
+              <Button type="link" size="small" style={{ padding: '0 4px', color: '#52c41a' }}>
+                Paid
               </Button>
             </Popconfirm>
           )}
@@ -251,16 +266,15 @@ export default function PayrollPage() {
     },
   ];
 
-  const totalGross = payrollData.reduce((sum, emp) => sum + emp.grossSalary, 0);
-  const totalDeductions = payrollData.reduce((sum, emp) => sum + emp.deductions, 0);
-  const totalNet = payrollData.reduce((sum, emp) => sum + emp.netSalary, 0);
-  const paidCount = payrollData.filter(emp => emp.paymentStatus === 'paid').length;
-  const unpaidCount = payrollData.filter(emp => emp.paymentStatus === 'unpaid').length;
+  const totalPayrollNet = payrollData.reduce((sum, emp) => sum + emp.netSalary, 0);
 
   return (
     <div style={{ padding: '24px' }}>
       <div style={{ marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 600 }}>Payroll Management</h2>
+        <div>
+          <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 600 }}>Payroll Management</h2>
+          <p style={{ margin: 0, color: '#666', fontSize: '12px' }}>Total Payroll: Rs. {totalPayrollNet.toLocaleString()}</p>
+        </div>
         <Space>
           <DatePicker
             picker="month"
@@ -269,80 +283,76 @@ export default function PayrollPage() {
             format="MMMM YYYY"
           />
           <Button icon={<PrinterOutlined />} onClick={handlePrint}>
-            Print Report
+            Print All
           </Button>
         </Space>
       </div>
 
-      <Row gutter={16} style={{ marginBottom: '24px' }}>
-        <Col span={4}>
-          <Card>
-            <Statistic
-              title={<span style={{ fontSize: '12px' }}>Total Employees</span>}
-              value={payrollData.length}
-              valueStyle={{ fontSize: '20px' }}
-              prefix={<DollarOutlined />}
-            />
-          </Card>
-        </Col>
-        <Col span={5}>
-          <Card>
-            <Statistic
-              title={<span style={{ fontSize: '12px' }}>Total Gross</span>}
-              value={totalGross}
-              valueStyle={{ fontSize: '20px', color: '#1890ff' }}
-              prefix="Rs."
-            />
-          </Card>
-        </Col>
-        <Col span={5}>
-          <Card>
-            <Statistic
-              title={<span style={{ fontSize: '12px' }}>Total Net</span>}
-              value={totalNet}
-              valueStyle={{ fontSize: '20px', color: '#52c41a', fontWeight: 600 }}
-              prefix="Rs."
-            />
-          </Card>
-        </Col>
-        <Col span={5}>
-          <Card>
-            <Statistic
-              title={<span style={{ fontSize: '12px' }}>Paid</span>}
-              value={paidCount}
-              valueStyle={{ fontSize: '20px', color: '#52c41a' }}
-              prefix={<CheckCircleOutlined />}
-            />
-          </Card>
-        </Col>
-        <Col span={5}>
-          <Card>
-            <Statistic
-              title={<span style={{ fontSize: '12px' }}>Unpaid</span>}
-              value={unpaidCount}
-              valueStyle={{ fontSize: '20px', color: '#faad14' }}
-              prefix={<ClockCircleOutlined />}
-            />
-          </Card>
-        </Col>
-      </Row>
+      <Spin spinning={loading} tip="Loading payroll data...">
+        <div style={{ minHeight: '200px' }}>
+          {clients.length > 0 ? (
+            <Collapse accordion expandIconPosition="end" ghost style={{ backgroundColor: 'white', borderRadius: '8px' }}>
+              {clients.map(client => {
+                const clientGuards = payrollData.filter(emp => String(emp.client_id) === String(client.id));
+                const clientNet = clientGuards.reduce((sum, emp) => sum + emp.netSalary, 0);
 
-      <Table
-        columns={columns}
-        dataSource={payrollData}
-        rowKey="id"
-        loading={loading}
-        size="small"
-        pagination={{ pageSize: 20 }}
-        scroll={{ x: 1400 }}
-        style={{ fontSize: '11px' }}
-      />
+                return (
+                  <Collapse.Panel
+                    key={client.id}
+                    header={
+                      <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingRight: '20px' }}>
+                        <Space size="large">
+                          <span style={{ fontWeight: 600, fontSize: '16px', color: '#1890ff' }}>{client.name}</span>
+                          <Tag color="cyan" icon={<UserOutlined />} style={{ borderRadius: '12px' }}>{clientGuards.length} Guards</Tag>
+                        </Space>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontSize: '12px', color: '#8c8c8c', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Monthly Net</div>
+                          <div style={{ fontWeight: 700, color: '#52c41a', fontSize: '16px' }}>Rs. {clientNet.toLocaleString()}</div>
+                        </div>
+                      </div>
+                    }
+                    style={{
+                      marginBottom: '16px',
+                      border: '1px solid #e8e8e8',
+                      borderRadius: '8px',
+                      overflow: 'hidden',
+                      backgroundColor: '#ffffff',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
+                    }}
+                  >
+                    <div style={{ padding: '16px', backgroundColor: '#fafafa' }}>
+                      <Table
+                        columns={columns}
+                        dataSource={clientGuards}
+                        rowKey="id"
+                        size="small"
+                        bordered
+                        className="compact-table"
+                        pagination={false}
+                        scroll={{ x: 'max-content' }}
+                        locale={{ emptyText: 'No guards assigned to this client' }}
+                      />
+                    </div>
+                  </Collapse.Panel>
+                );
+              })}
+            </Collapse>
+          ) : (
+            !loading && (
+              <Empty
+                description="No clients found. Please add clients in Client Management."
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+              />
+            )
+          )}
+        </div>
+      </Spin>
 
       {/* Payslip Drawer */}
       <Drawer
         title="Employee Payslip"
         placement="right"
-        width={720}
+        size="large"
         onClose={() => setPayslipDrawerVisible(false)}
         open={payslipDrawerVisible}
         extra={
@@ -353,13 +363,11 @@ export default function PayrollPage() {
       >
         {selectedEmployee && (
           <div ref={payslipPrintRef} style={{ padding: '20px' }}>
-            {/* Company Header */}
             <div style={{ textAlign: 'center', marginBottom: '30px', borderBottom: '2px solid #1890ff', paddingBottom: '20px' }}>
               <h1 style={{ margin: 0, fontSize: '24px', color: '#1890ff' }}>Flash Security Services</h1>
               <p style={{ margin: '5px 0', fontSize: '12px', color: '#666' }}>Payslip for {month.format('MMMM YYYY')}</p>
             </div>
 
-            {/* Employee Info */}
             <div style={{ marginBottom: '30px' }}>
               <h3 style={{ fontSize: '16px', marginBottom: '15px', color: '#1890ff' }}>Employee Information</h3>
               <Row gutter={[16, 8]}>
@@ -390,38 +398,36 @@ export default function PayrollPage() {
               </Row>
             </div>
 
-            {/* Attendance Summary */}
             <div style={{ marginBottom: '30px' }}>
               <h3 style={{ fontSize: '16px', marginBottom: '15px', color: '#1890ff' }}>Attendance Summary</h3>
               <Row gutter={[16, 8]}>
                 <Col span={6}>
                   <div style={{ padding: '8px', borderLeft: '3px solid #52c41a', backgroundColor: '#f5f5f5' }}>
-                    <strong style={{ fontSize: '11px' }}>Present Days:</strong>
+                    <strong style={{ fontSize: '11px' }}>Present:</strong>
                     <div style={{ fontSize: '12px' }}>{selectedEmployee.presentDays}</div>
                   </div>
                 </Col>
                 <Col span={6}>
                   <div style={{ padding: '8px', borderLeft: '3px solid #ff4d4f', backgroundColor: '#f5f5f5' }}>
-                    <strong style={{ fontSize: '11px' }}>Absent Days:</strong>
+                    <strong style={{ fontSize: '11px' }}>Absent:</strong>
                     <div style={{ fontSize: '12px' }}>{selectedEmployee.absentDays}</div>
                   </div>
                 </Col>
                 <Col span={6}>
                   <div style={{ padding: '8px', borderLeft: '3px solid #1890ff', backgroundColor: '#f5f5f5' }}>
-                    <strong style={{ fontSize: '11px' }}>Leave Days:</strong>
+                    <strong style={{ fontSize: '11px' }}>Leave:</strong>
                     <div style={{ fontSize: '12px' }}>{selectedEmployee.leaveDays}</div>
                   </div>
                 </Col>
                 <Col span={6}>
                   <div style={{ padding: '8px', borderLeft: '3px solid #faad14', backgroundColor: '#f5f5f5' }}>
-                    <strong style={{ fontSize: '11px' }}>Late Days:</strong>
+                    <strong style={{ fontSize: '11px' }}>Late:</strong>
                     <div style={{ fontSize: '12px' }}>{selectedEmployee.lateDays}</div>
                   </div>
                 </Col>
               </Row>
             </div>
 
-            {/* Salary Breakdown */}
             <div style={{ marginBottom: '30px' }}>
               <h3 style={{ fontSize: '16px', marginBottom: '15px', color: '#1890ff' }}>Salary Breakdown</h3>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
@@ -449,7 +455,7 @@ export default function PayrollPage() {
                     <td style={{ padding: '8px', textAlign: 'right', border: '1px solid #ddd', color: '#52c41a' }}>+{selectedEmployee.overtimePay.toLocaleString()}</td>
                   </tr>
                   <tr>
-                    <td style={{ padding: '8px', border: '1px solid #ddd', color: '#ff4d4f' }}>Deductions (Fines/Absent)</td>
+                    <td style={{ padding: '8px', border: '1px solid #ddd', color: '#ff4d4f' }}>Deductions</td>
                     <td style={{ padding: '8px', textAlign: 'right', border: '1px solid #ddd', color: '#ff4d4f' }}>-{selectedEmployee.deductions.toLocaleString()}</td>
                   </tr>
                   <tr style={{ backgroundColor: '#52c41a', color: 'white', fontWeight: 600, fontSize: '14px' }}>
@@ -460,10 +466,9 @@ export default function PayrollPage() {
               </table>
             </div>
 
-            {/* Footer */}
             <div style={{ marginTop: '50px', paddingTop: '20px', borderTop: '1px solid #ddd', fontSize: '11px', color: '#666' }}>
-              <p>This is a computer-generated payslip and does not require a signature.</p>
-              <p>Generated on: {dayjs().format('DD MMM YYYY')}</p>
+              <p>Computer-generated payslip.</p>
+              <p>Date: {dayjs().format('DD MMM YYYY')}</p>
             </div>
           </div>
         )}
@@ -481,80 +486,52 @@ export default function PayrollPage() {
               }
             `}
           </style>
-          <div style={{ padding: '20px' }}>
-            <div style={{ textAlign: 'center', marginBottom: '30px', borderBottom: '2px solid #1890ff', paddingBottom: '20px' }}>
-              <h1 style={{ margin: 0, fontSize: '24px', color: '#1890ff' }}>Flash Security Services</h1>
-              <p style={{ margin: '5px 0', fontSize: '14px' }}>Payroll Report - {month.format('MMMM YYYY')}</p>
-            </div>
+          {clients.map(client => {
+            const clientGuards = payrollData.filter(emp => emp.client_id === client.id);
+            if (clientGuards.length === 0) return null;
+            const clientNet = clientGuards.reduce((sum, emp) => sum + emp.netSalary, 0);
 
-            <div style={{ marginBottom: '20px' }}>
-              <Row gutter={16}>
-                <Col span={6}>
-                  <div style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'center' }}>
-                    <div style={{ fontSize: '12px', color: '#666' }}>Total Employees</div>
-                    <div style={{ fontSize: '20px', fontWeight: 600 }}>{payrollData.length}</div>
-                  </div>
-                </Col>
-                <Col span={6}>
-                  <div style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'center' }}>
-                    <div style={{ fontSize: '12px', color: '#666' }}>Total Gross</div>
-                    <div style={{ fontSize: '20px', fontWeight: 600, color: '#1890ff' }}>Rs. {totalGross.toLocaleString()}</div>
-                  </div>
-                </Col>
-                <Col span={6}>
-                  <div style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'center' }}>
-                    <div style={{ fontSize: '12px', color: '#666' }}>Total Deductions</div>
-                    <div style={{ fontSize: '20px', fontWeight: 600, color: '#ff4d4f' }}>Rs. {totalDeductions.toLocaleString()}</div>
-                  </div>
-                </Col>
-                <Col span={6}>
-                  <div style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'center' }}>
-                    <div style={{ fontSize: '12px', color: '#666' }}>Total Net</div>
-                    <div style={{ fontSize: '20px', fontWeight: 600, color: '#52c41a' }}>Rs. {totalNet.toLocaleString()}</div>
-                  </div>
-                </Col>
-              </Row>
-            </div>
+            return (
+              <div key={client.id} style={{ marginBottom: '40px', pageBreakAfter: 'always' }}>
+                <div style={{ textAlign: 'center', marginBottom: '20px', borderBottom: '2px solid #1890ff', paddingBottom: '10px' }}>
+                  <h1 style={{ margin: 0, fontSize: '20px', color: '#1890ff' }}>Flash Security Services</h1>
+                  <p style={{ margin: '5px 0', fontSize: '14px', fontWeight: 600 }}>{client.name} - {month.format('MMMM YYYY')}</p>
+                  <p style={{ margin: 0, fontSize: '12px' }}>Client Total: Rs. {clientNet.toLocaleString()} | Guards: {clientGuards.length}</p>
+                </div>
 
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px' }}>
-              <thead>
-                <tr style={{ backgroundColor: '#1890ff', color: 'white' }}>
-                  <th style={{ padding: '8px', border: '1px solid #ddd' }}>ID</th>
-                  <th style={{ padding: '8px', border: '1px solid #ddd' }}>Name</th>
-                  <th style={{ padding: '8px', border: '1px solid #ddd' }}>Dept</th>
-                  <th style={{ padding: '8px', border: '1px solid #ddd' }}>P</th>
-                  <th style={{ padding: '8px', border: '1px solid #ddd' }}>A</th>
-                  <th style={{ padding: '8px', border: '1px solid #ddd' }}>L</th>
-                  <th style={{ padding: '8px', border: '1px solid #ddd' }}>Basic</th>
-                  <th style={{ padding: '8px', border: '1px solid #ddd' }}>Gross</th>
-                  <th style={{ padding: '8px', border: '1px solid #ddd' }}>OT</th>
-                  <th style={{ padding: '8px', border: '1px solid #ddd' }}>Deduct</th>
-                  <th style={{ padding: '8px', border: '1px solid #ddd' }}>Net</th>
-                </tr>
-              </thead>
-              <tbody>
-                {payrollData.map((emp) => (
-                  <tr key={emp.id}>
-                    <td style={{ padding: '6px', border: '1px solid #ddd' }}>{emp.employee_id}</td>
-                    <td style={{ padding: '6px', border: '1px solid #ddd' }}>{emp.full_name}</td>
-                    <td style={{ padding: '6px', border: '1px solid #ddd' }}>{emp.department}</td>
-                    <td style={{ padding: '6px', border: '1px solid #ddd', textAlign: 'center' }}>{emp.presentDays}</td>
-                    <td style={{ padding: '6px', border: '1px solid #ddd', textAlign: 'center' }}>{emp.absentDays}</td>
-                    <td style={{ padding: '6px', border: '1px solid #ddd', textAlign: 'center' }}>{emp.leaveDays}</td>
-                    <td style={{ padding: '6px', border: '1px solid #ddd', textAlign: 'right' }}>{emp.basicSalary.toLocaleString()}</td>
-                    <td style={{ padding: '6px', border: '1px solid #ddd', textAlign: 'right' }}>{emp.grossSalary.toLocaleString()}</td>
-                    <td style={{ padding: '6px', border: '1px solid #ddd', textAlign: 'right' }}>{emp.overtimePay.toLocaleString()}</td>
-                    <td style={{ padding: '6px', border: '1px solid #ddd', textAlign: 'right' }}>{emp.deductions.toLocaleString()}</td>
-                    <td style={{ padding: '6px', border: '1px solid #ddd', textAlign: 'right', fontWeight: 600 }}>{emp.netSalary.toLocaleString()}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-
-            <div style={{ marginTop: '30px', fontSize: '10px', color: '#666' }}>
-              <p>Generated on: {dayjs().format('DD MMM YYYY HH:mm')}</p>
-            </div>
-          </div>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9px' }}>
+                  <thead>
+                    <tr style={{ backgroundColor: '#f0f0f0' }}>
+                      <th style={{ padding: '4px', border: '1px solid #ddd' }}>ID</th>
+                      <th style={{ padding: '4px', border: '1px solid #ddd' }}>Name</th>
+                      <th style={{ padding: '4px', border: '1px solid #ddd' }}>Site</th>
+                      <th style={{ padding: '4px', border: '1px solid #ddd' }}>P</th>
+                      <th style={{ padding: '4px', border: '1px solid #ddd' }}>A</th>
+                      <th style={{ padding: '4px', border: '1px solid #ddd' }}>Basic</th>
+                      <th style={{ padding: '4px', border: '1px solid #ddd' }}>OT</th>
+                      <th style={{ padding: '4px', border: '1px solid #ddd' }}>Deduct</th>
+                      <th style={{ padding: '4px', border: '1px solid #ddd' }}>Net</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {clientGuards.map((emp) => (
+                      <tr key={emp.id}>
+                        <td style={{ padding: '4px', border: '1px solid #ddd' }}>{emp.employee_id}</td>
+                        <td style={{ padding: '4px', border: '1px solid #ddd' }}>{emp.full_name}</td>
+                        <td style={{ padding: '4px', border: '1px solid #ddd' }}>{emp.site_name}</td>
+                        <td style={{ padding: '4px', border: '1px solid #ddd', textAlign: 'center' }}>{emp.presentDays}</td>
+                        <td style={{ padding: '4px', border: '1px solid #ddd', textAlign: 'center' }}>{emp.absentDays}</td>
+                        <td style={{ padding: '4px', border: '1px solid #ddd', textAlign: 'right' }}>{emp.basicSalary.toLocaleString()}</td>
+                        <td style={{ padding: '4px', border: '1px solid #ddd', textAlign: 'right' }}>{emp.overtimePay.toLocaleString()}</td>
+                        <td style={{ padding: '4px', border: '1px solid #ddd', textAlign: 'right' }}>{emp.deductions.toLocaleString()}</td>
+                        <td style={{ padding: '4px', border: '1px solid #ddd', textAlign: 'right', fontWeight: 600 }}>{emp.netSalary.toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>

@@ -72,6 +72,7 @@ export default function EmployeesPage() {
     designation: '',
     enrolled_as: '',
     date_of_enrolment: '',
+    served_in: '',
   });
 
   // Inventory assignment state
@@ -106,6 +107,7 @@ export default function EmployeesPage() {
     if (filters.designation) params.designation = filters.designation;
     if (filters.enrolled_as) params.enrolled_as = filters.enrolled_as;
     if (filters.date_of_enrolment) params.date_of_enrolment = filters.date_of_enrolment;
+    if (filters.served_in) params.served_in = filters.served_in;
 
     const response = await employeeApi.getAll(params);
     setLoading(false);
@@ -129,7 +131,7 @@ export default function EmployeesPage() {
   useEffect(() => {
     fetchEmployees();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.search, filters.status, filters.fss_no, filters.full_name, filters.cnic, filters.father_name, filters.date_of_birth, filters.mobile_number, filters.department, filters.designation, filters.enrolled_as, filters.date_of_enrolment]);
+  }, [filters.search, filters.status, filters.fss_no, filters.full_name, filters.cnic, filters.father_name, filters.date_of_birth, filters.mobile_number, filters.department, filters.designation, filters.enrolled_as, filters.date_of_enrolment, filters.served_in]);
 
   const handleCreate = () => {
     setEditingEmployee(null);
@@ -248,6 +250,7 @@ export default function EmployeesPage() {
       setGeneralItems(items);
     }
   };
+  console.log("employees", employees)
 
   const handleAssignRestrictedItem = async (employee: Employee) => {
     setSelectedEmployeeForAssignment(employee);
@@ -458,6 +461,12 @@ export default function EmployeesPage() {
       ...getColumnSearchProps('mobile_number', 'Mobile Number'),
     },
     {
+      title: 'Person Status',
+      dataIndex: 'served_in',
+      key: 'served_in',
+      width: 120,
+    },
+    {
       title: 'Rank',
       dataIndex: 'rank',
       key: 'rank',
@@ -607,6 +616,21 @@ export default function EmployeesPage() {
             { label: 'Active', value: 'Active' },
             { label: 'Inactive', value: 'Inactive' },
             { label: 'Suspended', value: 'Suspended' },
+          ]}
+        />
+        <Select
+          placeholder="Filter by Person Status"
+          allowClear
+          style={{ width: 150 }}
+          onChange={(value) => setFilters({ ...filters, served_in: value || '' })}
+          options={[
+            { label: 'Army', value: 'Army' },
+            { label: 'Navy', value: 'Navy' },
+            { label: 'PAF', value: 'PAF' },
+            { label: 'Police', value: 'Police' },
+            { label: 'FC', value: 'FC' },
+            { label: 'MJD', value: 'MJD' },
+            { label: 'Civil', value: 'Civil' },
           ]}
         />
         <Button icon={<ReloadOutlined />} onClick={() => fetchEmployees()}>
