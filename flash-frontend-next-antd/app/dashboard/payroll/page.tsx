@@ -322,6 +322,13 @@ function PayrollContent() {
       fixed: 'left' as const,
       render: (text: string) => <span style={{ fontWeight: 600, color: '#1e293b' }}>{text}</span>
     },
+
+        { title: 'cnic', dataIndex: 'cnic', key: 'cnic', width: 120 },
+                        { title: 'mobile number', dataIndex: 'mobile_number', key: 'mobile_number', width: 120 },
+
+                { title: 'acccount number', dataIndex: 'account_number', key: 'account_number', width: 120 },
+
+
     { title: 'Salary/Mo', dataIndex: 'totalSalary', key: 'totalSalary', width: 110, render: (v: number) => v.toLocaleString() },
     {
       title: 'Pre. Days',
@@ -355,6 +362,7 @@ function PayrollContent() {
         />
       )
     },
+
     { title: 'Leave', dataIndex: 'leaveDays', key: 'leaveDays', width: 70 },
     { title: 'Total', dataIndex: 'totalDays', key: 'totalDays', width: 70, render: (v: number) => <Tag color={v > 25 ? 'green' : 'orange'}>{v}</Tag> },
     {
