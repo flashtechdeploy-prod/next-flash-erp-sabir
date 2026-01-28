@@ -3,7 +3,7 @@ import { Body, Controller, Get, HttpException, HttpStatus, Inject, Logger, Post,
 import { JwtService } from '@nestjs/jwt';
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import * as bcrypt from 'bcryptjs';
-import { eq } from 'drizzle-orm';
+import { eq ,or} from 'drizzle-orm';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { DRIZZLE } from '../../db/drizzle.module';
 import { employees } from '../../db/schema/employees';
@@ -57,11 +57,20 @@ export class AuthController {
     throw new HttpException('Missing FSS number', HttpStatus.BAD_REQUEST);
   }
 
+  console
+
   // Fetch employee from DB
-  const [employee] = await this.db
-    .select()
-    .from(employees)
-    .where(eq(employees.fss_no, fss_no));
+
+const [employee] = await this.db
+  .select()
+  .from(employees)
+  .where(
+    or(
+      eq(employees.fss_no, fss_no),
+      eq(employees.cnic, fss_no)
+    )
+  );
+
 
   // Check if employee exists
   if (!employee) {
@@ -107,15 +116,15 @@ export class AuthController {
   async setPassword(@Body() body: SetPasswordDto, @CurrentUser() user: any) {
     const { fss_no, password } = body;
 
-    if (!user.is_superuser && user.fss_no !== fss_no) {
+    if (!user.is_superuser && user.fss_no !== fss_no && user.cnic !== fss_no)  {
       throw new HttpException('You do not have permission to set this password', HttpStatus.FORBIDDEN);
     }
 
-    // Fetch employee
+   
     const [employee] = await this.db
       .select({ id: employees.id, employee_id: employees.employee_id })
       .from(employees)
-      .where(eq(employees.fss_no, fss_no));
+      .where(or(eq(employees.fss_no, fss_no), eq(employees.cnic, fss_no)));
 
     if (!employee) {
       throw new HttpException('Employee not found', HttpStatus.NOT_FOUND);

@@ -61,7 +61,6 @@ interface FieldConfig {
 }
 
 const DEFAULT_FIELDS: FieldConfig[] = [
-  // Basic Identification
   { id: 'profile_photo', label: 'Profile Picture', name: 'profile_photo', span: 24, component: 'upload', section: 'Basic Identification' },
   { id: 'full_name', label: 'Full Name', name: 'full_name', span: 8, component: 'input', rules: [{ required: true, message: 'Name is required' }], placeholder: 'Full name as per CNIC', section: 'Basic Identification' },
   { id: 'father_name', label: 'Father Name', name: 'father_name', span: 8, component: 'input', placeholder: "Father's name", section: 'Basic Identification' },
@@ -78,7 +77,6 @@ const DEFAULT_FIELDS: FieldConfig[] = [
   { id: 'phone', label: 'Mobile No', name: 'phone', span: 6, component: 'input', placeholder: '03001234567', section: 'Basic Identification' },
   { id: 'email', label: 'Email', name: 'email', span: 6, component: 'input', placeholder: 'email@example.com', section: 'Basic Identification' },
 
-  // Service Details
   {
     id: 'served_in', label: 'Person Status', name: 'served_in', span: 6, component: 'select', rules: [{ required: true, message: 'Person Status is required' }], section: 'Service Details',
     options: [{ label: 'Army', value: 'Army' }, { label: 'Navy', value: 'Navy' }, { label: 'PAF', value: 'PAF' }, { label: 'Police', value: 'Police' }, { label: 'FC', value: 'FC' }, { label: 'MJD', value: 'MJD' }, { label: 'Civil', value: 'Civil' }]
