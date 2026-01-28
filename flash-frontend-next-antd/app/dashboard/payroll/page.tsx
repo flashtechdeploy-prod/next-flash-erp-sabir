@@ -329,7 +329,7 @@ function PayrollContent() {
                 { title: 'acccount number', dataIndex: 'account_number', key: 'account_number', width: 120 },
 
 
-    { title: 'Salary/Mo', dataIndex: 'totalSalary', key: 'totalSalary', width: 110, render: (v: number) => v.toLocaleString() },
+    { title: 'Total Salary', dataIndex: 'totalSalary', key: 'totalSalary', width: 110, render: (v: number) => v.toLocaleString() },
     {
       title: 'Pre. Days',
       dataIndex: 'preDays',
