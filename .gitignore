@@ -1,0 +1,31 @@
+# Root gitignore to keep repo clean across projects
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Env files
+.env
+.env.*
+
+# TypeScript build info
+tsconfig.tsbuildinfo
+
+# Node modules (covered in sub-projects, but safe globally)
+node_modules/
+
+# Build outputs
+flash-backend-nestjs/dist/
+flash-frontend-next-antd/.next/
+flash-frontend-next-antd/out/
+
+# App data
+flash-backend-nestjs/uploads/
+flash-backend-nestjs/sqlite.db

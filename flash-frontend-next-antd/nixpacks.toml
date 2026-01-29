@@ -1,0 +1,17 @@
+[install]
+pkgManager = "npm"
+
+[build]
+cmds = [
+  "npm ci --legacy-peer-deps",
+  "npm run build"
+]
+
+[start]
+cmd = "npm run start"
+
+[env]
+NODE_ENV = "production"
+
+[processes]
+web = "npm run start"
