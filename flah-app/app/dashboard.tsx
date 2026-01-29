@@ -8,12 +8,14 @@ import { useRouter } from 'expo-router';
 import { Picker } from '@react-native-picker/picker';
 import { CONFIG } from '../constants/config';
 import { Ionicons } from '@expo/vector-icons';
+import { Calendar } from 'react-native-calendars';
 
 export default function DashboardScreen() {
   const [status, setStatus] = useState('');
-  const [location, setLocation] = useState(null);
+  const [location, setLocation] = useState<any>(null);
   const [image, setImage] = useState<string | null>(null);
   const [note, setNote] = useState('');
+
   const [leaveType, setLeaveType] = useState('casual');
   const [submitting, setSubmitting] = useState(false);
   const [todayStatus, setTodayStatus] = useState<any>(null);
@@ -21,13 +23,55 @@ export default function DashboardScreen() {
   const [history, setHistory] = useState<any[]>([]);
   const [loadingStats, setLoadingStats] = useState(true);
   const [employeeId, setEmployeeId] = useState<string | null>(null);
+  const [employeeName, setEmployeeName] = useState<string | null>(null);
+  const [fssNo, setFssNo] = useState<string | null>(null);
+  const [assignment, setAssignment] = useState<any>(null);
+  const [markedDates, setMarkedDates] = useState<any>({});
+  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [selectedDayHistory, setSelectedDayHistory] = useState<any[]>([]);
+  const [calendarMonth, setCalendarMonth] = useState<string>(new Date().toISOString().split('T')[0]);
   const router = useRouter();
+
+  const today = new Date();
+  const todayStr = today.toLocaleDateString('en-CA');
+
+  const goToPrevMonth = () => {
+    const current = new Date(calendarMonth);
+    current.setMonth(current.getMonth() - 1);
+    setCalendarMonth(current.toISOString().split('T')[0]);
+  };
+
+  const goToNextMonth = () => {
+    const current = new Date(calendarMonth);
+    const nextMonth = new Date(current.getFullYear(), current.getMonth() + 1, 1);
+    // Only allow if next month is not in the future
+    if (nextMonth <= today) {
+      current.setMonth(current.getMonth() + 1);
+      setCalendarMonth(current.toISOString().split('T')[0]);
+    }
+  };
+
+  const isNextMonthDisabled = () => {
+    const current = new Date(calendarMonth);
+    const nextMonth = new Date(current.getFullYear(), current.getMonth() + 1, 1);
+    return nextMonth > today;
+  };
 
   const fetchStats = async () => {
     try {
       const token = await AsyncStorage.getItem('token');
       const empId = await AsyncStorage.getItem('employee_id');
+      const name = await AsyncStorage.getItem('full_name');
+      const fss = await AsyncStorage.getItem('fss_no');
+
       setEmployeeId(empId);
+      setEmployeeName(name);
+      setFssNo(fss);
+
+      if (!token) {
+        setLoadingStats(false);
+        return;
+      }
 
       const [statusRes, statsRes, historyRes] = await Promise.all([
         fetch(`${CONFIG.API_BASE_URL}/attendance/my-status`, {
@@ -38,12 +82,59 @@ export default function DashboardScreen() {
         }),
         fetch(`${CONFIG.API_BASE_URL}/attendance/my-history`, {
           headers: { 'Authorization': `Bearer ${token}` }
-        })
+        }),
+
       ]);
 
-      if (statusRes.ok) setTodayStatus(await statusRes.json());
-      if (statsRes.ok) setStats(await statsRes.json());
-      if (historyRes.ok) setHistory(await historyRes.json());
+      const safeJson = async (res: Response) => {
+        if (res.status === 401) {
+          await AsyncStorage.removeItem('token');
+          router.replace('/login');
+          return null;
+        }
+        if (!res.ok) return null;
+        try {
+          const text = await res.text();
+          return text ? JSON.parse(text) : null;
+        } catch (e) {
+          return null;
+        }
+      };
+
+      const statusData = await safeJson(statusRes);
+      if (statusData) setTodayStatus(statusData);
+
+      const statsData = await safeJson(statsRes);
+      if (statsData) setStats(statsData);
+
+
+
+      const historyData = await safeJson(historyRes);
+      if (historyData && Array.isArray(historyData)) {
+        setHistory(historyData);
+        const marks: any = {};
+
+        const formatDate = (d: any) => {
+          const date = new Date(d);
+          const year = date.getFullYear();
+          const month = String(date.getMonth() + 1).padStart(2, '0');
+          const day = String(date.getDate()).padStart(2, '0');
+          return `${year}-${month}-${day}`;
+        };
+
+        historyData.forEach((item: any) => {
+          const dateStr = formatDate(item.date);
+          let dotColor = '#64748b';
+          switch (item.status) {
+            case 'present': dotColor = '#10b981'; break;
+            case 'late': dotColor = '#f59e0b'; break;
+            case 'absent': dotColor = '#ef4444'; break;
+            case 'leave': dotColor = '#3b82f6'; break;
+          }
+          marks[dateStr] = { marked: true, dotColor };
+        });
+        setMarkedDates(marks);
+      }
     } catch (e) {
       console.error('Failed to fetch stats', e);
     } finally {
@@ -54,6 +145,23 @@ export default function DashboardScreen() {
   useEffect(() => {
     fetchStats();
   }, []);
+
+  useEffect(() => {
+    if (history.length > 0 && selectedDate) {
+      const filtered = history.filter(item => {
+        const itemDate = new Date(item.date);
+        const dateStr = `${itemDate.getFullYear()}-${String(itemDate.getMonth() + 1).padStart(2, '0')}-${String(itemDate.getDate()).padStart(2, '0')}`;
+        return dateStr === selectedDate;
+      });
+      setSelectedDayHistory(filtered);
+    } else {
+      setSelectedDayHistory([]);
+    }
+  }, [selectedDate, history]);
+
+  const onDayPress = (day: any) => {
+    setSelectedDate(day.dateString);
+  };
 
   const takeSelfie = async () => {
     let { status: camStatus } = await ImagePicker.requestCameraPermissionsAsync();
@@ -83,7 +191,6 @@ export default function DashboardScreen() {
     }
 
     setSubmitting(true);
-
     let { status: locStatus } = await Location.requestForegroundPermissionsAsync();
     if (locStatus !== 'granted') {
       Alert.alert('Permission denied', 'Location permission is required for verification.');
@@ -92,7 +199,6 @@ export default function DashboardScreen() {
     }
     let loc = await Location.getCurrentPositionAsync({});
     setLocation(loc.coords);
-
     await submitAttendance(status, loc.coords, image);
   };
 
@@ -107,6 +213,7 @@ export default function DashboardScreen() {
       if (attendanceStatus === 'leave') {
         formData.append('leave_type', leaveType);
       }
+
 
       const fileUri = imageUri.startsWith('file://') ? imageUri : `file://${imageUri}`;
       const fileName = fileUri.split('/').pop() || 'selfie.jpg';
@@ -125,12 +232,28 @@ export default function DashboardScreen() {
         headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' },
         body: formData,
       });
-      const data = await res.json();
+
+      if (res.status === 401) {
+        Alert.alert('Session Expired', 'Please log in again.');
+        await AsyncStorage.removeItem('token');
+        router.replace('/login');
+        return;
+      }
+
+      let data: any = {};
+      try {
+        const text = await res.text();
+        data = text ? JSON.parse(text) : {};
+      } catch (e) {
+        console.warn('Response parsing failed', e);
+      }
+
       if (res.ok) {
         Alert.alert('Attendance Marked', 'Your status has been updated and synced with HR.');
         fetchStats();
         setImage(null);
         setNote('');
+        setStatus(''); // Reset status selection
       } else {
         Alert.alert('Submission Error', data.message || 'Verification failed.');
       }
@@ -157,103 +280,120 @@ export default function DashboardScreen() {
     }
   };
 
+  console.log("todayStatus", todayStatus);
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" />
       <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
         {/* Profile Header */}
-        <View style={styles.profileHeader}>
-          <View>
-            <Text style={styles.greetingHeader}>Welcome back,</Text>
-            <Text style={styles.employeeName}>{employeeId || 'Employee'}</Text>
+        <View style={styles.header}>
+          <View style={styles.headerProfile}>
+            <View style={styles.avatarMini}>
+              <Text style={styles.avatarMiniText}>{(employeeName || 'E').charAt(0).toUpperCase()}</Text>
+            </View>
+            <View>
+              <View style={styles.welcomeRow}>
+                <Text style={styles.welcomeBackText}>Welcome back,</Text>
+                <View style={styles.liveBadge}>
+                  <View style={styles.liveDot} />
+                  <Text style={styles.liveBadgeText}>ERP LIVE</Text>
+                </View>
+              </View>
+              <Text style={styles.profileFullName}>{employeeName || 'Muhammad Riaz'}</Text>
+              <Text style={styles.profileFssNo}>FSE-{fssNo || '447'}</Text>
+            </View>
           </View>
-          <TouchableOpacity onPress={handleLogout} style={styles.logoutCircle}>
-            <Text style={styles.logoutIcon}>🚪</Text>
+          <TouchableOpacity onPress={handleLogout} style={styles.endSessionBtn}>
+            <Ionicons name="power-outline" size={20} color="#64748b" />
+            <Text style={styles.endSessionText}>END SESSION</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Monthly Performance Highlights */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Monthly Stats</Text>
-          <Text style={styles.sectionDate}>{new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}</Text>
-        </View>
-
-        <View style={styles.statsGrid}>
-          <View style={[styles.statItem, { backgroundColor: '#ecfdf5' }]}>
-            <Text style={[styles.statValue, { color: '#059669' }]}>{stats.present}</Text>
-            <Text style={styles.statLabel}>Present</Text>
-          </View>
-          <View style={[styles.statItem, { backgroundColor: '#fffbeb' }]}>
-            <Text style={[styles.statValue, { color: '#d97706' }]}>{stats.late}</Text>
-            <Text style={styles.statLabel}>Late</Text>
-          </View>
-          <View style={[styles.statItem, { backgroundColor: '#fef2f2' }]}>
-            <Text style={[styles.statValue, { color: '#dc2626' }]}>{stats.absent}</Text>
-            <Text style={styles.statLabel}>Absent</Text>
-          </View>
-          <View style={[styles.statItem, { backgroundColor: '#eff6ff' }]}>
-            <Text style={[styles.statValue, { color: '#2563eb' }]}>{stats.leave}</Text>
-            <Text style={styles.statLabel}>Leave</Text>
-          </View>
-        </View>
-
-        {/* Current Status Card */}
-        <View style={[styles.mainActionCard, todayStatus && styles.completedCard]}>
-          <View style={styles.cardHeader}>
-            <Text style={styles.cardHeaderTitle}>Today's Attendance</Text>
-            <View style={[styles.dateBadge, { backgroundColor: todayStatus ? '#dcfce7' : '#f1f5f9' }]}>
-              <Text style={[styles.dateBadgeText, { color: todayStatus ? '#15803d' : '#475569' }]}>
-                {new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
-              </Text>
+        {/* Assignment Info (Optional feature retained) */}
+        {assignment && (
+          <View style={styles.assignmentCard}>
+            <View style={styles.assignmentHeader}>
+              <Ionicons name="location" size={20} color="#3b82f6" />
+              <Text style={styles.assignmentTitle}>Current Assignment</Text>
+            </View>
+            <Text style={styles.siteName}>{assignment.site_name}</Text>
+            <Text style={styles.clientName}>{assignment.client_name}</Text>
+            <View style={styles.assignmentDetails}>
+              <View style={styles.detailRow}>
+                <Ionicons name="map-outline" size={14} color="#64748b" />
+                <Text style={styles.detailText}>{assignment.address}, {assignment.city}</Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Ionicons name="time-outline" size={14} color="#64748b" />
+                <Text style={styles.detailText}>Shift: {assignment.shift}</Text>
+              </View>
             </View>
           </View>
+        )}
+
+        {/* Main Attendance Card */}
+        <View style={styles.attendanceWhiteCard}>
+          <View style={styles.cardHeaderSmall}>
+            <Text style={styles.cardHeaderLabel}>Current Status</Text>
+            <View style={styles.monthBadge}>
+              <Text style={styles.monthBadgeText}>{new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</Text>
+            </View>
+          </View>
+          <Text style={styles.readyText}>{todayStatus ? 'Daily synchronization complete' : 'Ready to mark your attendance'}</Text>
 
           {todayStatus ? (
-            <View style={styles.completionView}>
-              <View style={styles.successCircle}>
-                <Ionicons name="checkmark-circle" size={48} color="#10b981" />
+            <View style={styles.capturedView}>
+              <View style={styles.capturedIconCircle}>
+                <Ionicons name="checkmark" size={40} color="#fff" />
               </View>
-              <Text style={styles.completionTitle}>Attendance Captured</Text>
-              <Text style={styles.completionSub}>Marked as <Text style={{ fontWeight: '800', color: getStatusStyle(todayStatus.status).color }}>{todayStatus.status.toUpperCase()}</Text></Text>
+              <Text style={styles.capturedTitle}>Attendance Active</Text>
 
-              {todayStatus.location && (
-                <View style={styles.locationVerifiedBadge}>
-                  <Ionicons name="location" size={12} color="#059669" />
-                  <Text style={styles.locationVerifiedText}>GPS Verified</Text>
+              <View style={styles.capturedBadgesRow}>
+                <View style={[styles.statusBadge, { backgroundColor: '#10b981', marginRight: 10 }]}>
+                  <Text style={[styles.statusLabel, { color: '#fff' }]}>{todayStatus.status.toUpperCase()}</Text>
                 </View>
-              )}
+
+                <View style={[styles.syncBadge, { borderWidth: 1, borderColor: '#d1fae5' }]}>
+                  <Ionicons name="cloud-done" size={14} color="#10b981" />
+                  <Text style={styles.syncBadgeText}>Synced</Text>
+                </View>
+              </View>
+
+              <View style={styles.gpsBadge}>
+                <Ionicons name="location" size={12} color="#475569" />
+                <Text style={styles.gpsBadgeText}>GPS Verification Secured</Text>
+              </View>
             </View>
           ) : (
-            <View style={styles.actionBody}>
-              <TouchableOpacity style={styles.cameraTrigger} onPress={takeSelfie} activeOpacity={0.7}>
+            <View style={styles.attendanceForm}>
+              <TouchableOpacity style={styles.dashedCameraTrigger} onPress={takeSelfie} activeOpacity={0.7}>
                 {image ? (
-                  <View style={styles.previewContainer}>
-                    <Image source={{ uri: image }} style={styles.selfiePreview} />
-                    <View style={styles.retakeOverlay}>
-                      <Text style={styles.retakeText}>RETAKE</Text>
-                    </View>
-                  </View>
+                  <Image source={{ uri: image }} style={styles.fullPreview} />
                 ) : (
-                  <View style={styles.cameraPlaceholder}>
-                    <Text style={styles.cameraIcon}>📸</Text>
-                    <Text style={styles.cameraHint}>TAP TO TAKE SELFIE</Text>
+                  <View style={styles.cameraCenter}>
+                    <View style={styles.cameraIconBg}>
+                      <Ionicons name="camera" size={30} color="#2563eb" />
+                    </View>
+                    <Text style={styles.cameraPromptText}>Take a live selfie to verify</Text>
                   </View>
                 )}
               </TouchableOpacity>
 
-              <View style={styles.statusPickerRow}>
+              <Text style={styles.selectStatusLabel}>SELECT YOUR STATUS</Text>
+              <View style={styles.statusBarRow}>
                 {['present', 'late', 'absent', 'leave'].map((s) => (
                   <TouchableOpacity
                     key={s}
                     onPress={() => selectStatus(s)}
                     style={[
-                      styles.statusBubble,
-                      status === s && { backgroundColor: getStatusStyle(s).color, borderColor: getStatusStyle(s).color }
+                      styles.statusSelectBtn,
+                      status === s && styles.statusSelectBtnActive
                     ]}
                   >
-                    <Text style={[styles.statusBubbleText, status === s && { color: '#fff' }]}>
-                      {s.charAt(0).toUpperCase()}
+                    <Text style={[styles.statusSelectText, status === s && styles.statusSelectTextActive]}>
+                      {s.toUpperCase()}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -274,132 +414,282 @@ export default function DashboardScreen() {
                 </View>
               )}
 
+
+
               <TextInput
-                style={styles.noteInput}
-                placeholder="Add a remark (optional)..."
+                style={styles.whiteNoteInput}
+                placeholder="Attach a message for HR (optional)..."
                 value={note}
                 onChangeText={setNote}
+                placeholderTextColor="#94a3b8"
               />
 
               <TouchableOpacity
-                style={[styles.submitButton, (!image || !status || submitting) && styles.submitButtonDisabled]}
+                style={[styles.confirmBtn, (!image || !status || submitting) && styles.confirmBtnDisabled]}
                 onPress={handleManualSubmit}
                 disabled={!image || !status || submitting}
               >
-                {submitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitButtonText}>CONFIRM & MARK</Text>}
+                {submitting ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <>
+                    <Text style={styles.confirmBtnText}>CONFIRM ATTENDANCE</Text>
+                    <Ionicons name="arrow-forward" size={18} color="#fff" style={{ marginLeft: 8 }} />
+                  </>
+                )}
               </TouchableOpacity>
             </View>
           )}
         </View>
 
-        {/* History Area */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Timeline History</Text>
-          <TouchableOpacity onPress={fetchStats}><Text style={styles.refreshLink}>Refresh</Text></TouchableOpacity>
+        {/* Timeline History */}
+        <View style={styles.historySectionLabel}>
+          <View>
+            <Text style={styles.historyMainTitle}>Timeline History</Text>
+            <Text style={styles.historySubtitle}>View logs and attendance trends</Text>
+          </View>
+          <TouchableOpacity style={styles.historyCloseBtn}>
+            <Ionicons name="close-circle" size={18} color="#2563eb" />
+            <Text style={styles.historyCloseText}>Close</Text>
+          </TouchableOpacity>
         </View>
 
-        {history.length === 0 ? (
-          <View style={styles.emptyHistory}>
-            <Text style={styles.emptyHistoryText}>No records found for the past month.</Text>
+        <View style={styles.premiumCalendarCard}>
+          <View style={styles.calendarSummaryHeader}>
+            <View style={styles.calMonthInfo}>
+              <Text style={styles.calMonthName}>{new Date(calendarMonth).toLocaleString('default', { month: 'long' })}</Text>
+              <Text style={styles.calYearInfo}>{new Date(calendarMonth).getFullYear()} • MONTHLY SUMMARY</Text>
+            </View>
+            <View style={styles.calNavArrows}>
+              <TouchableOpacity style={styles.calNavBtn} onPress={goToPrevMonth}>
+                <Ionicons name="chevron-back" size={20} color="#64748b" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.calNavBtn, { marginLeft: 12, opacity: isNextMonthDisabled() ? 0.3 : 1 }]}
+                onPress={goToNextMonth}
+                disabled={isNextMonthDisabled()}
+              >
+                <Ionicons name="chevron-forward" size={20} color="#64748b" />
+              </TouchableOpacity>
+            </View>
           </View>
-        ) : (
-          history.slice(0, 5).map((item, index) => (
-            <View key={index} style={styles.historyCard}>
-              <View style={styles.historyLeading}>
-                <View style={[styles.statusDot, { backgroundColor: getStatusStyle(item.status).color }]} />
-                <View style={styles.historyDetails}>
-                  <Text style={styles.historyDate}>{new Date(item.date).toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' })}</Text>
-                  <Text style={[styles.historyStatus, { color: getStatusStyle(item.status).color }]}>{item.status.toUpperCase()}</Text>
+
+          <View style={styles.calStatsRow}>
+            <View style={styles.calStatBox}>
+              <Text style={[styles.calStatVal, { color: '#1e293b' }]}>{stats.present + stats.late + stats.absent + stats.leave}</Text>
+              <Text style={styles.calStatLab}>LOGS</Text>
+            </View>
+            <View style={styles.calStatDivider} />
+            <View style={styles.calStatBox}>
+              <Text style={[styles.calStatVal, { color: '#10b981' }]}>{stats.present}</Text>
+              <Text style={styles.calStatLab}>PRES</Text>
+            </View>
+            <View style={styles.calStatDivider} />
+            <View style={styles.calStatBox}>
+              <Text style={[styles.calStatVal, { color: '#3b82f6' }]}>{stats.leave}</Text>
+              <Text style={styles.calStatLab}>LEAV</Text>
+            </View>
+            <View style={styles.calStatDivider} />
+            <View style={styles.calStatBox}>
+              <Text style={[styles.calStatVal, { color: '#f59e0b' }]}>{stats.late}</Text>
+              <Text style={styles.calStatLab}>LATE</Text>
+            </View>
+          </View>
+
+          <Calendar
+            key={calendarMonth}
+            current={calendarMonth}
+            onDayPress={onDayPress}
+            hideArrows={true}
+            enableSwipeMonths={false}
+            maxDate={new Date().toLocaleDateString('en-CA')}
+            markedDates={{
+              ...markedDates,
+              [selectedDate]: { ...(markedDates[selectedDate] || {}), selected: true, selectedColor: '#2563eb' }
+            }}
+            theme={{
+              calendarBackground: '#fff',
+              textSectionTitleColor: '#94a3b8',
+              selectedDayBackgroundColor: '#2563eb',
+              selectedDayTextColor: '#ffffff',
+              todayTextColor: '#2563eb',
+              dayTextColor: '#1e293b',
+              textDisabledColor: '#e2e8f0',
+              dotColor: '#2563eb',
+              selectedDotColor: '#ffffff',
+              arrowColor: '#1e293b',
+              monthTextColor: '#1e293b',
+              indicatorColor: '#1e293b',
+              textDayFontWeight: '600',
+              textMonthFontWeight: '800',
+              textDayHeaderFontWeight: '600',
+              textDayFontSize: 14,
+              textMonthFontSize: 0,
+              textDayHeaderFontSize: 12
+            }}
+            renderHeader={() => null}
+            style={{ marginTop: 10 }}
+          />
+        </View>
+
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <Text style={styles.recentActivityTitle}>ACTIVITY FOR {selectedDate}</Text>
+          <Text style={styles.logCountText}>{selectedDayHistory.length} Logs</Text>
+        </View>
+
+        {selectedDayHistory.length > 0 ? (
+          <View style={{ marginBottom: 20 }}>
+            {selectedDayHistory.map((item, index) => {
+              const style = getStatusStyle(item.status);
+              return (
+                <View key={`sel-${index}`} style={styles.dayRecordCard}>
+                  <View style={styles.dayRecordHeader}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <View style={[styles.statusBadge, { backgroundColor: style.bg }]}>
+                        <Text style={[styles.statusLabel, { color: style.color }]}>{item.status.toUpperCase()}</Text>
+                      </View>
+
+                    </View>
+                    <Text style={styles.dayRecordTime}>
+                      {new Date(item.created_at || item.date).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                    </Text>
+                  </View>
+                  {item.picture && (
+                    <Image
+                      source={{ uri: item.picture }}
+                      style={{ width: '100%', height: 200, borderRadius: 12, marginTop: 8, marginBottom: 8, backgroundColor: '#f1f5f9' }}
+                      resizeMode="cover"
+                    />
+                  )}
                   {item.location && (
                     <TouchableOpacity
                       onPress={() => Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${JSON.parse(item.location).latitude},${JSON.parse(item.location).longitude}`)}
-                      style={styles.historyLocationLink}
+                      style={styles.dayLocationLink}
                     >
-                      <Ionicons name="location-outline" size={12} color="#2563eb" />
-                      <Text style={styles.historyLocationText}>View Mapping</Text>
+                      <Ionicons name="location-outline" size={14} color="#2563eb" />
+                      <Text style={styles.dayLocationText}>View Mapping</Text>
                     </TouchableOpacity>
                   )}
                 </View>
-              </View>
-              <View style={styles.historyTrailing}>
-                {item.picture ? (
-                  <View style={styles.historyThumbWrapper}>
-                    <Image source={{ uri: item.picture }} style={styles.historyThumb} />
-                  </View>
-                ) : (
-                  <View style={styles.historyNoThumb} />
-                )}
-              </View>
+              );
+            })}
+          </View>
+        ) : (
+          <View style={styles.emptyActivityPlaceholder}>
+            <View style={styles.documentIconCircle}>
+              <Ionicons name="document-text-outline" size={40} color="#94a3b8" />
             </View>
-          ))
+            <Text style={styles.emptyActivityText}>No logs found for this date.</Text>
+          </View>
         )}
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
-    </SafeAreaView>
+    </SafeAreaView >
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#f8fafc' },
+  safeArea: { flex: 1, backgroundColor: '#fdfdfe' },
   container: { flex: 1 },
-  scrollContent: { paddingHorizontal: 20, paddingTop: 20 },
-  profileHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32 },
-  greetingHeader: { fontSize: 16, color: '#64748b', fontWeight: '500' },
-  employeeName: { fontSize: 26, fontWeight: '800', color: '#1e293b', letterSpacing: -0.5 },
-  logoutCircle: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10, elevation: 2 },
-  logoutIcon: { fontSize: 18 },
-  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 16 },
-  sectionTitle: { fontSize: 18, fontWeight: '700', color: '#1e293b' },
-  sectionDate: { fontSize: 14, color: '#94a3b8', fontWeight: '600' },
-  statsGrid: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 32 },
-  statItem: { flex: 1, height: 80, marginHorizontal: 4, borderRadius: 20, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.02, shadowRadius: 5 },
-  statValue: { fontSize: 22, fontWeight: '800' },
-  statLabel: { fontSize: 11, fontWeight: '700', color: '#64748b', marginTop: 2, textTransform: 'uppercase' },
-  mainActionCard: { backgroundColor: '#fff', borderRadius: 32, padding: 24, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 20, elevation: 3, marginBottom: 32 },
-  completedCard: { backgroundColor: '#f0fdf4', borderColor: '#d1fae5', borderWidth: 1 },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
-  cardHeaderTitle: { fontSize: 17, fontWeight: '700', color: '#1e293b' },
-  dateBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10 },
-  dateBadgeText: { fontSize: 12, fontWeight: '700' },
-  cameraTrigger: { width: '100%', height: 180, borderRadius: 24, backgroundColor: '#f8fafc', borderStyle: 'dashed', borderWidth: 2, borderColor: '#e2e8f0', overflow: 'hidden', marginBottom: 20 },
-  cameraPlaceholder: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  cameraIcon: { fontSize: 40, marginBottom: 8 },
-  cameraHint: { fontSize: 13, fontWeight: '700', color: '#94a3b8', letterSpacing: 0.5 },
-  previewContainer: { flex: 1 },
-  selfiePreview: { width: '100%', height: '100%', objectFit: 'cover' },
-  retakeOverlay: { position: 'absolute', bottom: 12, alignSelf: 'center', backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
-  retakeText: { color: '#fff', fontSize: 11, fontWeight: '800' },
-  statusPickerRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 },
-  statusBubble: { width: 56, height: 56, borderRadius: 28, borderWidth: 2, borderColor: '#f1f5f9', backgroundColor: '#f8fafc', justifyContent: 'center', alignItems: 'center' },
-  statusBubbleText: { fontSize: 18, fontWeight: '800', color: '#64748b' },
-  noteInput: { backgroundColor: '#f8fafc', borderRadius: 16, padding: 16, fontSize: 15, color: '#1e293b', borderWidth: 1, borderColor: '#f1f5f9', marginBottom: 20 },
-  actionBody: { width: '100%' },
-  submitButton: { backgroundColor: '#1e293b', paddingVertical: 18, borderRadius: 18, alignItems: 'center', shadowColor: '#1e293b', shadowOpacity: 0.3, shadowRadius: 10, elevation: 4 },
-  submitButtonText: { color: '#fff', fontWeight: '800', fontSize: 15, letterSpacing: 0.5 },
-  submitButtonDisabled: { opacity: 0.4, elevation: 0 },
-  completionView: { alignItems: 'center', paddingVertical: 20 },
-  successCircle: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center', marginBottom: 16, shadowColor: '#10b981', shadowOpacity: 0.1, shadowRadius: 10, elevation: 2 },
-  completionTitle: { fontSize: 20, fontWeight: '800', color: '#1e293b', marginBottom: 4 },
-  completionSub: { fontSize: 15, color: '#64748b', fontWeight: '500' },
-  historyCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#fff', padding: 16, borderRadius: 24, marginBottom: 12, shadowColor: '#000', shadowOpacity: 0.02, shadowRadius: 5 },
-  historyLeading: { flexDirection: 'row', alignItems: 'center' },
-  statusDot: { width: 8, height: 8, borderRadius: 4, marginRight: 16 },
-  historyDetails: { gap: 2 },
-  historyDate: { fontSize: 15, fontWeight: '700', color: '#1e293b' },
-  historyStatus: { fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },
-  historyTrailing: {},
-  historyThumb: { width: 44, height: 44, borderRadius: 12, backgroundColor: '#f8fafc' },
-  historyNoThumb: { width: 44, height: 44, borderRadius: 12, backgroundColor: '#f1f5f9' },
-  historyThumbWrapper: { position: 'relative' },
-  locationVerifiedBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#d1fae5', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 20, marginTop: 12, gap: 4 },
-  locationVerifiedText: { color: '#059669', fontSize: 12, fontWeight: '700' },
-  historyLocationLink: { flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 2 },
-  historyLocationText: { fontSize: 11, fontWeight: '600', color: '#2563eb' },
-  refreshLink: { color: '#2563eb', fontSize: 14, fontWeight: '700' },
-  emptyHistory: { alignItems: 'center', paddingVertical: 40 },
-  emptyHistoryText: { color: '#94a3b8', fontSize: 14, fontWeight: '500' },
-  bottomSpacer: { height: 40 },
+  scrollContent: { paddingHorizontal: 20, paddingTop: 10 },
+
+  // Header Styles
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 30, marginTop: 10 },
+  headerProfile: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  avatarMini: { width: 50, height: 50, borderRadius: 25, backgroundColor: '#1e293b', justifyContent: 'center', alignItems: 'center' },
+  avatarMiniText: { color: '#fff', fontSize: 20, fontWeight: '800' },
+  welcomeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  welcomeBackText: { fontSize: 13, color: '#94a3b8', fontWeight: '500' },
+  liveBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f0fdf4', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, gap: 4 },
+  liveDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: '#10b981' },
+  liveBadgeText: { fontSize: 9, fontWeight: '800', color: '#10b981', letterSpacing: 0.5 },
+  profileFullName: { fontSize: 22, fontWeight: '800', color: '#1e293b', marginTop: -2 },
+  profileFssNo: { fontSize: 12, fontWeight: '700', color: '#94a3b8', marginTop: 2 },
+  endSessionBtn: { alignItems: 'center' },
+  endSessionText: { fontSize: 9, fontWeight: '800', color: '#64748b', marginTop: 4 },
+
+  // Attendance Card
+  attendanceWhiteCard: { backgroundColor: '#fff', borderRadius: 40, padding: 24, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 30, elevation: 8, marginBottom: 30 },
+  cardHeaderSmall: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  cardHeaderLabel: { fontSize: 18, fontWeight: '800', color: '#1e293b' },
+  monthBadge: { backgroundColor: '#f1f5f9', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
+  monthBadgeText: { fontSize: 13, fontWeight: '700', color: '#475569' },
+  readyText: { fontSize: 14, color: '#94a3b8', marginBottom: 20, fontWeight: '500' },
+  attendanceForm: { width: '100%' },
+  dashedCameraTrigger: { width: '100%', height: 180, borderRadius: 32, borderStyle: 'dashed', borderWidth: 2, borderColor: '#e2e8f0', justifyContent: 'center', alignItems: 'center', marginBottom: 20, overflow: 'hidden' },
+  fullPreview: { width: '100%', height: '100%', objectFit: 'cover' },
+  cameraCenter: { alignItems: 'center' },
+  cameraIconBg: { width: 60, height: 60, borderRadius: 30, backgroundColor: '#f8fafc', justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
+  cameraPromptText: { fontSize: 14, fontWeight: '700', color: '#64748b' },
+  selectStatusLabel: { fontSize: 11, fontWeight: '800', color: '#94a3b8', textAlign: 'center', marginBottom: 16, letterSpacing: 1 },
+  statusBarRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
+  statusSelectBtn: { flex: 1, height: 44, borderRadius: 12, borderWidth: 1, borderColor: '#f1f5f9', backgroundColor: '#f8fafc', justifyContent: 'center', alignItems: 'center' },
+  statusSelectBtnActive: { backgroundColor: '#fff', borderColor: '#e2e8f0', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 5, elevation: 2 },
+  statusSelectText: { fontSize: 10, fontWeight: '800', color: '#94a3b8' },
+  statusSelectTextActive: { color: '#1e293b' },
   leavePickerContainer: { marginBottom: 20, backgroundColor: '#f8fafc', borderRadius: 16, overflow: 'hidden' },
   simplePicker: { height: 50, color: '#1e293b' },
+  whiteNoteInput: { backgroundColor: '#f8fafc', borderRadius: 16, padding: 16, fontSize: 15, color: '#1e293b', marginBottom: 20, borderWidth: 1, borderColor: '#f1f5f9' },
+  confirmBtn: { backgroundColor: '#1e293b', height: 56, borderRadius: 18, flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
+  confirmBtnDisabled: { opacity: 0.7 },
+  confirmBtnText: { color: '#fff', fontSize: 15, fontWeight: '800', letterSpacing: 0.5 },
+
+  // Captured State
+  capturedView: { alignItems: 'center', paddingVertical: 10 },
+  capturedIconCircle: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#10b981', justifyContent: 'center', alignItems: 'center', marginBottom: 20, shadowColor: '#10b981', shadowOpacity: 0.2, shadowRadius: 15, elevation: 5 },
+  capturedTitle: { fontSize: 28, fontWeight: '800', color: '#1e293b', marginBottom: 16 },
+  capturedBadgesRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 25 },
+  syncBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#ecfdf5', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, gap: 4, borderWidth: 1, borderColor: '#d1fae5' },
+  syncBadgeText: { fontSize: 11, fontWeight: '800', color: '#10b981', letterSpacing: 0.5 },
+  gpsBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, gap: 6, borderWidth: 1, borderColor: '#f1f5f9' },
+  gpsBadgeText: { fontSize: 12, fontWeight: '700', color: '#94a3b8' },
+
+  // Timeline History Label Section
+  historySectionLabel: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  historyMainTitle: { fontSize: 18, fontWeight: '800', color: '#1e293b' },
+  historySubtitle: { fontSize: 13, color: '#94a3b8', fontWeight: '500' },
+  historyCloseBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#eff6ff', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12, gap: 6 },
+  historyCloseText: { fontSize: 14, fontWeight: '700', color: '#2563eb' },
+
+  // Premium Calendar Card
+  premiumCalendarCard: { backgroundColor: '#fff', borderRadius: 32, padding: 20, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 20, elevation: 4, marginBottom: 24, borderWidth: 1, borderColor: '#f8fafc' },
+  calendarSummaryHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  calMonthInfo: { flex: 1 },
+  calMonthName: { fontSize: 20, fontWeight: '800', color: '#1e293b' },
+  calYearInfo: { fontSize: 10, fontWeight: '700', color: '#94a3b8', marginTop: 2, letterSpacing: 0.5 },
+  calNavArrows: { flexDirection: 'row' },
+  calNavBtn: { padding: 4 },
+  calStatsRow: { flexDirection: 'row', paddingVertical: 15, borderTopWidth: 1, borderTopColor: '#f8fafc', borderBottomWidth: 1, borderBottomColor: '#f8fafc', marginBottom: 10 },
+  calStatBox: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  calStatVal: { fontSize: 18, fontWeight: '800', marginBottom: 2 },
+  calStatLab: { fontSize: 9, fontWeight: '800', color: '#cbd5e1', letterSpacing: 0.5 },
+  calStatDivider: { width: 1, height: '70%', backgroundColor: '#f1f5f9', alignSelf: 'center' },
+
+  // Recent Activity Placeholder
+  recentActivityTitle: { fontSize: 12, fontWeight: '800', color: '#94a3b8', letterSpacing: 1, marginBottom: 4 },
+  logCountText: { fontSize: 12, fontWeight: '700', color: '#1e293b' },
+  emptyActivityPlaceholder: { width: '100%', height: 160, borderRadius: 32, borderStyle: 'dashed', borderWidth: 2, borderColor: '#f1f5f9', justifyContent: 'center', alignItems: 'center', marginTop: 10 },
+  documentIconCircle: { width: 70, height: 70, borderRadius: 35, backgroundColor: '#f8fafc', justifyContent: 'center', alignItems: 'center', marginBottom: 15 },
+  emptyActivityText: { fontSize: 13, color: '#94a3b8', fontWeight: '700', textAlign: 'center', width: '60%' },
+
+  // Record Cards
+  dayRecordCard: { backgroundColor: '#fff', borderRadius: 20, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#f1f5f9' },
+  dayRecordHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  statusBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+  statusLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
+  dayRecordTime: { fontSize: 13, fontWeight: '600', color: '#64748b' },
+  dayLocationLink: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  dayLocationText: { fontSize: 12, fontWeight: '700', color: '#2563eb' },
+
+  // Assignment Info (Legacy)
+  assignmentCard: { backgroundColor: '#fff', padding: 20, borderRadius: 24, marginBottom: 24, shadowColor: '#3b82f6', shadowOpacity: 0.1, shadowRadius: 15, elevation: 3, borderLeftWidth: 4, borderLeftColor: '#3b82f6' },
+  assignmentHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
+  assignmentTitle: { fontSize: 13, fontWeight: '700', color: '#3b82f6', textTransform: 'uppercase', letterSpacing: 0.5 },
+  siteName: { fontSize: 20, fontWeight: '800', color: '#1e293b', marginBottom: 4 },
+  clientName: { fontSize: 14, fontWeight: '600', color: '#64748b', marginBottom: 12 },
+  assignmentDetails: { gap: 6 },
+  detailRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  detailText: { fontSize: 13, color: '#64748b', fontWeight: '500' },
+  bottomSpacer: { height: 40 },
 });

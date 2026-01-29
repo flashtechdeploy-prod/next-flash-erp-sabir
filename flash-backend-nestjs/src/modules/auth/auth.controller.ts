@@ -3,7 +3,7 @@ import { Body, Controller, Get, HttpException, HttpStatus, Inject, Logger, Post,
 import { JwtService } from '@nestjs/jwt';
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import * as bcrypt from 'bcryptjs';
-import { eq ,or} from 'drizzle-orm';
+import { eq ,or, sql} from 'drizzle-orm';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { DRIZZLE } from '../../db/drizzle.module';
 import { employees } from '../../db/schema/employees';
@@ -61,13 +61,26 @@ export class AuthController {
 
   // Fetch employee from DB
 
+const cleanedInput = fss_no.replace(/-/g, ''); // Input without dashes
+const numericInput = fss_no.replace(/^0+/, ''); // Input without leading zeros
+
 const [employee] = await this.db
   .select()
   .from(employees)
   .where(
     or(
+      // Match FSS No: exactly, or without leading zeros
       eq(employees.fss_no, fss_no),
-      eq(employees.cnic, fss_no)
+      eq(sql`LTRIM(${employees.fss_no}, '0')`, numericInput),
+      
+      // Match CNIC: exactly, without dashes, or with cleaning-both
+      eq(employees.cnic, fss_no),
+      eq(employees.cnic, cleanedInput),
+      eq(sql`REPLACE(${employees.cnic}, '-', '')`, cleanedInput),
+      
+      // Also check cnic_no field just in case
+      eq(employees.cnic_no, fss_no),
+      eq(sql`REPLACE(${employees.cnic_no}, '-', '')`, cleanedInput)
     )
   );
 
@@ -104,7 +117,12 @@ const [employee] = await this.db
   const token = this.jwtService.sign(payload);
 
   this.logger.log(`Login successful for employee_id: ${employee.employee_id}`);
-  return { token, employee_id: employee.employee_id, fss_no: employee.fss_no };
+  return { 
+    token, 
+    employee_id: employee.employee_id, 
+    fss_no: employee.fss_no,
+    full_name: employee.full_name || employee.first_name || 'Employee'
+  };
 }
 
   @UseGuards(JwtAuthGuard)

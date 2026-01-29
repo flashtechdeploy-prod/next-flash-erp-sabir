@@ -11,9 +11,28 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
+  const formatCNIC = (text: string) => {
+    const cleaned = text.replace(/\D/g, '');
+    let formatted = cleaned;
+    if (cleaned.length > 5 && cleaned.length <= 12) {
+      formatted = `${cleaned.slice(0, 5)}-${cleaned.slice(5)}`;
+    } else if (cleaned.length > 12) {
+      formatted = `${cleaned.slice(0, 5)}-${cleaned.slice(5, 12)}-${cleaned.slice(12, 13)}`;
+    }
+    return formatted;
+  };
+
+  const handleIdentifierChange = (text: string) => {
+    if (text.length > 5 || (fssNo.includes('-') && text.length > 4)) {
+      setFssNo(formatCNIC(text));
+    } else {
+      setFssNo(text);
+    }
+  };
+
   const handleLogin = async () => {
     if (!fssNo || !password) {
-      Alert.alert('Required Fields', 'Please enter your FSS Number and password.');
+      Alert.alert('Required Fields', 'Please enter your FSS Number or CNIC and password.');
       return;
     }
 
@@ -28,6 +47,8 @@ export default function LoginScreen() {
       if (res.ok && data.token && data.employee_id) {
         await AsyncStorage.setItem('token', data.token);
         await AsyncStorage.setItem('employee_id', data.employee_id);
+        await AsyncStorage.setItem('full_name', data.full_name || '');
+        await AsyncStorage.setItem('fss_no', data.fss_no || '');
         router.replace('/dashboard');
       } else {
         Alert.alert('Login Failed', data.message || 'Invalid credentials');
@@ -63,14 +84,15 @@ export default function LoginScreen() {
             <Text style={styles.inputHint}>Enter your credentials to manage your attendance and tasks.</Text>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>FSS NUMBER</Text>
+              <Text style={styles.label}>FSS NUMBER / CNIC</Text>
               <TextInput
                 style={styles.input}
-                placeholder="Ex: 0447"
+                placeholder="0447 or 37201-4437771-7"
                 placeholderTextColor="#94a3b8"
                 value={fssNo}
-                onChangeText={setFssNo}
+                onChangeText={handleIdentifierChange}
                 autoCapitalize="none"
+                keyboardType="numeric"
               />
             </View>
 
@@ -99,9 +121,7 @@ export default function LoginScreen() {
               )}
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.forgotButton} activeOpacity={0.6}>
-              <Text style={styles.forgotText}>Forgot Password?</Text>
-            </TouchableOpacity>
+
           </View>
 
           <View style={styles.footerSection}>

@@ -398,6 +398,7 @@ export class AttendanceService {
         fine_amount: record.fine_amount || null,
         location: record.location || null,
         picture: pictureUrl || null,
+        created_at: new Date(),
         updated_at: new Date(),
       };
 
@@ -433,7 +434,16 @@ export class AttendanceService {
    */
   async getEmployeeStatus(employeeId: string, date: string) {
     const [record] = await this.db
-      .select()
+      .select({
+        id: schema.attendance.id,
+        employee_id: schema.attendance.employee_id,
+        date: schema.attendance.date,
+        status: schema.attendance.status,
+        note: schema.attendance.note,
+        location: schema.attendance.location,
+        picture: schema.attendance.picture,
+        created_at: schema.attendance.created_at,
+      })
       .from(schema.attendance)
       .where(
         and(
@@ -485,7 +495,16 @@ export class AttendanceService {
    */
   async getEmployeeHistory(employeeId: string, limit = 30) {
     return this.db
-      .select()
+      .select({
+        id: schema.attendance.id,
+        employee_id: schema.attendance.employee_id,
+        date: schema.attendance.date,
+        status: schema.attendance.status,
+        note: schema.attendance.note,
+        location: schema.attendance.location,
+        picture: schema.attendance.picture,
+        created_at: schema.attendance.created_at,
+      })
       .from(schema.attendance)
       .where(eq(schema.attendance.employee_id, employeeId))
       .orderBy(desc(schema.attendance.date), desc(schema.attendance.created_at))

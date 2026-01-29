@@ -17,6 +17,7 @@ export default function RootLayout() {
       <Stack>
         <Stack.Screen name="login" options={{ headerShown: false }} />
         <Stack.Screen name="dashboard" options={{ title: 'Dashboard', headerShown: false }} />
+        <Stack.Screen name="history" options={{ title: 'Attendance History', headerShown: false }} />
       </Stack>
       <StatusBar style="auto" />
     </ThemeProvider>

@@ -456,7 +456,6 @@ export class ClientManagementService {
 
   async getAvailableGuards() {
     try {
-      // Get all active employees
       const allEmployees = await this.db
         .select()
         .from(schema.employees);
@@ -465,7 +464,6 @@ export class ClientManagementService {
         emp.status?.toLowerCase() === 'active'
       );
 
-      // Get currently assigned guards
       const assignedGuards = await this.db
         .select()
         .from(schema.site_guard_assignments)
@@ -543,4 +541,6 @@ export class ClientManagementService {
     await this.db.delete(schema.industries).where(eq(schema.industries.id, id));
     return { message: 'Deleted' };
   }
+
+
 }
