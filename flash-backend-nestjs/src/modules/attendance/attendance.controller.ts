@@ -78,7 +78,7 @@ export class AttendanceController {
     @UploadedFile() file?: Express.Multer.File,
   ) {
     console.log('--- Received mark-self request ---');
-    console.log('User:', user.sub);
+    console.log('User Context:', JSON.stringify(user));
     console.log('File received:', file ? `${file.originalname} (${file.size} bytes)` : 'NONE');
 
     if (user.type !== 'employee') {

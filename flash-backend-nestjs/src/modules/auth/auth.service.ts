@@ -58,9 +58,19 @@ export class AuthService {
   async validateUser(payload: JwtPayload) {
     if (payload.type === 'employee') {
       const [employee] = await this.usersService.findEmployeeById(payload.sub);
-      if (!employee || employee.status !== 'Active') {
+      
+      if (!employee) {
+        console.warn(`Auth Failed: Employee not found for ID ${payload.sub}`);
         throw new UnauthorizedException();
       }
+
+      // Check status case-insensitively
+      const status = employee.status ? employee.status.toLowerCase() : '';
+      if (status !== 'active') {
+        console.warn(`Auth Failed: Employee ${payload.sub} status is '${employee.status}'`);
+        throw new UnauthorizedException('Employee account is not active');
+      }
+
       return { ...employee, sub: employee.employee_id, type: 'employee' };
     }
 
