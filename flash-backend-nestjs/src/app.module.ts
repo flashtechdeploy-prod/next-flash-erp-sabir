@@ -40,7 +40,10 @@ import { CompanySettingsModule } from './modules/company-settings/company-settin
       // Note: .env file only used in local development
       // In production, env vars come from the platform (Coolify, etc.)
     }),
-
+    ServeStaticModule.forRoot({
+      rootPath: join(__dirname, '..', 'uploads'),
+      serveRoot: '/uploads',
+    }),
 
 
     DrizzleModule,

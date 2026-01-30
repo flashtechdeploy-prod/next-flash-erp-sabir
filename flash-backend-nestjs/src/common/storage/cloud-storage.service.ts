@@ -93,15 +93,34 @@ export class CloudStorageService {
     mimeType: string,
     subDir?: string,
   ): Promise<{ filename: string; url: string }> {
-    if (!this.s3Client) {
-      throw new Error(
-        'Cloud storage is not configured. Please check B2 credentials in .env file.',
-      );
-    }
-
     const ext = filename.split('.').pop() || '';
     const uniqueFilename = `${await this.generateUuid()}.${ext}`;
     const key = subDir ? `${subDir}/${uniqueFilename}` : uniqueFilename;
+
+    if (!this.s3Client) {
+        // Fallback to local storage
+        try {
+            const fs = await import('fs');
+            const path = await import('path');
+            
+            const uploadDir = path.join(process.cwd(), 'uploads', subDir || '');
+            
+            if (!fs.existsSync(uploadDir)) {
+                fs.mkdirSync(uploadDir, { recursive: true });
+            }
+            
+            const filePath = path.join(uploadDir, uniqueFilename);
+            fs.writeFileSync(filePath, fileBuffer);
+            
+            const url = `/uploads/${key}`;
+            this.logger.log(`File saved locally: ${filePath}`);
+            return { filename: uniqueFilename, url };
+        } catch (error) {
+             this.logger.error(`Failed to save file locally: ${error.message}`);
+             throw error;
+        }
+    }
+
     try {
       await this.s3Client.send(
         new PutObjectCommand({
@@ -127,10 +146,19 @@ export class CloudStorageService {
 
   async deleteFile(key: string): Promise<void> {
     if (!this.s3Client) {
-      this.logger.warn(
-        'Cloud storage not configured, skipping delete operation',
-      );
-      return;
+       // Local delete
+       try {
+           const fs = await import('fs');
+           const path = await import('path');
+           const filePath = path.join(process.cwd(), 'uploads', key);
+           if (fs.existsSync(filePath)) {
+               fs.unlinkSync(filePath);
+               this.logger.log(`Local file deleted: ${key}`);
+           }
+       } catch(e) {
+           this.logger.warn(`Failed to delete local file: ${e.message}`);
+       }
+       return;
     }
 
     try {
