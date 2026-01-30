@@ -185,18 +185,12 @@ const [employee] = await this.db
     return { message: 'All - ALL - passwords reset to admin123' };
   }
 
-  @UseGuards(JwtAuthGuard)
   @Post('set-password')
-  @ApiOperation({ summary: 'Set or update employee password' })
-  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Set or update employee password (Public for testing)' })
   @ApiBody({ type: SetPasswordDto })
   @ApiResponse({ status: 200, description: 'Password set successfully' })
-  async setPassword(@Body() body: SetPasswordDto, @CurrentUser() user: any) {
+  async setPassword(@Body() body: SetPasswordDto) {
     const { fss_no, password } = body;
-
-    if (!user.is_superuser && user.fss_no !== fss_no && user.cnic !== fss_no)  {
-      throw new HttpException('You do not have permission to set this password', HttpStatus.FORBIDDEN);
-    }
 
    
     const [employee] = await this.db
