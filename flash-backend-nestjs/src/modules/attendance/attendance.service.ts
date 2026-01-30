@@ -542,7 +542,6 @@ export class AttendanceService {
             eq(schema.attendance.date, date),
           ),
         )
-        .where(eq(schema.employees.status, 'Active'))
         .orderBy(desc(sql`CAST(NULLIF(${schema.employees.fss_no}, '') AS INTEGER)`));
 
       return records;

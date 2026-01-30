@@ -87,7 +87,7 @@ export default function LoginScreen() {
               <Text style={styles.label}>FSS NUMBER / CNIC</Text>
               <TextInput
                 style={styles.input}
-                placeholder="0447 or 37201-4437771-7"
+                placeholder="000 or 1111-42347771-1"
                 placeholderTextColor="#94a3b8"
                 value={fssNo}
                 onChangeText={handleIdentifierChange}
