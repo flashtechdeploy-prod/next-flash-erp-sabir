@@ -138,6 +138,8 @@ export const authApi = {
   getMe: () => api.get("/api/auth/me"),
   setPassword: (data: { fss_no: string; password: string }) =>
     api.post("/api/auth/set-password", data),
+  setupPassword: (data: { fss_no: string; password: string }) =>
+    api.post("/api/auth/setup-password", data),
 };
 
 // Employee API

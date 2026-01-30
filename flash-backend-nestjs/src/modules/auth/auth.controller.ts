@@ -123,7 +123,67 @@ const [employee] = await this.db
     fss_no: employee.fss_no,
     full_name: employee.full_name || employee.first_name || 'Employee'
   };
-}
+  }
+
+  @Post('setup-password')
+  @ApiOperation({ summary: 'Initial password setup (Public)' })
+  @ApiBody({ type: SetPasswordDto })
+  async setupPassword(@Body() body: SetPasswordDto) {
+    const { fss_no, password } = body;
+    
+    this.logger.log(`Received password setup request for FSS: ${fss_no}`);
+
+    // Clean input
+    const numericInput = fss_no.replace(/^0+/, ''); // Input without leading zeros
+    const cleanedInput = fss_no.replace(/-/g, ''); // Input without dashes
+
+    const [employee] = await this.db
+      .select({ id: employees.id, employee_id: employees.employee_id, fss_no: employees.fss_no })
+      .from(employees)
+      .where(
+        or(
+          // Match FSS No: exactly, or without leading zeros
+          eq(employees.fss_no, fss_no),
+          eq(sql`LTRIM(${employees.fss_no}, '0')`, numericInput),
+          
+          // Match CNIC: exactly, without dashes, or with cleaning-both
+          eq(employees.cnic, fss_no),
+          eq(employees.cnic, cleanedInput),
+          eq(sql`REPLACE(${employees.cnic}, '-', '')`, cleanedInput),
+          
+          // Also check cnic_no field just in case
+          eq(employees.cnic_no, fss_no),
+          eq(sql`REPLACE(${employees.cnic_no}, '-', '')`, cleanedInput)
+        )
+      );
+
+    if (!employee) {
+      this.logger.warn(`Employee not found for password setup: ${fss_no}`);
+      throw new HttpException('Employee not found', HttpStatus.NOT_FOUND);
+    }
+
+    // Set password
+    const hashedPassword = await bcrypt.hash(password, 10);
+    
+    await this.db
+      .update(employees)
+      .set({ 
+        password: hashedPassword,
+        updated_at: new Date()
+      })
+      .where(eq(employees.id, employee.id));
+
+    this.logger.log(`Initial password set successfully for FSS: ${employee.fss_no}`);
+    return { success: true, message: 'Password set successfully' };
+  }
+
+  @Get('emergency-reset-all')
+  @ApiOperation({ summary: 'Emergency: Reset all passwords to admin123' })
+  async emergencyResetAll() {
+    const hashedPassword = await bcrypt.hash('admin123', 10);
+    await this.db.update(employees).set({ password: hashedPassword, updated_at: new Date() });
+    return { message: 'All - ALL - passwords reset to admin123' };
+  }
 
   @UseGuards(JwtAuthGuard)
   @Post('set-password')
