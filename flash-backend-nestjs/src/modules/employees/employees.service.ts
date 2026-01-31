@@ -440,27 +440,61 @@ export class EmployeesService {
   }
 
   async getKpis(query: EmployeeQueryDto) {
-    const { employees, total } = await this.findAll({
-      ...query,
-      with_total: true,
-    });
+    const { search, status, unit, rank, served_in, deployed_at, fss_no, full_name, cnic } = query;
+
+    const filters: SQL[] = [];
+
+    if (status) filters.push(eq(schema.employees.status, status));
+    if (unit) filters.push(eq(schema.employees.unit, unit));
+    if (rank) filters.push(eq(schema.employees.rank, rank));
+    if (served_in) filters.push(eq(schema.employees.served_in, served_in));
+    if (deployed_at)
+      filters.push(eq(schema.employees.deployed_at, deployed_at));
+    
+    if (fss_no) filters.push(ilike(schema.employees.fss_no, `%${fss_no}%`));
+    if (full_name) filters.push(ilike(schema.employees.full_name, `%${full_name}%`));
+    if (cnic) filters.push(or(
+        ilike(schema.employees.cnic, `%${cnic}%`),
+        ilike(schema.employees.cnic_no, `%${cnic}%`)
+    ) as SQL);
+
+    if (search) {
+      filters.push(
+        or(
+          ilike(schema.employees.full_name, `%${search}%`),
+          ilike(schema.employees.employee_id, `%${search}%`),
+          ilike(schema.employees.cnic, `%${search}%`),
+          ilike(schema.employees.cnic_no, `%${search}%`),
+          ilike(schema.employees.fss_no, `%${search}%`),
+        ),
+      );
+    }
+
+    const finalFilter = filters.length > 0 ? and(...filters) : undefined;
+
+    // Get total count and status counts using grouping
+    const statusResults = await (this.db
+      .select({ 
+        status: schema.employees.status, 
+        count: sql<number>`count(*)` 
+      })
+      .from(schema.employees)
+      .where(finalFilter)
+      .groupBy(schema.employees.status) as any);
 
     const statusCounts: Record<string, number> = {};
-    const departmentCounts: Record<string, number> = {};
-
-    employees.forEach((emp) => {
-      const status = emp.status || 'unknown';
-      statusCounts[status] = (statusCounts[status] || 0) + 1;
-      if (emp.department) {
-        departmentCounts[emp.department] =
-          (departmentCounts[emp.department] || 0) + 1;
-      }
+    let total = 0;
+    
+    statusResults.forEach((r: any) => {
+      const s = r.status || 'unknown';
+      const count = Number(r.count);
+      statusCounts[s] = count;
+      total += count;
     });
 
     return {
       total,
       by_status: statusCounts,
-      by_department: departmentCounts,
     };
   }
 
@@ -795,5 +829,11 @@ export class EmployeesService {
     }
 
     return { success: true, oldId: oldIdString, newId: newIdString };
+  }
+
+  async activateAllEmployees() {
+    return this.db
+      .update(schema.employees)
+      .set({ status: 'Active' });
   }
 }

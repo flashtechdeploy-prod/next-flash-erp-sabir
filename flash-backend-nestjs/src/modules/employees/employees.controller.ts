@@ -103,6 +103,13 @@ export class EmployeesController {
     return { status: 'ok' };
   }
 
+  @Post('activate-all')
+  @ApiOperation({ summary: 'Set all employees to Active status' })
+  @Public()
+  async activateAll() {
+    return this.employeesService.activateAllEmployees();
+  }
+
   @Put('bulk-delete')
   @ApiOperation({ summary: 'Bulk delete employees' })
   async bulkDelete(@Body() body: { employee_ids: string[] }) {

@@ -14,6 +14,10 @@ import {
   Tag,
   Form,
   InputNumber,
+  Row,
+  Col,
+  Card,
+  Statistic,
   Dropdown,
   Menu,
   MenuProps,
@@ -28,6 +32,9 @@ import {
   InboxOutlined,
   DownOutlined,
   LockOutlined,
+  TeamOutlined,
+  CheckCircleOutlined,
+  StopOutlined,
 } from '@ant-design/icons';
 import { employeeApi, generalInventoryApi, restrictedInventoryApi, authApi } from '@/lib/api';
 import EmployeeForm from './EmployeeForm';
@@ -73,6 +80,10 @@ export default function EmployeesPage() {
     enrolled_as: '',
     date_of_enrolment: '',
     served_in: '',
+  });
+  const [kpis, setKpis] = useState<{ total: number; by_status: Record<string, number> }>({
+    total: 0,
+    by_status: {},
   });
 
   // Inventory assignment state
@@ -128,8 +139,24 @@ export default function EmployeesPage() {
     }));
   };
 
+  const fetchKpis = async () => {
+    const params: Record<string, string> = {};
+    if (filters.search) params.search = filters.search;
+    if (filters.status) params.status = filters.status;
+    if (filters.fss_no) params.fss_no = filters.fss_no;
+    if (filters.full_name) params.full_name = filters.full_name;
+    if (filters.cnic) params.cnic = filters.cnic;
+    if (filters.served_in) params.served_in = filters.served_in;
+
+    const response = await employeeApi.getKpis(params);
+    if (!response.error && response.data) {
+      setKpis(response.data as any);
+    }
+  };
+
   useEffect(() => {
     fetchEmployees();
+    fetchKpis();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters.search, filters.status, filters.fss_no, filters.full_name, filters.cnic, filters.father_name, filters.date_of_birth, filters.mobile_number, filters.department, filters.designation, filters.enrolled_as, filters.date_of_enrolment, filters.served_in]);
 
@@ -598,6 +625,38 @@ export default function EmployeesPage() {
           Add Employee
         </Button>
       </div>
+
+      <Row gutter={[16, 16]} className="mb-6">
+        <Col xs={24} sm={8}>
+          <Card bordered={false} className="shadow-sm">
+            <Statistic
+              title="Total Employees"
+              value={kpis.total}
+              prefix={<TeamOutlined className="text-blue-500" />}
+            />
+          </Card>
+        </Col>
+        <Col xs={24} sm={8}>
+          <Card bordered={false} className="shadow-sm">
+            <Statistic
+              title="Active Employees"
+              value={kpis.by_status['Active'] || 0}
+              valueStyle={{ color: '#3f8600' }}
+              prefix={<CheckCircleOutlined />}
+            />
+          </Card>
+        </Col>
+        <Col xs={24} sm={8}>
+          <Card bordered={false} className="shadow-sm">
+            <Statistic
+              title="Inactive/Suspended"
+              value={(kpis.by_status['Inactive'] || 0) + (kpis.by_status['Suspended'] || 0)}
+              valueStyle={{ color: '#cf1322' }}
+              prefix={<StopOutlined />}
+            />
+          </Card>
+        </Col>
+      </Row>
 
       <div className="mb-4 flex gap-4">
         <Search

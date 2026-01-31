@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Alert, Image, TextInput, ActivityIndicator, Platform, ScrollView, TouchableOpacity, Linking, SafeAreaView, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, Alert, Image, TextInput, ActivityIndicator, Platform, ScrollView, TouchableOpacity, Linking, StatusBar } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -15,6 +16,7 @@ export default function DashboardScreen() {
   const [location, setLocation] = useState<any>(null);
   const [image, setImage] = useState<string | null>(null);
   const [note, setNote] = useState('');
+  const [initialLocation, setInitialLocation] = useState<any>(null);
 
   const [leaveType, setLeaveType] = useState('casual');
   const [submitting, setSubmitting] = useState(false);
@@ -172,12 +174,41 @@ export default function DashboardScreen() {
     let result = await ImagePicker.launchCameraAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.5 });
     if (!result.canceled && result.assets && result.assets.length > 0) {
       setImage(result.assets[0].uri);
+
+      // Capture initial location immediately after taking selfie
+      try {
+        let { status: locStatus } = await Location.requestForegroundPermissionsAsync();
+        if (locStatus === 'granted') {
+          let loc = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.High,
+          });
+          setInitialLocation(loc.coords);
+          console.log("Initial location captured:", loc.coords);
+        }
+      } catch (e) {
+        console.warn("Failed to capture initial location:", e);
+      }
     }
   };
 
   const selectStatus = (attendanceStatus: string) => {
     if (todayStatus) return;
     setStatus(attendanceStatus);
+  };
+
+  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371e3; // metres
+    const φ1 = lat1 * Math.PI / 180;
+    const φ2 = lat2 * Math.PI / 180;
+    const Δφ = (lat2 - lat1) * Math.PI / 180;
+    const Δλ = (lon2 - lon1) * Math.PI / 180;
+
+    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+      Math.cos(φ1) * Math.cos(φ2) *
+      Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    return R * c; // in metres
   };
 
   const handleManualSubmit = async () => {
@@ -197,7 +228,33 @@ export default function DashboardScreen() {
       setSubmitting(false);
       return;
     }
-    let loc = await Location.getCurrentPositionAsync({});
+    let loc = await Location.getCurrentPositionAsync({
+      accuracy: Location.Accuracy.High,
+    });
+
+    // Security check: verify location hasn't changed too much
+    if (initialLocation) {
+      const distance = calculateDistance(
+        initialLocation.latitude,
+        initialLocation.longitude,
+        loc.coords.latitude,
+        loc.coords.longitude
+      );
+
+      console.log(`Location verification: distance moved = ${distance.toFixed(2)}m`);
+
+      if (distance > 100) {
+        setSubmitting(false);
+        Alert.alert(
+          'Security Warning',
+          'You have moved too far since taking the selfie. Please take a fresh selfie at your current location to continue.'
+        );
+        setImage(null);
+        setInitialLocation(null);
+        return;
+      }
+    }
+
     setLocation(loc.coords);
     await submitAttendance(status, loc.coords, image);
   };
@@ -448,10 +505,6 @@ export default function DashboardScreen() {
             <Text style={styles.historyMainTitle}>Timeline History</Text>
             <Text style={styles.historySubtitle}>View logs and attendance trends</Text>
           </View>
-          <TouchableOpacity style={styles.historyCloseBtn}>
-            <Ionicons name="close-circle" size={18} color="#2563eb" />
-            <Text style={styles.historyCloseText}>Close</Text>
-          </TouchableOpacity>
         </View>
 
         <View style={styles.premiumCalendarCard}>
@@ -649,8 +702,6 @@ const styles = StyleSheet.create({
   historySectionLabel: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
   historyMainTitle: { fontSize: 18, fontWeight: '800', color: '#1e293b' },
   historySubtitle: { fontSize: 13, color: '#94a3b8', fontWeight: '500' },
-  historyCloseBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#eff6ff', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12, gap: 6 },
-  historyCloseText: { fontSize: 14, fontWeight: '700', color: '#2563eb' },
 
   // Premium Calendar Card
   premiumCalendarCard: { backgroundColor: '#fff', borderRadius: 32, padding: 20, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 20, elevation: 4, marginBottom: 24, borderWidth: 1, borderColor: '#f8fafc' },
