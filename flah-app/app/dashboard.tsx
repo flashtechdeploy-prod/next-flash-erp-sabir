@@ -266,11 +266,13 @@ export default function DashboardScreen() {
       const formData = new FormData();
       formData.append('status', attendanceStatus);
       formData.append('location', JSON.stringify(coords));
+      if (initialLocation) {
+        formData.append('initial_location', JSON.stringify(initialLocation));
+      }
       formData.append('note', note);
       if (attendanceStatus === 'leave') {
         formData.append('leave_type', leaveType);
       }
-
 
       const fileUri = imageUri.startsWith('file://') ? imageUri : `file://${imageUri}`;
       const fileName = fileUri.split('/').pop() || 'selfie.jpg';
@@ -418,10 +420,34 @@ export default function DashboardScreen() {
                 </View>
               </View>
 
-              <View style={styles.gpsBadge}>
-                <Ionicons name="location" size={12} color="#475569" />
-                <Text style={styles.gpsBadgeText}>GPS Verification Secured</Text>
+              <View style={[styles.gpsBadge, { flexDirection: 'column', height: 'auto', paddingVertical: 8 }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4 }}>
+                  <Ionicons name="location" size={12} color="#475569" />
+                  <Text style={styles.gpsBadgeText}>GPS Verification Secured</Text>
+                </View>
+
+                {todayStatus.initial_location && (
+                  <Text style={{ fontSize: 10, color: '#64748b' }}>
+                    Captured: {JSON.parse(todayStatus.initial_location).latitude.toFixed(6)}, {JSON.parse(todayStatus.initial_location).longitude.toFixed(6)}
+                  </Text>
+                )}
+
+                {todayStatus.location && (
+                  <Text style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>
+                    Final: {JSON.parse(todayStatus.location).latitude.toFixed(6)}, {JSON.parse(todayStatus.location).longitude.toFixed(6)}
+                  </Text>
+                )}
               </View>
+            </View>
+          ) : selectedDate !== todayStr ? (
+            <View style={[styles.capturedView, { paddingVertical: 40 }]}>
+              <View style={[styles.capturedIconCircle, { backgroundColor: '#94a3b8' }]}>
+                <Ionicons name="calendar-outline" size={40} color="#fff" />
+              </View>
+              <Text style={styles.capturedTitle}>Past Date Viewing</Text>
+              <Text style={{ color: '#64748b', textAlign: 'center', marginTop: 8 }}>
+                Attendance can only be marked for the current date ({todayStr}).
+              </Text>
             </View>
           ) : (
             <View style={styles.attendanceForm}>
@@ -480,6 +506,20 @@ export default function DashboardScreen() {
                 onChangeText={setNote}
                 placeholderTextColor="#94a3b8"
               />
+
+              {initialLocation && (
+                <View style={styles.locationDisplayRow}>
+                  <Ionicons name="camera-outline" size={16} color="#2563eb" />
+                  <Text style={styles.locationDisplayText}>Capture Location: {initialLocation.latitude.toFixed(6)}, {initialLocation.longitude.toFixed(6)}</Text>
+                </View>
+              )}
+
+              {submitting && (
+                <View style={[styles.locationDisplayRow, { marginTop: 4 }]}>
+                  <Ionicons name="send-outline" size={16} color="#10b981" />
+                  <Text style={styles.locationDisplayText}>Finalizing Submission Location...</Text>
+                </View>
+              )}
 
               <TouchableOpacity
                 style={[styles.confirmBtn, (!image || !status || submitting) && styles.confirmBtnDisabled]}
@@ -615,13 +655,30 @@ export default function DashboardScreen() {
                     />
                   )}
                   {item.location && (
-                    <TouchableOpacity
-                      onPress={() => Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${JSON.parse(item.location).latitude},${JSON.parse(item.location).longitude}`)}
-                      style={styles.dayLocationLink}
-                    >
-                      <Ionicons name="location-outline" size={14} color="#2563eb" />
-                      <Text style={styles.dayLocationText}>View Mapping</Text>
-                    </TouchableOpacity>
+                    <View style={{ marginTop: 8 }}>
+                      <TouchableOpacity
+                        onPress={() => Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${JSON.parse(item.location).latitude},${JSON.parse(item.location).longitude}`)}
+                        style={styles.dayLocationLink}
+                      >
+                        <Ionicons name="location-outline" size={14} color="#2563eb" />
+                        <Text style={styles.dayLocationText}>
+                          Submission Location: {JSON.parse(item.location).latitude.toFixed(6)}, {JSON.parse(item.location).longitude.toFixed(6)}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                  {item.initial_location && (
+                    <View style={{ marginTop: 4 }}>
+                      <TouchableOpacity
+                        onPress={() => Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${JSON.parse(item.initial_location).latitude},${JSON.parse(item.initial_location).longitude}`)}
+                        style={styles.dayLocationLink}
+                      >
+                        <Ionicons name="camera-outline" size={14} color="#64748b" />
+                        <Text style={[styles.dayLocationText, { color: '#64748b' }]}>
+                          Selfie Location: {JSON.parse(item.initial_location).latitude.toFixed(6)}, {JSON.parse(item.initial_location).longitude.toFixed(6)}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
                   )}
                 </View>
               );
@@ -742,5 +799,7 @@ const styles = StyleSheet.create({
   assignmentDetails: { gap: 6 },
   detailRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   detailText: { fontSize: 13, color: '#64748b', fontWeight: '500' },
+  locationDisplayRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12, backgroundColor: '#f0f7ff', padding: 8, borderRadius: 8 },
+  locationDisplayText: { fontSize: 12, fontWeight: '600', color: '#1e40af' },
   bottomSpacer: { height: 40 },
 });

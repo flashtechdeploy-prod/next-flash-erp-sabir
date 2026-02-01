@@ -53,8 +53,8 @@ export default function LoginScreen() {
       } else {
         Alert.alert('Login Failed', data.message || 'Invalid credentials');
       }
-    } catch (e) {
-      Alert.alert('Error', 'Could not connect to server');
+    } catch (e: any) {
+      Alert.alert('Error', `Could not connect to server: ${e.message || 'Unknown error'}`);
     } finally {
       setLoading(false);
     }

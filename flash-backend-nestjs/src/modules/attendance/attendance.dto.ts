@@ -25,6 +25,11 @@ export class AttendanceRecordDto {
   @IsString()
   location?: string;
 
+  @ApiPropertyOptional({ description: 'GPS location captured at selfie time (lat,lng JSON)' })
+  @IsOptional()
+  @IsString()
+  initial_location?: string;
+
   @ApiPropertyOptional({ description: 'Selfie or picture URL' })
   @IsOptional()
   @IsString()
@@ -82,6 +87,11 @@ export class MarkSelfAttendanceDto {
   @IsOptional()
   @IsString()
   location?: string;
+
+  @ApiPropertyOptional({ description: 'GPS location captured at selfie time (lat,lng JSON)' })
+  @IsOptional()
+  @IsString()
+  initial_location?: string;
 
   @ApiPropertyOptional({ 
     description: 'Type of leave (required if status is leave)',

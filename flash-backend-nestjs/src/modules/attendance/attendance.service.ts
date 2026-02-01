@@ -16,6 +16,7 @@ interface AttendanceRecord {
   leave_type?: string | null;
   fine_amount?: number | null;
   location?: string | null;
+  initial_location?: string | null;
   picture?: string | null;
 }
 
@@ -45,6 +46,7 @@ export class AttendanceService {
           leave_type: schema.attendance.leave_type,
           fine_amount: schema.attendance.fine_amount,
           location: schema.attendance.location,
+          initial_location: schema.attendance.initial_location,
           picture: schema.attendance.picture,
           created_at: schema.attendance.created_at,
         })
@@ -158,6 +160,7 @@ export class AttendanceService {
           leave_type: record.leave_type || null,
           fine_amount: record.fine_amount || null,
           location: record.location || null,
+          initial_location: record.initial_location || null,
           picture: record.picture || null,
         };
 
@@ -397,10 +400,13 @@ export class AttendanceService {
         leave_type: record.leave_type || null,
         fine_amount: record.fine_amount || null,
         location: record.location || null,
+        initial_location: record.initial_location || null,
         picture: pictureUrl || null,
         created_at: new Date(),
         updated_at: new Date(),
       };
+
+      console.log('Final data object for DB (upsert):', JSON.stringify(data, null, 2));
 
       if (existing) {
         // Update existing record
@@ -441,6 +447,7 @@ export class AttendanceService {
         status: schema.attendance.status,
         note: schema.attendance.note,
         location: schema.attendance.location,
+        initial_location: schema.attendance.initial_location,
         picture: schema.attendance.picture,
         created_at: schema.attendance.created_at,
       })
@@ -502,6 +509,7 @@ export class AttendanceService {
         status: schema.attendance.status,
         note: schema.attendance.note,
         location: schema.attendance.location,
+        initial_location: schema.attendance.initial_location,
         picture: schema.attendance.picture,
         created_at: schema.attendance.created_at,
       })
@@ -531,6 +539,7 @@ export class AttendanceService {
           fine_amount: schema.attendance.fine_amount,
           leave_type: schema.attendance.leave_type,
           location: schema.attendance.location,
+          initial_location: schema.attendance.initial_location,
           picture: schema.attendance.picture,
           date: sql<string>`${date}`,
         })

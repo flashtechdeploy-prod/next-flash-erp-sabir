@@ -90,8 +90,11 @@ export class AttendanceController {
       status: body.status,
       note: body.note,
       location: body.location,
+      initial_location: body.initial_location,
       leave_type: body.leave_type,
     };
+
+    console.log('Processed Record for markSelf:', JSON.stringify(record, null, 2));
 
     // Use the employee ID from the JWT payload
     const employeeId = user.sub;

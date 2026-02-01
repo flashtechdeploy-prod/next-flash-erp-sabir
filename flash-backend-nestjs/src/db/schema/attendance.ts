@@ -23,6 +23,7 @@ export const attendance = pgTable('attendance', {
   leave_type: text('leave_type'),
   fine_amount: real('fine_amount'),
   location: text('location'), // JSON string: {lat, lng} (optional)
+  initial_location: text('initial_location'), // JSON string: {lat, lng} captured at selfie time
   picture: text('picture'), // URL or file path (optional)
   created_at: timestamp('created_at').defaultNow(),
   updated_at: timestamp('updated_at').defaultNow(),
