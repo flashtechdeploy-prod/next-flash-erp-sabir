@@ -29,13 +29,13 @@ export default function DashboardScreen() {
   const [fssNo, setFssNo] = useState<string | null>(null);
   const [assignment, setAssignment] = useState<any>(null);
   const [markedDates, setMarkedDates] = useState<any>({});
-  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
-  const [selectedDayHistory, setSelectedDayHistory] = useState<any[]>([]);
-  const [calendarMonth, setCalendarMonth] = useState<string>(new Date().toISOString().split('T')[0]);
-  const router = useRouter();
-
   const today = new Date();
   const todayStr = today.toLocaleDateString('en-CA');
+
+  const [selectedDate, setSelectedDate] = useState<string>(todayStr);
+  const [selectedDayHistory, setSelectedDayHistory] = useState<any[]>([]);
+  const [calendarMonth, setCalendarMonth] = useState<string>(todayStr);
+  const router = useRouter();
 
   const goToPrevMonth = () => {
     const current = new Date(calendarMonth);
