@@ -3,6 +3,7 @@
 import { attendanceApi, commonApi } from '@/lib/api';
 import {
   CalendarOutlined,
+  CameraOutlined,
   CheckCircleOutlined,
   ClockCircleOutlined,
   CloseCircleOutlined,
@@ -58,6 +59,7 @@ interface AttendanceRecord {
   is_long_leave?: boolean;
   picture?: string;
   location?: string;
+  initial_location?: string;
 }
 
 export default function AttendancePage() {
@@ -74,6 +76,7 @@ export default function AttendancePage() {
   const [employeeHistory, setEmployeeHistory] = useState<AttendanceRecord[]>([]);
   const [selectedEmployee, setSelectedEmployee] = useState<{ id: string; name: string } | null>(null);
   const [searchText, setSearchText] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string | null>(null);
 
   const fetchFullSheet = async (date: Dayjs) => {
     setLoading(true);
@@ -317,24 +320,36 @@ export default function AttendancePage() {
       },
     },
     {
-      title: 'Loc',
-      key: 'location_map',
-      width: 50,
+      title: 'GPS',
+      key: 'locations',
+      width: 100,
       align: 'center' as const,
-      render: (_: unknown, record: AttendanceRecord) => {
-        if (!record.location) return '-';
-        return (
-          <Tooltip title="View GPS Location">
-            <EnvironmentOutlined
-              style={{ color: '#1890ff', fontSize: 16, cursor: 'pointer' }}
-              onClick={() => {
-                const loc = JSON.parse(record.location!);
-                window.open(`https://www.google.com/maps/search/?api=1&query=${loc.latitude},${loc.longitude}`, '_blank');
-              }}
-            />
-          </Tooltip>
-        );
-      },
+      render: (_: unknown, record: AttendanceRecord) => (
+        <Space size="middle">
+          {record.initial_location ? (
+            <Tooltip title="Selfie Capture Location">
+              <CameraOutlined
+                style={{ color: '#64748b', fontSize: 16, cursor: 'pointer' }}
+                onClick={() => {
+                  const loc = JSON.parse(record.initial_location!);
+                  window.open(`https://www.google.com/maps/search/?api=1&query=${loc.latitude},${loc.longitude}`, '_blank');
+                }}
+              />
+            </Tooltip>
+          ) : '-'}
+          {record.location ? (
+            <Tooltip title="Final Submission Location">
+              <EnvironmentOutlined
+                style={{ color: '#1890ff', fontSize: 16, cursor: 'pointer' }}
+                onClick={() => {
+                  const loc = JSON.parse(record.location!);
+                  window.open(`https://www.google.com/maps/search/?api=1&query=${loc.latitude},${loc.longitude}`, '_blank');
+                }}
+              />
+            </Tooltip>
+          ) : '-'}
+        </Space>
+      ),
     },
     {
       title: 'Status: P',
@@ -627,15 +642,32 @@ export default function AttendancePage() {
         </Col>
       </Row>
 
-      <div className="flex justify-between items-center mb-6">
-        <Input.Search
-          placeholder="Quick search: Name, FSS No, or Remarks..."
-          allowClear
-          size="large"
-          className="search-input-modern"
-          onChange={(e) => setSearchText(e.target.value)}
-          style={{ maxWidth: 500 }}
-        />
+      <div className="flex justify-between items-center mb-6 gap-4">
+        <div className="flex items-center gap-4 flex-1">
+          <Input.Search
+            placeholder="Quick search: Name, FSS No, or Remarks..."
+            allowClear
+            size="large"
+            className="search-input-modern"
+            onChange={(e) => setSearchText(e.target.value)}
+            style={{ maxWidth: 500 }}
+          />
+          <Select
+            placeholder="Filter by Status"
+            allowClear
+            size="large"
+            style={{ width: 180 }}
+            className="status-filter-modern"
+            onChange={(val) => setStatusFilter(val)}
+            options={[
+              { label: 'Present', value: 'present' },
+              { label: 'Late', value: 'late' },
+              { label: 'Absent', value: 'absent' },
+              { label: 'Leave', value: 'leave' },
+              { label: 'Unmarked', value: 'unmarked' },
+            ]}
+          />
+        </div>
         <Space>
           <Button
             icon={<ReloadOutlined />}
@@ -652,13 +684,18 @@ export default function AttendancePage() {
         <Table
           columns={columns}
           dataSource={attendance.filter(record => {
-            if (!searchText) return true;
+            // Text search
             const searchLower = searchText.toLowerCase();
-            return (
+            const matchesSearch = !searchText || (
               (record.fss_id || '').toString().toLowerCase().includes(searchLower) ||
               (record.employee_name || '').toLowerCase().includes(searchLower) ||
               (record.note || '').toLowerCase().includes(searchLower)
             );
+
+            // Status filter
+            const matchesStatus = !statusFilter || record.status === statusFilter;
+
+            return matchesSearch && matchesStatus;
           })}
           rowKey="employee_id"
           loading={loading}
@@ -855,6 +892,38 @@ export default function AttendancePage() {
               dataIndex: 'note',
               key: 'note',
               ellipsis: true,
+            },
+            {
+              title: 'GPS',
+              key: 'locations',
+              width: 80,
+              align: 'center' as const,
+              render: (_: unknown, record: AttendanceRecord) => (
+                <Space size="small">
+                  {record.initial_location ? (
+                    <Tooltip title="Selfie Capture">
+                      <CameraOutlined
+                        style={{ color: '#64748b', fontSize: 14, cursor: 'pointer' }}
+                        onClick={() => {
+                          const loc = JSON.parse(record.initial_location!);
+                          window.open(`https://www.google.com/maps/search/?api=1&query=${loc.latitude},${loc.longitude}`, '_blank');
+                        }}
+                      />
+                    </Tooltip>
+                  ) : '-'}
+                  {record.location ? (
+                    <Tooltip title="Submission">
+                      <EnvironmentOutlined
+                        style={{ color: '#1890ff', fontSize: 14, cursor: 'pointer' }}
+                        onClick={() => {
+                          const loc = JSON.parse(record.location!);
+                          window.open(`https://www.google.com/maps/search/?api=1&query=${loc.latitude},${loc.longitude}`, '_blank');
+                        }}
+                      />
+                    </Tooltip>
+                  ) : '-'}
+                </Space>
+              ),
             },
           ]}
           dataSource={employeeHistory}
