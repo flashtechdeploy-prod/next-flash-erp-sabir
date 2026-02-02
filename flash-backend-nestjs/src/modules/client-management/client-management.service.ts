@@ -461,24 +461,12 @@ export class ClientManagementService {
         .from(schema.employees);
       
       const activeEmployees = allEmployees.filter(emp => 
-        emp.status?.toLowerCase() === 'active'
+        emp.status?.toLowerCase() === 'active' 
       );
 
-      const assignedGuards = await this.db
-        .select()
-        .from(schema.site_guard_assignments)
-        .where(eq(schema.site_guard_assignments.status, 'active'));
-
-      const assignedEmployeeIds = new Set(
-        assignedGuards.map((a) => a.employee_id),
-      );
-
-      // Filter out assigned guards
-      const available = activeEmployees.filter(
-        (emp) => !assignedEmployeeIds.has(emp.employee_id),
-      );
-
-      return { guards: available };
+      // Return all active employees, regardless of assignment status
+      // This allows assigning guards to multiple sites/shifts
+      return { guards: activeEmployees };
     } catch (error) {
       this.logger.error('Failed to get available guards:', error);
       throw error;
