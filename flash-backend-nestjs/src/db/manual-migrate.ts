@@ -21,6 +21,17 @@ async function migrate() {
       `ALTER TABLE vehicle_assignments ADD COLUMN IF NOT EXISTS to_date TEXT;`,
       `ALTER TABLE vehicle_assignments ADD COLUMN IF NOT EXISTS location TEXT;`,
       `ALTER TABLE vehicle_assignments ADD COLUMN IF NOT EXISTS purpose TEXT;`,
+      `CREATE TABLE IF NOT EXISTS vehicle_categories (
+        id SERIAL PRIMARY KEY,
+        name TEXT UNIQUE NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW()
+      );`,
+      `CREATE TABLE IF NOT EXISTS vehicle_types (
+        id SERIAL PRIMARY KEY,
+        name TEXT UNIQUE NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW()
+      );`,
+      `ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS registration_date TEXT;`,
     ];
 
     for (const query of queries) {

@@ -94,6 +94,10 @@ export default function VehicleMaintenancePage() {
   const handleAdd = () => {
     setEditingRecord(null);
     form.resetFields();
+    form.setFieldsValue({
+      maintenance_date: dayjs(),
+      maintenance_type: 'service'
+    });
     setDrawerVisible(true);
   };
 
@@ -153,7 +157,27 @@ export default function VehicleMaintenancePage() {
 
   const columns = [
     { title: 'Date', dataIndex: 'maintenance_date', key: 'maintenance_date', width: 110, render: (d: string) => <span style={{ fontSize: '11px' }}>{dayjs(d).format('DD MMM YYYY')}</span> },
-    { title: 'Vehicle', dataIndex: 'vehicle_id', key: 'vehicle_id', width: 120, render: (t: string) => <span style={{ fontSize: '11px', fontWeight: 600 }}>{t}</span> },
+    {
+      title: 'Vehicle',
+      dataIndex: 'vehicle_id',
+      key: 'vehicle_id',
+      width: 150,
+      render: (id: string, record: any) => (
+        <div style={{ fontSize: '11px' }}>
+          <div style={{ fontWeight: 600 }}>{id}</div>
+          <div style={{ color: '#8c8c8c', fontSize: '10px' }}>
+            {record.make_model || ''} {record.vehicle_type ? `(${record.vehicle_type})` : ''}
+          </div>
+        </div>
+      )
+    },
+    {
+      title: 'License Plate',
+      dataIndex: 'license_plate',
+      key: 'license_plate',
+      width: 110,
+      render: (plate: string) => <Tag color="blue" style={{ fontSize: '10px' }}>{plate || 'N/A'}</Tag>
+    },
     {
       title: 'Type',
       dataIndex: 'maintenance_type',
@@ -182,10 +206,14 @@ export default function VehicleMaintenancePage() {
     },
   ];
 
-  const filteredRecords = records.filter(r =>
-    String(r.vehicle_id || '').toLowerCase().includes(searchText.toLowerCase()) ||
-    String(r.description || '').toLowerCase().includes(searchText.toLowerCase())
-  );
+  const filteredRecords = records.filter(r => {
+    const search = searchText.toLowerCase();
+    return String(r.vehicle_id || '').toLowerCase().includes(search) ||
+      String(r.description || '').toLowerCase().includes(search) ||
+      String(r.make_model || '').toLowerCase().includes(search) ||
+      String(r.license_plate || '').toLowerCase().includes(search) ||
+      String(r.vendor || '').toLowerCase().includes(search);
+  });
 
   const totalCost = filteredRecords.reduce((sum, r) => sum + Number(r.cost || 0), 0);
   const serviceCount = filteredRecords.filter(r => r.maintenance_type === 'service').length;
@@ -232,13 +260,13 @@ export default function VehicleMaintenancePage() {
             <Select
               showSearch
               placeholder="Select vehicle"
-              optionFilterProp="children"
+              optionFilterProp="label"
               filterOption={(input, option) =>
-                (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                (String(option?.label) ?? '').toLowerCase().includes(input.toLowerCase())
               }
               options={vehicles && vehicles.length > 0 ? vehicles.map((v) => ({
                 value: v.vehicle_id,
-                label: `${v.vehicle_id || 'N/A'} - ${v.make_model || ''}`
+                label: `${v.vehicle_id || 'N/A'} | ${v.make_model || ''} ${v.license_plate ? `(${v.license_plate})` : ''}`
               })) : []}
               notFoundContent={!vehicles || vehicles.length === 0 ? <span style={{ color: '#999' }}>No vehicles available</span> : null}
             />

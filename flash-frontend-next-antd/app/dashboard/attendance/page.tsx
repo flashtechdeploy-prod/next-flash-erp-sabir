@@ -17,10 +17,12 @@ import {
   UserOutlined
 } from '@ant-design/icons';
 import {
+  Badge,
   Button,
   Card,
   Checkbox,
   Col,
+  Collapse,
   DatePicker,
   Drawer,
   Form,
@@ -43,6 +45,27 @@ import { useEffect, useState } from 'react';
 
 const { TextArea } = Input;
 
+const parseGPS = (locStr: string | null | undefined) => {
+  if (!locStr || locStr === 'null') return null;
+  try {
+    const trimmed = locStr.trim();
+    if (trimmed.startsWith('{')) {
+      const loc = JSON.parse(trimmed);
+      const lat = loc.latitude ?? loc.lat;
+      const lng = loc.longitude ?? loc.lng;
+      if (lat !== undefined && lng !== undefined) return { lat: parseFloat(lat), lng: parseFloat(lng) };
+    }
+    // Attempt to match numbers (including negative and decimals)
+    const nums = trimmed.match(/-?\d+\.\d+|-?\d+/g);
+    if (nums && nums.length >= 2) {
+      return { lat: parseFloat(nums[0]), lng: parseFloat(nums[1]) };
+    }
+  } catch (e) {
+    console.warn('GPS Parse Error:', e);
+  }
+  return null;
+};
+
 interface AttendanceRecord {
   id?: number;
   employee_id: string;
@@ -60,6 +83,20 @@ interface AttendanceRecord {
   picture?: string;
   location?: string;
   initial_location?: string;
+  check_in?: string;
+  check_in_date?: string;
+  check_out?: string;
+  check_out_date?: string;
+  check_out_picture?: string;
+  check_out_location?: string;
+  overtime_in?: string;
+  overtime_in_date?: string;
+  overtime_in_picture?: string;
+  overtime_in_location?: string;
+  overtime_out?: string;
+  overtime_out_date?: string;
+  overtime_out_picture?: string;
+  overtime_out_location?: string;
 }
 
 export default function AttendancePage() {
@@ -93,7 +130,8 @@ export default function AttendancePage() {
     }
 
     const data = response.data as AttendanceRecord[];
-    console.log(`Loaded ${data.length} employees instantly.`);
+    console.log(`[fetchFullSheet] Loaded ${data.length} employees.`);
+    console.log(`[fetchFullSheet] Samples with status:`, data.filter(r => r.status && r.status !== 'unmarked').slice(0, 5).map(r => ({ id: r.employee_id, status: r.status, check_in: r.check_in })));
     setAttendance(data);
 
     // Map minimal employee data for local filtering/lookups if needed
@@ -155,6 +193,21 @@ export default function AttendancePage() {
         leave_type: r.leave_type,
         location: r.location,
         picture: r.picture,
+        check_in: r.check_in,
+        check_in_date: r.check_in_date,
+        initial_location: r.initial_location,
+        check_out: r.check_out,
+        check_out_date: r.check_out_date,
+        check_out_picture: r.check_out_picture,
+        check_out_location: r.check_out_location,
+        overtime_in: r.overtime_in,
+        overtime_in_date: r.overtime_in_date,
+        overtime_in_picture: r.overtime_in_picture,
+        overtime_in_location: r.overtime_in_location,
+        overtime_out: r.overtime_out,
+        overtime_out_date: r.overtime_out_date,
+        overtime_out_picture: r.overtime_out_picture,
+        overtime_out_location: r.overtime_out_location,
       }));
 
     const response = await attendanceApi.bulkUpsert(dateStr, recordsToSave);
@@ -193,6 +246,59 @@ export default function AttendancePage() {
     setEmployeeHistory((response.data as AttendanceRecord[]) || []);
   };
 
+  // Calculate total working hours from check_in and check_out times
+  const calculateWorkingHours = () => {
+    let totalMinutes = 0;
+    attendance.forEach(r => {
+      if (r.check_in && r.check_out) {
+        try {
+          const checkInDate = r.check_in_date || dayjs().format('YYYY-MM-DD');
+          const checkOutDate = r.check_out_date || checkInDate;
+          const checkIn = dayjs(`${checkInDate}T${r.check_in}`);
+          const checkOut = dayjs(`${checkOutDate}T${r.check_out}`);
+          if (checkIn.isValid() && checkOut.isValid()) {
+            const diff = checkOut.diff(checkIn, 'minute');
+            if (diff > 0) totalMinutes += diff;
+          }
+        } catch (e) { /* ignore parsing errors */ }
+      }
+    });
+    return totalMinutes;
+  };
+
+  // Calculate total overtime hours from overtime_in and overtime_out or overtime_minutes
+  const calculateOvertimeHours = () => {
+    let totalMinutes = 0;
+    attendance.forEach(r => {
+      // First check if overtime_in and overtime_out are set
+      if (r.overtime_in && r.overtime_out) {
+        try {
+          const otInDate = r.overtime_in_date || dayjs().format('YYYY-MM-DD');
+          const otOutDate = r.overtime_out_date || otInDate;
+          const otIn = dayjs(`${otInDate}T${r.overtime_in}`);
+          const otOut = dayjs(`${otOutDate}T${r.overtime_out}`);
+          if (otIn.isValid() && otOut.isValid()) {
+            const diff = otOut.diff(otIn, 'minute');
+            if (diff > 0) totalMinutes += diff;
+          }
+        } catch (e) { /* ignore parsing errors */ }
+      } else if (r.overtime_minutes && r.overtime_minutes > 0) {
+        // Fall back to overtime_minutes if times not set
+        totalMinutes += r.overtime_minutes;
+      }
+    });
+    return totalMinutes;
+  };
+
+  const totalWorkingMinutes = calculateWorkingHours();
+  const totalOvertimeMinutes = calculateOvertimeHours();
+
+  const formatHoursMinutes = (minutes: number) => {
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return `${hours}h ${mins}m`;
+  };
+
   const summary = {
     total: attendance.length,
     present: attendance.filter(r => r.status === 'present').length,
@@ -200,6 +306,8 @@ export default function AttendancePage() {
     absent: attendance.filter(r => r.status === 'absent').length,
     leave: attendance.filter(r => r.status === 'leave').length,
     unmarked: attendance.filter(r => r.status === 'unmarked').length,
+    totalWorkingHours: formatHoursMinutes(totalWorkingMinutes),
+    totalOvertimeHours: formatHoursMinutes(totalOvertimeMinutes),
   };
 
   const getStatusColor = (status: string) => {
@@ -221,6 +329,8 @@ export default function AttendancePage() {
       default: return null;
     }
   };
+
+  console.log(attendance, "attendance")
 
   const getStatusBadge = (status: string, statusType: string) => {
     const isActive = status === statusType;
@@ -292,27 +402,27 @@ export default function AttendancePage() {
       },
     },
     {
-      title: 'Selfie',
-      key: 'selfie',
+      title: 'In Pic',
+      key: 'checkin_picture',
       width: 70,
       align: 'center' as const,
       render: (_: unknown, record: AttendanceRecord) => {
         if (!record.picture) return '-';
         return (
-          <Tooltip title="View Full Selfie">
+          <Tooltip title="View Check-In Selfie">
             <div
               style={{ cursor: 'pointer' }}
               onClick={() => Modal.info({
-                title: 'Attendance Selfie',
-                content: <img src={record.picture} alt="Selfie" style={{ width: '100%', marginTop: 10 }} />,
+                title: 'Check-In Selfie',
+                content: <img src={record.picture} alt="Check-In Selfie" style={{ width: '100%', marginTop: 10 }} />,
                 width: 500,
                 maskClosable: true
               })}
             >
               <img
                 src={record.picture}
-                alt="Selfie"
-                style={{ width: 32, height: 32, borderRadius: 4, objectFit: 'cover', border: '1px solid #ddd' }}
+                alt="In"
+                style={{ width: 32, height: 32, borderRadius: 4, objectFit: 'cover', border: '2px solid #22c55e' }}
               />
             </div>
           </Tooltip>
@@ -320,36 +430,87 @@ export default function AttendancePage() {
       },
     },
     {
-      title: 'GPS',
-      key: 'locations',
-      width: 100,
-      align: 'center' as const,
+      title: 'In / Out',
+      key: 'timings',
+      width: 140,
       render: (_: unknown, record: AttendanceRecord) => (
-        <Space size="middle">
-          {record.initial_location ? (
-            <Tooltip title="Selfie Capture Location">
-              <CameraOutlined
-                style={{ color: '#64748b', fontSize: 16, cursor: 'pointer' }}
-                onClick={() => {
-                  const loc = JSON.parse(record.initial_location!);
-                  window.open(`https://www.google.com/maps/search/?api=1&query=${loc.latitude},${loc.longitude}`, '_blank');
-                }}
+        <div style={{ fontSize: '11px', lineHeight: '1.4' }}>
+          <div className="flex items-center gap-1 text-green-600 font-bold">
+            <Badge status="processing" color="green" /> In: {record.check_in || '-'}
+          </div>
+          <div className="flex items-center gap-1 text-red-500 font-bold">
+            <Badge status="default" /> Out: {record.check_out || '-'}
+          </div>
+        </div>
+      )
+    },
+    {
+      title: 'Out Pic',
+      key: 'checkout_picture',
+      width: 70,
+      align: 'center' as const,
+      render: (_: unknown, record: AttendanceRecord) => {
+        if (!record.check_out_picture) return '-';
+        return (
+          <Tooltip title="View Check-Out Selfie">
+            <div
+              style={{ cursor: 'pointer' }}
+              onClick={() => Modal.info({
+                title: 'Check-Out Selfie',
+                content: <img src={record.check_out_picture} alt="Check-Out Selfie" style={{ width: '100%', marginTop: 10 }} />,
+                width: 500,
+                maskClosable: true
+              })}
+            >
+              <img
+                src={record.check_out_picture}
+                alt="Out"
+                style={{ width: 32, height: 32, borderRadius: 4, objectFit: 'cover', border: '2px solid #ef4444' }}
               />
-            </Tooltip>
-          ) : '-'}
-          {record.location ? (
-            <Tooltip title="Final Submission Location">
-              <EnvironmentOutlined
-                style={{ color: '#1890ff', fontSize: 16, cursor: 'pointer' }}
-                onClick={() => {
-                  const loc = JSON.parse(record.location!);
-                  window.open(`https://www.google.com/maps/search/?api=1&query=${loc.latitude},${loc.longitude}`, '_blank');
-                }}
-              />
-            </Tooltip>
-          ) : '-'}
-        </Space>
-      ),
+            </div>
+          </Tooltip>
+        );
+      },
+    },
+    {
+      title: 'In GPS',
+      key: 'in_location',
+      width: 70,
+      align: 'center' as const,
+      render: (_: unknown, record: AttendanceRecord) => {
+        const coords = parseGPS(record.initial_location || record.location);
+        if (!coords) return '-';
+        return (
+          <Tooltip title={`In GPS: ${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}`}>
+            <EnvironmentOutlined
+              style={{ color: '#22c55e', fontSize: 18, cursor: 'pointer' }}
+              onClick={() => {
+                window.open(`https://www.google.com/maps/search/?api=1&query=${coords.lat},${coords.lng}`, '_blank');
+              }}
+            />
+          </Tooltip>
+        );
+      },
+    },
+    {
+      title: 'Out GPS',
+      key: 'out_location',
+      width: 70,
+      align: 'center' as const,
+      render: (_: unknown, record: AttendanceRecord) => {
+        const coords = parseGPS(record.check_out_location);
+        if (!coords) return '-';
+        return (
+          <Tooltip title={`Out GPS: ${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}`}>
+            <EnvironmentOutlined
+              style={{ color: '#ef4444', fontSize: 18, cursor: 'pointer' }}
+              onClick={() => {
+                window.open(`https://www.google.com/maps/search/?api=1&query=${coords.lat},${coords.lng}`, '_blank');
+              }}
+            />
+          </Tooltip>
+        );
+      },
     },
     {
       title: 'Status: P',
@@ -425,6 +586,117 @@ export default function AttendancePage() {
               { label: 'Emergency', value: 'emergency' },
             ]}
           />
+        );
+      },
+    },
+    {
+      title: 'OT In / Out',
+      key: 'ot_timings',
+      width: 140,
+      render: (_: unknown, record: AttendanceRecord) => (
+        <div style={{ fontSize: '11px', lineHeight: '1.4' }}>
+          <div className="flex items-center gap-1 text-orange-600 font-bold">
+            <Badge status="processing" color="orange" /> In: {record.overtime_in || '-'}
+          </div>
+          <div className="flex items-center gap-1 text-purple-500 font-bold">
+            <Badge status="default" color="purple" /> Out: {record.overtime_out || '-'}
+          </div>
+        </div>
+      )
+    },
+    {
+      title: 'OT In Pic',
+      key: 'ot_in_picture',
+      width: 70,
+      align: 'center' as const,
+      render: (_: unknown, record: AttendanceRecord) => {
+        if (!record.overtime_in_picture) return '-';
+        return (
+          <Tooltip title="View OT In Selfie">
+            <div
+              style={{ cursor: 'pointer' }}
+              onClick={() => Modal.info({
+                title: 'Overtime In Selfie',
+                content: <img src={record.overtime_in_picture} alt="OT In Selfie" style={{ width: '100%', marginTop: 10 }} />,
+                width: 500,
+                maskClosable: true
+              })}
+            >
+              <img
+                src={record.overtime_in_picture}
+                alt="OT In"
+                style={{ width: 32, height: 32, borderRadius: 4, objectFit: 'cover', border: '2px solid #f97316' }}
+              />
+            </div>
+          </Tooltip>
+        );
+      },
+    },
+    {
+      title: 'OT Out Pic',
+      key: 'ot_out_picture',
+      width: 70,
+      align: 'center' as const,
+      render: (_: unknown, record: AttendanceRecord) => {
+        if (!record.overtime_out_picture) return '-';
+        return (
+          <Tooltip title="View OT Out Selfie">
+            <div
+              style={{ cursor: 'pointer' }}
+              onClick={() => Modal.info({
+                title: 'Overtime Out Selfie',
+                content: <img src={record.overtime_out_picture} alt="OT Out Selfie" style={{ width: '100%', marginTop: 10 }} />,
+                width: 500,
+                maskClosable: true
+              })}
+            >
+              <img
+                src={record.overtime_out_picture}
+                alt="OT Out"
+                style={{ width: 32, height: 32, borderRadius: 4, objectFit: 'cover', border: '2px solid #a855f7' }}
+              />
+            </div>
+          </Tooltip>
+        );
+      },
+    },
+    {
+      title: 'OT In GPS',
+      key: 'ot_in_location',
+      width: 70,
+      align: 'center' as const,
+      render: (_: unknown, record: AttendanceRecord) => {
+        const coords = parseGPS(record.overtime_in_location);
+        if (!coords) return '-';
+        return (
+          <Tooltip title={`OT In: ${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}`}>
+            <EnvironmentOutlined
+              style={{ color: '#f97316', fontSize: 18, cursor: 'pointer' }}
+              onClick={() => {
+                window.open(`https://www.google.com/maps/search/?api=1&query=${coords.lat},${coords.lng}`, '_blank');
+              }}
+            />
+          </Tooltip>
+        );
+      },
+    },
+    {
+      title: 'OT Out GPS',
+      key: 'ot_out_location',
+      width: 70,
+      align: 'center' as const,
+      render: (_: unknown, record: AttendanceRecord) => {
+        const coords = parseGPS(record.overtime_out_location);
+        if (!coords) return '-';
+        return (
+          <Tooltip title={`OT Out: ${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}`}>
+            <EnvironmentOutlined
+              style={{ color: '#a855f7', fontSize: 18, cursor: 'pointer' }}
+              onClick={() => {
+                window.open(`https://www.google.com/maps/search/?api=1&query=${coords.lat},${coords.lng}`, '_blank');
+              }}
+            />
+          </Tooltip>
         );
       },
     },
@@ -587,7 +859,7 @@ export default function AttendancePage() {
       </div>
 
       <Row gutter={[24, 24]} className="mb-8">
-        <Col xs={12} sm={6} lg={4}>
+        <Col xs={12} sm={6} lg={3}>
           <Card className="summary-stat-card bg-white border-none shadow-sm rounded-2xl">
             <Statistic
               title="Present"
@@ -597,7 +869,7 @@ export default function AttendancePage() {
             />
           </Card>
         </Col>
-        <Col xs={12} sm={6} lg={4}>
+        <Col xs={12} sm={6} lg={3}>
           <Card className="summary-stat-card bg-white border-none shadow-sm rounded-2xl">
             <Statistic
               title="Late"
@@ -607,7 +879,7 @@ export default function AttendancePage() {
             />
           </Card>
         </Col>
-        <Col xs={12} sm={6} lg={4}>
+        <Col xs={12} sm={6} lg={3}>
           <Card className="summary-stat-card bg-white border-none shadow-sm rounded-2xl">
             <Statistic
               title="Absent"
@@ -617,7 +889,7 @@ export default function AttendancePage() {
             />
           </Card>
         </Col>
-        <Col xs={12} sm={6} lg={4}>
+        <Col xs={12} sm={6} lg={3}>
           <Card className="summary-stat-card bg-white border-none shadow-sm rounded-2xl">
             <Statistic
               title="Leave"
@@ -627,7 +899,29 @@ export default function AttendancePage() {
             />
           </Card>
         </Col>
-        <Col xs={12} sm={12} lg={8}>
+        <Col xs={12} sm={6} lg={3}>
+          <Card className="summary-stat-card bg-gradient-to-r from-green-500 to-emerald-600 border-none shadow-lg rounded-2xl">
+            <div className="text-white">
+              <div className="text-green-100 mb-1 text-sm">Total Working Hours</div>
+              <div className="text-2xl font-bold flex items-center gap-2">
+                <ClockCircleOutlined />
+                {summary.totalWorkingHours}
+              </div>
+            </div>
+          </Card>
+        </Col>
+        <Col xs={12} sm={6} lg={3}>
+          <Card className="summary-stat-card bg-gradient-to-r from-orange-500 to-amber-600 border-none shadow-lg rounded-2xl">
+            <div className="text-white">
+              <div className="text-orange-100 mb-1 text-sm">Total Overtime Hours</div>
+              <div className="text-2xl font-bold flex items-center gap-2">
+                <HistoryOutlined />
+                {summary.totalOvertimeHours}
+              </div>
+            </div>
+          </Card>
+        </Col>
+        <Col xs={24} sm={12} lg={6}>
           <Card className="summary-stat-card bg-blue-600 border-none shadow-lg rounded-2xl text-white">
             <div className="flex justify-between items-center text-white">
               <div>
@@ -781,40 +1075,202 @@ export default function AttendancePage() {
             <TextArea rows={2} placeholder="Any additional notes..." />
           </Form.Item>
 
-          <Form.Item label="Location (Optional)" name="location">
-            <Input placeholder="e.g. 33.6844, 73.0479 or Site Name" />
-          </Form.Item>
+          <Collapse ghost className="attendance-details-collapse">
+            <Collapse.Panel
+              header={<span className="font-bold text-slate-700">Check-In Details</span>}
+              key="checkin"
+            >
+              <Row gutter={12}>
+                <Col span={12}>
+                  <Form.Item label="Time" name="check_in">
+                    <Input placeholder="10:32" />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item label="Date" name="check_in_date">
+                    <Input placeholder="YYYY-MM-DD" />
+                  </Form.Item>
+                </Col>
+              </Row>
+              <Form.Item label="Location" name="initial_location">
+                <Input placeholder="GPS Coordinates (JSON)" />
+              </Form.Item>
+              <Form.Item label="Picture" name="picture">
+                <div className="flex flex-col gap-2">
+                  {editingRecord?.picture && (
+                    <img src={editingRecord.picture} alt="In" className="w-20 h-20 object-cover rounded border" />
+                  )}
+                  <Upload
+                    maxCount={1}
+                    beforeUpload={async (file) => {
+                      const formData = new FormData();
+                      formData.append('file', file);
+                      const res = await commonApi.upload(formData);
+                      if (!res.error && res.data) {
+                        form.setFieldValue('picture', (res.data as any).url);
+                      }
+                      return false;
+                    }}
+                    showUploadList={false}
+                  >
+                    <Button icon={<UploadOutlined />}>Upload Check-In Picture</Button>
+                  </Upload>
+                </div>
+              </Form.Item>
+            </Collapse.Panel>
 
-          <Form.Item label="Picture / Selfie (Optional)" name="picture">
-            <div className="flex flex-col gap-2">
-              {editingRecord?.picture && (
-                <img
-                  src={editingRecord.picture}
-                  alt="Current"
-                  className="w-24 h-24 object-cover rounded-lg border mb-2"
-                />
-              )}
-              <Upload
-                maxCount={1}
-                beforeUpload={async (file) => {
-                  const formData = new FormData();
-                  formData.append('file', file);
-                  message.loading('Uploading picture...');
-                  const res = await commonApi.upload(formData);
-                  if (res.data) {
-                    const url = (res.data as any).url || (res.data as any).path;
-                    form.setFieldValue('picture', url);
-                    message.success('Picture uploaded');
-                  } else {
-                    message.error('Upload failed');
-                  }
-                  return false;
-                }}
+            <Collapse.Panel header={<span className="font-bold text-slate-700">Check-Out Details</span>} key="checkout">
+              <Row gutter={12}>
+                <Col span={12}>
+                  <Form.Item label="Time" name="check_out">
+                    <Input placeholder="18:30" />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item label="Date" name="check_out_date">
+                    <Input placeholder="YYYY-MM-DD" />
+                  </Form.Item>
+                </Col>
+              </Row>
+              <Form.Item label="Location" name="check_out_location">
+                <Input placeholder="GPS Coordinates" />
+              </Form.Item>
+              <Form.Item label="Picture" name="check_out_picture">
+                <div className="flex flex-col gap-2">
+                  {editingRecord?.check_out_picture && (
+                    <img src={editingRecord.check_out_picture} alt="Out" className="w-20 h-20 object-cover rounded border" />
+                  )}
+                  <Upload
+                    maxCount={1}
+                    beforeUpload={async (file) => {
+                      const formData = new FormData();
+                      formData.append('file', file);
+                      const res = await commonApi.upload(formData);
+                      if (res.data) {
+                        form.setFieldValue('check_out_picture', (res.data as any).url || (res.data as any).path);
+                        message.success('Uploaded');
+                      }
+                      return false;
+                    }}
+                  >
+                    <Button size="small" icon={<UploadOutlined />}>Upload</Button>
+                  </Upload>
+                </div>
+              </Form.Item>
+            </Collapse.Panel>
+
+            <Collapse.Panel header={<span className="font-bold text-slate-700">Overtime Details</span>} key="overtime">
+              <Form.Item
+                noStyle
+                shouldUpdate={(prev, curr) =>
+                  prev.overtime_in !== curr.overtime_in ||
+                  prev.overtime_out !== curr.overtime_out ||
+                  prev.overtime_in_date !== curr.overtime_in_date ||
+                  prev.overtime_out_date !== curr.overtime_out_date
+                }
               >
-                <Button icon={<UploadOutlined />}>Upload New Picture</Button>
-              </Upload>
-            </div>
-          </Form.Item>
+                {({ getFieldsValue, setFieldsValue }) => {
+                  const vals = getFieldsValue(['overtime_in', 'overtime_in_date', 'overtime_out', 'overtime_out_date']);
+                  if (vals.overtime_in && vals.overtime_out) {
+                    try {
+                      const startD = vals.overtime_in_date || selectedDate.format('YYYY-MM-DD');
+                      const endD = vals.overtime_out_date || startD;
+                      const start = dayjs(`${startD}T${vals.overtime_in}`);
+                      const end = dayjs(`${endD}T${vals.overtime_out}`);
+                      if (start.isValid() && end.isValid()) {
+                        const diff = end.diff(start, 'minute');
+                        if (diff > 0) {
+                          // Update overtime_minutes field if it's different
+                          const currentMins = form.getFieldValue('overtime_minutes');
+                          if (currentMins !== diff) {
+                            setTimeout(() => setFieldsValue({ overtime_minutes: diff }), 0);
+                          }
+                        }
+                      }
+                    } catch (e) { }
+                  }
+                  return null;
+                }}
+              </Form.Item>
+              <Row gutter={12}>
+                <Col span={12}>
+                  <Form.Item label="In Time" name="overtime_in">
+                    <Input placeholder="19:00" />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item label="In Date" name="overtime_in_date">
+                    <Input placeholder="YYYY-MM-DD" />
+                  </Form.Item>
+                </Col>
+              </Row>
+              <Form.Item label="OT In Location" name="overtime_in_location">
+                <Input placeholder="GPS Coordinates" />
+              </Form.Item>
+              <Form.Item label="OT In Picture" name="overtime_in_picture">
+                <div className="flex flex-col gap-2">
+                  {editingRecord?.overtime_in_picture && (
+                    <img src={editingRecord.overtime_in_picture} alt="OT In" className="w-20 h-20 object-cover rounded border" />
+                  )}
+                  <Upload
+                    maxCount={1}
+                    beforeUpload={async (file) => {
+                      const formData = new FormData();
+                      formData.append('file', file);
+                      const res = await commonApi.upload(formData);
+                      if (res.data) {
+                        form.setFieldValue('overtime_in_picture', (res.data as any).url || (res.data as any).path);
+                        message.success('OT In picture uploaded');
+                      }
+                      return false;
+                    }}
+                    showUploadList={false}
+                  >
+                    <Button size="small" icon={<UploadOutlined />}>Upload OT In Pic</Button>
+                  </Upload>
+                </div>
+              </Form.Item>
+
+              <Row gutter={12} className="mt-4">
+                <Col span={12}>
+                  <Form.Item label="Out Time" name="overtime_out">
+                    <Input placeholder="22:00" />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item label="Out Date" name="overtime_out_date">
+                    <Input placeholder="YYYY-MM-DD" />
+                  </Form.Item>
+                </Col>
+              </Row>
+              <Form.Item label="OT Out Location" name="overtime_out_location">
+                <Input placeholder="GPS Coordinates" />
+              </Form.Item>
+              <Form.Item label="OT Out Picture" name="overtime_out_picture">
+                <div className="flex flex-col gap-2">
+                  {editingRecord?.overtime_out_picture && (
+                    <img src={editingRecord.overtime_out_picture} alt="OT Out" className="w-20 h-20 object-cover rounded border" />
+                  )}
+                  <Upload
+                    maxCount={1}
+                    beforeUpload={async (file) => {
+                      const formData = new FormData();
+                      formData.append('file', file);
+                      const res = await commonApi.upload(formData);
+                      if (res.data) {
+                        form.setFieldValue('overtime_out_picture', (res.data as any).url || (res.data as any).path);
+                        message.success('OT Out picture uploaded');
+                      }
+                      return false;
+                    }}
+                    showUploadList={false}
+                  >
+                    <Button size="small" icon={<UploadOutlined />}>Upload OT Out Pic</Button>
+                  </Upload>
+                </div>
+              </Form.Item>
+            </Collapse.Panel>
+          </Collapse>
         </Form>
       </Drawer>
 
@@ -898,32 +1354,34 @@ export default function AttendancePage() {
               key: 'locations',
               width: 80,
               align: 'center' as const,
-              render: (_: unknown, record: AttendanceRecord) => (
-                <Space size="small">
-                  {record.initial_location ? (
-                    <Tooltip title="Selfie Capture">
-                      <CameraOutlined
-                        style={{ color: '#64748b', fontSize: 14, cursor: 'pointer' }}
-                        onClick={() => {
-                          const loc = JSON.parse(record.initial_location!);
-                          window.open(`https://www.google.com/maps/search/?api=1&query=${loc.latitude},${loc.longitude}`, '_blank');
-                        }}
-                      />
-                    </Tooltip>
-                  ) : '-'}
-                  {record.location ? (
-                    <Tooltip title="Submission">
-                      <EnvironmentOutlined
-                        style={{ color: '#1890ff', fontSize: 14, cursor: 'pointer' }}
-                        onClick={() => {
-                          const loc = JSON.parse(record.location!);
-                          window.open(`https://www.google.com/maps/search/?api=1&query=${loc.latitude},${loc.longitude}`, '_blank');
-                        }}
-                      />
-                    </Tooltip>
-                  ) : '-'}
-                </Space>
-              ),
+              render: (_: unknown, record: AttendanceRecord) => {
+                const initialCoords = parseGPS(record.initial_location);
+                const submissionCoords = parseGPS(record.location);
+                return (
+                  <Space size="small">
+                    {initialCoords ? (
+                      <Tooltip title="Selfie Capture">
+                        <CameraOutlined
+                          style={{ color: '#64748b', fontSize: 14, cursor: 'pointer' }}
+                          onClick={() => {
+                            window.open(`https://www.google.com/maps/search/?api=1&query=${initialCoords.lat},${initialCoords.lng}`, '_blank');
+                          }}
+                        />
+                      </Tooltip>
+                    ) : '-'}
+                    {submissionCoords ? (
+                      <Tooltip title="Submission">
+                        <EnvironmentOutlined
+                          style={{ color: '#1890ff', fontSize: 14, cursor: 'pointer' }}
+                          onClick={() => {
+                            window.open(`https://www.google.com/maps/search/?api=1&query=${submissionCoords.lat},${submissionCoords.lng}`, '_blank');
+                          }}
+                        />
+                      </Tooltip>
+                    ) : '-'}
+                  </Space>
+                );
+              },
             },
           ]}
           dataSource={employeeHistory}
@@ -1028,6 +1486,6 @@ export default function AttendancePage() {
            box-shadow: 0 -4px 6px -1px rgb(0 0 0 / 0.02);
         }
       `}</style>
-    </div>
+    </div >
   );
 }

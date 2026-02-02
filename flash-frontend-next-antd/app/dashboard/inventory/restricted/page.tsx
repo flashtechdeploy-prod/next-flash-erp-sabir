@@ -49,7 +49,7 @@ export default function RestrictedInventoryPage() {
 
   const loadEmployees = async () => {
     try {
-      const response = await employeeApi.getAll();
+      const response = await employeeApi.getAll({ limit: '10000' });
       console.log('=== EMPLOYEES API RESPONSE ===');
       console.log('Full response:', response);
       let empData: Record<string, unknown>[] = [];
@@ -59,8 +59,8 @@ export default function RestrictedInventoryPage() {
       } else if (response?.data) {
         if (Array.isArray(response.data)) {
           empData = response.data;
-        } else if (Array.isArray(response.data.employees)) {
-          empData = response.data.employees;
+        } else if (Array.isArray((response.data as any).employees)) {
+          empData = (response.data as any).employees;
         }
       }
 
@@ -106,13 +106,13 @@ export default function RestrictedInventoryPage() {
 
       console.log('=== RESTRICTED INVENTORY ITEMS API RESPONSE ===');
       console.log('Full response:', itemsResponse);
-      const itemsData = itemsResponse?.data || (Array.isArray(itemsResponse) ? itemsResponse : []);
+      const itemsData = Array.isArray(itemsResponse?.data) ? itemsResponse.data : (Array.isArray(itemsResponse) ? itemsResponse : []);
       console.log('✅ Loaded items:', itemsData);
       setItems(itemsData);
 
       console.log('=== RESTRICTED INVENTORY TRANSACTIONS API RESPONSE ===');
       console.log('Full response:', transResponse);
-      const transData = transResponse?.data || (Array.isArray(transResponse) ? transResponse : []);
+      const transData = Array.isArray(transResponse?.data) ? transResponse.data : (Array.isArray(transResponse) ? transResponse : []);
       console.log('✅ Loaded transactions:', transData);
       setTransactions(transData);
     } catch (error) {
@@ -578,19 +578,6 @@ export default function RestrictedInventoryPage() {
 
   const transactionColumns = [
     { title: 'Date', dataIndex: 'created_at', key: 'created_at', width: 110, render: (t: string) => <span style={{ fontSize: '11px' }}>{t ? new Date(t).toLocaleDateString() : '-'}</span> },
-    { title: 'Item', dataIndex: 'item_code', key: 'item_code', width: 100, render: (t: string) => <span style={{ fontSize: '11px', fontWeight: 600 }}>{t}</span> },
-    { title: 'Serial', dataIndex: 'serial_number', key: 'serial_number', width: 120, render: (t: string) => <span style={{ fontSize: '11px' }}>{t || '-'}</span> },
-    { title: 'Quantity', dataIndex: 'quantity', key: 'quantity', width: 90, render: (v: number) => <span style={{ fontSize: '11px' }}>{v || '-'}</span> },
-    {
-      title: 'Type',
-      dataIndex: 'action',
-      key: 'action',
-      width: 100,
-      render: (type: string) => {
-        const colors: Record<string, string> = { issue: 'blue', return: 'green' };
-        return <Tag color={colors[type] || 'default'} style={{ fontSize: '11px' }}>{type?.toUpperCase()}</Tag>;
-      }
-    },
     {
       title: 'FSS No.',
       dataIndex: 'employee_id',
@@ -607,6 +594,42 @@ export default function RestrictedInventoryPage() {
         </Button>
       )
     },
+    { title: 'Item', dataIndex: 'item_code', key: 'item_code', width: 100, render: (t: string) => <span style={{ fontSize: '11px', fontWeight: 600 }}>{t}</span> },
+    {
+      title: 'Item Name',
+      dataIndex: 'item_code',
+      key: 'item_name',
+      width: 150,
+      render: (code: string) => {
+        const item = items.find((i: any) => i.item_code === code);
+        return <span style={{ fontSize: '11px' }}>{item ? (item.name as string) : '-'}</span>;
+      }
+    },
+    {
+      title: 'Category',
+      dataIndex: 'item_code',
+      key: 'category',
+      width: 100,
+      render: (code: string) => {
+        const item = items.find((i: any) => i.item_code === code);
+        const category = item ? (item.category as string) : '';
+        const colors: Record<string, string> = { weapon: 'red', ammunition: 'orange', equipment: 'blue' };
+        return category ? <Tag color={colors[category] || 'default'} style={{ fontSize: '11px' }}>{category.toUpperCase()}</Tag> : '-';
+      }
+    },
+    { title: 'Serial', dataIndex: 'serial_number', key: 'serial_number', width: 120, render: (t: string) => <span style={{ fontSize: '11px' }}>{t || '-'}</span> },
+    { title: 'Quantity', dataIndex: 'quantity', key: 'quantity', width: 90, render: (v: number) => <span style={{ fontSize: '11px' }}>{v || '-'}</span> },
+    {
+      title: 'Type',
+      dataIndex: 'action',
+      key: 'action',
+      width: 100,
+      render: (type: string) => {
+        const colors: Record<string, string> = { issue: 'blue', return: 'green' };
+        return <Tag color={colors[type] || 'default'} style={{ fontSize: '11px' }}>{type?.toUpperCase()}</Tag>;
+      }
+    },
+
     { title: 'Notes', dataIndex: 'notes', key: 'notes', ellipsis: true, render: (t: string) => <span style={{ fontSize: '11px' }}>{t}</span> },
   ];
 
@@ -723,6 +746,9 @@ export default function RestrictedInventoryPage() {
                     label: `${fss} - ${emp.full_name || emp.name || 'Unknown'}`,
                   };
                 })}
+              filterOption={(input, option) =>
+                (option?.label ?? '').toString().toLowerCase().includes(input.toLowerCase())
+              }
             />
           </Form.Item>
           <Form.Item name="notes" label="Notes"><Input.TextArea rows={3} placeholder="Additional notes" /></Form.Item>
@@ -756,6 +782,9 @@ export default function RestrictedInventoryPage() {
                     label: `${fss} - ${emp.full_name || emp.name || 'Unknown'}`,
                   };
                 })}
+              filterOption={(input, option) =>
+                (option?.label ?? '').toString().toLowerCase().includes(input.toLowerCase())
+              }
             />
           </Form.Item>
           <Form.Item name="notes" label="Return Reason"><Input.TextArea rows={3} placeholder="Why is this being returned?" /></Form.Item>
@@ -799,15 +828,18 @@ export default function RestrictedInventoryPage() {
               showSearch
               placeholder="Select FSS number"
               notFoundContent={employees.length === 0 ? 'No employees found' : undefined}
-              options={Array.isArray(employees) ? employees
-                .filter((emp) => emp.fss_number || emp.fss_no)
+              options={employees
+                .filter((emp) => emp.fss_no)
                 .map((emp) => {
-                  const fss = emp.fss_number || emp.fss_no;
+                  const fss = emp.fss_no;
                   return {
                     value: fss,
                     label: `${fss} - ${emp.full_name || emp.name || 'Unknown'}`
                   };
-                }) : []}
+                })}
+              filterOption={(input, option) =>
+                (option?.label ?? '').toString().toLowerCase().includes(input.toLowerCase())
+              }
             />
           </Form.Item>
         </Form>

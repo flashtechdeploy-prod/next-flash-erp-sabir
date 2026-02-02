@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Table, Button, DatePicker, Space, Tag, Drawer, Popconfirm, Card, Statistic, App, Collapse, Spin, Empty, Col, Row, Input, InputNumber, Badge } from 'antd';
-import { PrinterOutlined, DollarOutlined, CheckCircleOutlined, ClockCircleOutlined, UserOutlined, SearchOutlined, RiseOutlined, FallOutlined, SafetyCertificateOutlined } from '@ant-design/icons';
+import { PrinterOutlined, DollarOutlined, CheckCircleOutlined, ClockCircleOutlined, UserOutlined, SearchOutlined, RiseOutlined, FallOutlined, SafetyCertificateOutlined, EyeOutlined } from '@ant-design/icons';
 import { employeeApi, attendanceApi, payrollApi, clientApi } from '@/lib/api';
 import dayjs, { Dayjs } from 'dayjs';
 import { useReactToPrint } from 'react-to-print';
@@ -14,6 +14,7 @@ interface PayrollEmployee extends Record<string, unknown> {
   full_name: string;
   department: string;
   designation: string;
+  main_number?: string;
   mobile_no: string;
   account_no: string;
   presentDays: number;
@@ -55,6 +56,11 @@ function PayrollContent() {
   const { message } = App.useApp();
   const [month, setMonth] = useState<Dayjs>(dayjs());
   const [payrollData, setPayrollData] = useState<PayrollEmployee[]>([]);
+  const [companySettings, setCompanySettings] = useState<any>(null);
+  const [selectedClient, setSelectedClient] = useState<any | null>(null);
+  const [selectedSite, setSelectedSite] = useState<any | null>(null);
+  const [sitesDrawerVisible, setSitesDrawerVisible] = useState(false);
+  const [guardsDrawerVisible, setGuardsDrawerVisible] = useState(false);
   const [clients, setClients] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -82,15 +88,18 @@ function PayrollContent() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
+      const prevMonth = month.subtract(1, 'month');
       const fromDate = month.startOf('month').format('YYYY-MM-DD');
       const toDate = month.endOf('month').format('YYYY-MM-DD');
 
-      const [empRes, attRes, assignRes, clientRes, sheetRes] = await Promise.all([
+      const [empRes, attRes, assignRes, clientRes, sheetRes, prevAttRes, prevSheetRes] = await Promise.all([
         employeeApi.getAll({ limit: '1000' }),
         attendanceApi.getByRange(fromDate, toDate),
         clientApi.getActiveAssignments(),
         clientApi.getAll(),
         payrollApi.getSheetEntries(fromDate, toDate),
+        attendanceApi.getByRange(prevMonth.startOf('month').format('YYYY-MM-DD'), prevMonth.endOf('month').format('YYYY-MM-DD')),
+        payrollApi.getSheetEntries(prevMonth.startOf('month').format('YYYY-MM-DD'), prevMonth.endOf('month').format('YYYY-MM-DD')),
       ]);
 
       const empData = Array.isArray(empRes.data) ? empRes.data : (empRes.data as any)?.employees || [];
@@ -110,8 +119,8 @@ function PayrollContent() {
         });
       });
 
-      const activeEmployees = empData.filter((e: Record<string, unknown>) =>
-        e.status === 'Active' || e.status === 'active'
+      const relevantEmployees = empData.filter((e: Record<string, unknown>) =>
+        ['Active', 'active', 'Suspended', 'Inactive'].includes(String(e.status))
       );
       const sheetEntryMap = new Map();
       sheetEntries.forEach((s: any) => {
@@ -129,7 +138,7 @@ function PayrollContent() {
       const workingDays = month.daysInMonth();
 
       // Optimized Employee Processing (O(N))
-      const calculated: PayrollEmployee[] = activeEmployees.map((emp: Record<string, unknown>) => {
+      const calculated: PayrollEmployee[] = relevantEmployees.map((emp: Record<string, unknown>) => {
         const employeeId = String(emp.employee_id);
         const empId = Number(emp.id);
         const empAttendance = attGroupMap.get(employeeId) || [];
@@ -187,6 +196,7 @@ function PayrollContent() {
           department: String(emp.department || "-"),
           account_no: String(emp.account_no || '-'),
           designation: String(emp.designation || "-"),
+          main_number: String(emp.main_number || "-"),
           mobile_no: String(emp.mobile_no || emp.mobile_number || "-"),
           client_id: assignment?.client_id || null,
           client_name: assignment?.client_name || "Unassigned",
@@ -217,22 +227,27 @@ function PayrollContent() {
       });
       setPayrollData(calculated);
 
-      // Fetch previous month data for comparison
-      const prevMonth = month.subtract(1, 'month');
-      const prevFromDate = prevMonth.startOf('month').format('YYYY-MM-DD');
-      const prevToDate = prevMonth.endOf('month').format('YYYY-MM-DD');
-
-      const prevAttendanceRes = await attendanceApi.getByRange(prevFromDate, prevToDate);
-      const prevSheetRes = await payrollApi.getSheetEntries(prevFromDate, prevToDate);
-
-      const prevAttendanceRecords = (prevAttendanceRes.data as any)?.attendance || [];
-      const prevSheetEntries = (prevSheetRes.data as any) || [];
+      const prevAttendanceRecords = Array.isArray(prevAttRes.data) ? prevAttRes.data : [];
+      const prevSheetEntries = Array.isArray(prevSheetRes.data) ? prevSheetRes.data : [];
 
       // Calculate previous month payroll
-      const prevPayroll = activeEmployees.map((emp: any) => { // Use activeEmployees for consistency
-        const employeeId = String(emp.employee_id || emp.id); // Corrected empId to employeeId
-        const empAttendance = prevAttendanceRecords.filter((a: any) => String(a.employee_id) === employeeId); // Filter by employeeId
-        const sheetEntry = prevSheetEntries.find((e: any) => e.employee_db_id === emp.id);
+      const prevAttGroupMap = new Map<string, any[]>();
+      prevAttendanceRecords.forEach((a: any) => {
+        const eid = String(a.employee_id);
+        if (!prevAttGroupMap.has(eid)) prevAttGroupMap.set(eid, []);
+        prevAttGroupMap.get(eid)?.push(a);
+      });
+
+      const prevSheetEntryMap = new Map();
+      prevSheetEntries.forEach((s: any) => {
+        prevSheetEntryMap.set(Number(s.employee_db_id), s);
+      });
+
+      const prevPayroll = relevantEmployees.map((emp: any) => {
+        const employeeId = String(emp.employee_id);
+        const empId = Number(emp.id);
+        const empAttendance = prevAttGroupMap.get(employeeId) || [];
+        const sheetEntry = prevSheetEntryMap.get(empId);
 
         let presentDays = 0, leaveDays = 0;
         empAttendance.forEach((a: any) => {
@@ -251,7 +266,7 @@ function PayrollContent() {
         const perDaySalary = totalSalary / prevMonth.daysInMonth();
         const grossSalaryBase = totalPaidDays * perDaySalary;
 
-        const assignment = empAssignmentMap.get(employeeId); // Use employeeId
+        const assignment = empAssignmentMap.get(employeeId);
         return {
           ...emp,
           client_id: assignment?.client_id,
@@ -284,6 +299,19 @@ function PayrollContent() {
       await loadData();
     } catch (error) {
       message.error('Failed to update entry');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleUpdateEmployee = async (employeeId: string, field: string, value: any) => {
+    setIsUpdating(true);
+    try {
+      await employeeApi.update(employeeId, { [field]: value });
+      await loadData();
+      message.success('Employee updated successfully');
+    } catch (error) {
+      message.error('Failed to update employee');
     } finally {
       setIsUpdating(false);
     }
@@ -323,13 +351,27 @@ function PayrollContent() {
       render: (text: string) => <span style={{ fontWeight: 600, color: '#1e293b' }}>{text}</span>
     },
 
-        { title: 'cnic', dataIndex: 'cnic', key: 'cnic', width: 120 },
-                        { title: 'mobile number', dataIndex: 'mobile_number', key: 'mobile_number', width: 120 },
+    { title: 'cnic', dataIndex: 'cnic', key: 'cnic', width: 120 },
+    { title: 'mobile number', dataIndex: 'mobile_number', key: 'mobile_number', width: 120 },
+    {
+      title: 'Main Number',
+      dataIndex: 'main_number',
+      key: 'main_number',
+      width: 130,
+      render: (val: string, record: PayrollEmployee) => (
+        <Input
+          defaultValue={val}
+          placeholder="Enter main number"
+          style={{ width: '100%', borderRadius: '6px' }}
+          onBlur={(e) => handleUpdateEmployee(record.employee_id, 'main_number', e.target.value)}
+        />
+      )
+    },
 
-                { title: 'acccount number', dataIndex: 'account_number', key: 'account_number', width: 120 },
+    { title: 'acccount number', dataIndex: 'account_number', key: 'account_number', width: 120 },
 
 
-    { title: 'Total Salary', dataIndex: 'totalSalary', key: 'totalSalary', width: 110, render: (v: number) => v.toLocaleString() },
+    { title: 'Basic Salary', dataIndex: 'totalSalary', key: 'totalSalary', width: 110, render: (v: number) => v.toLocaleString() },
     {
       title: 'Pre. Days',
       dataIndex: 'preDays',
@@ -784,6 +826,20 @@ function PayrollContent() {
 
       {/* Main Table Controls */}
       <div style={{ marginBottom: '24px', display: 'flex', gap: '16px', alignItems: 'center' }}>
+        <Button
+          icon={<RiseOutlined rotate={-45} />}
+          onClick={loadData}
+          style={{
+            height: '45px',
+            borderRadius: '12px',
+            display: 'flex',
+            alignItems: 'center',
+            fontWeight: 600,
+            boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)'
+          }}
+        >
+          Refresh
+        </Button>
         <Input
           placeholder="Search by Guard Name, ID or FSS No..."
           prefix={<SearchOutlined style={{ color: '#94a3b8' }} />}
@@ -807,10 +863,12 @@ function PayrollContent() {
 
       <div style={{ minHeight: '400px' }}>
         {filteredData.length > 0 ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
-            {clients.map((client: any) => {
+          <Table
+            dataSource={clients.map((client: any) => {
               const clientGuards = filteredData.filter((emp: PayrollEmployee) => String(emp.client_id) === String(client.id));
               if (clientGuards.length === 0) return null;
+
+              const clientNet = clientGuards.reduce((sum: number, emp: PayrollEmployee) => sum + emp.netSalary, 0);
 
               const sitesMap = new Map<string, PayrollEmployee[]>();
               clientGuards.forEach((g: PayrollEmployee) => {
@@ -819,60 +877,67 @@ function PayrollContent() {
                 sitesMap.get(site)?.push(g);
               });
 
-              const clientNet = clientGuards.reduce((sum: number, emp: PayrollEmployee) => sum + emp.netSalary, 0);
-
-              return (
-                <Card
-                  key={client.id}
-                  title={
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <div style={{ width: '8px', height: '24px', backgroundColor: '#3b82f6', borderRadius: '4px' }}></div>
-                        <span style={{ fontSize: '20px', fontWeight: 800, color: '#1e293b' }}>{client.name}</span>
-                      </div>
-                      <Tag color="processing" style={{ padding: '4px 12px', borderRadius: '8px', fontWeight: 700, fontSize: '14px' }}>
-                        Client Total: Rs. {clientNet.toLocaleString()}
-                      </Tag>
-                    </div>
-                  }
-                  styles={{ body: { padding: '24px' } }}
-                  style={{ borderRadius: '16px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}
-                >
-                  {Array.from(sitesMap.entries()).map(([siteName, guards]) => (
-                    <div key={siteName} style={{ marginBottom: '40px' }}>
-                      <div style={{
-                        backgroundColor: '#f1f5f9',
-                        padding: '12px 20px',
-                        borderRadius: '12px',
-                        marginBottom: '16px',
-                        fontWeight: 700,
-                        color: '#475569',
-                        fontSize: '15px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '10px'
-                      }}>
-                        <UserOutlined style={{ color: '#3b82f6' }} />
-                        {siteName}
-                        <span style={{ color: '#94a3b8', fontWeight: 500, fontSize: '13px' }}>({guards.length} Guards)</span>
-                      </div>
-                      <Table
-                        columns={columns}
-                        dataSource={guards}
-                        rowKey="id"
-                        size="middle"
-                        bordered={false}
-                        pagination={false}
-                        scroll={{ x: 'max-content' }}
-                        className="premium-table"
-                        style={{ borderRadius: '12px', overflow: 'hidden' }}
-                      />
-                    </div>
-                  ))}
-                </Card>
-              );
-            })}
-          </div>
+              return {
+                ...client,
+                key: client.id,
+                guardCount: clientGuards.length,
+                totalNet: clientNet,
+                sites: Array.from(sitesMap.entries()).map(([name, guards]) => {
+                  const siteNet = guards.reduce((sum, g) => sum + g.netSalary, 0);
+                  return {
+                    key: `${client.id}-${name}`,
+                    name,
+                    guardCount: guards.length,
+                    totalNet: siteNet,
+                    guards
+                  };
+                })
+              };
+            }).filter(Boolean)}
+            columns={[
+              {
+                title: 'CLIENT NAME',
+                dataIndex: 'name',
+                key: 'name',
+                render: (val) => <span style={{ fontWeight: 700, fontSize: '15px' }}>{val}</span>
+              },
+              {
+                title: 'TOTAL GUARDS',
+                dataIndex: 'guardCount',
+                key: 'guardCount',
+                width: 150,
+                render: (count) => <Tag color="blue" bordered={false}>{count} Guards</Tag>
+              },
+              {
+                title: 'TOTAL NET PAYABLE',
+                dataIndex: 'totalNet',
+                key: 'totalNet',
+                width: 250,
+                align: 'right',
+                render: (val) => <span style={{ fontWeight: 700, color: '#10b981' }}>Rs. {val.toLocaleString()}</span>
+              },
+              {
+                title: 'ACTIONS',
+                key: 'actions',
+                width: 100,
+                render: (_, record: any) => (
+                  <Button
+                    type="link"
+                    icon={<EyeOutlined />}
+                    onClick={() => {
+                      setSelectedClient(record);
+                      setSitesDrawerVisible(true);
+                    }}
+                  >
+                    View Sites
+                  </Button>
+                )
+              }
+            ]}
+            pagination={{ pageSize: 15, position: ['bottomRight'] }}
+            className="premium-table"
+            style={{ backgroundColor: 'white', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}
+          />
         ) : (
           !loading && <Empty
             image={Empty.PRESENTED_IMAGE_SIMPLE}
@@ -881,6 +946,86 @@ function PayrollContent() {
           />
         )}
       </div>
+
+      {/* Sites Drawer */}
+      <Drawer
+        title={<span style={{ fontSize: '18px', fontWeight: 800 }}>Sites for {selectedClient?.name}</span>}
+        placement="right"
+        width={800}
+        onClose={() => setSitesDrawerVisible(false)}
+        open={sitesDrawerVisible}
+      >
+        {selectedClient && (
+          <Table
+            dataSource={selectedClient.sites}
+            columns={[
+              {
+                title: 'SITE NAME',
+                dataIndex: 'name',
+                key: 'name',
+                render: (val) => <span style={{ fontWeight: 600 }}>{val}</span>
+              },
+              {
+                title: 'GUARDS',
+                dataIndex: 'guardCount',
+                key: 'guardCount',
+                width: 120,
+                render: (c) => <Tag color="cyan">{c}</Tag>
+              },
+              {
+                title: 'SITE TOTAL',
+                dataIndex: 'totalNet',
+                key: 'totalNet',
+                width: 200,
+                align: 'right',
+                render: (v) => <span style={{ fontWeight: 600 }}>Rs. {v.toLocaleString()}</span>
+              },
+              {
+                title: 'ACTIONS',
+                key: 'actions',
+                width: 100,
+                render: (_, siteRecord: any) => (
+                  <Button
+                    type="link"
+                    icon={<EyeOutlined />}
+                    onClick={() => {
+                      setSelectedSite(siteRecord);
+                      setGuardsDrawerVisible(true);
+                    }}
+                  >
+                    View Guards
+                  </Button>
+                )
+              }
+            ]}
+            pagination={false}
+            className="premium-table"
+          />
+        )}
+      </Drawer>
+
+      {/* Guards Drawer */}
+      <Drawer
+        title={<span style={{ fontSize: '18px', fontWeight: 800 }}>Guards at {selectedSite?.name} ({selectedClient?.name})</span>}
+        placement="right"
+        width="95%"
+        onClose={() => setGuardsDrawerVisible(false)}
+        open={guardsDrawerVisible}
+      >
+        {selectedSite && (
+          <Table
+            columns={columns}
+            dataSource={selectedSite.guards}
+            rowKey="id"
+            size="middle"
+            bordered={false}
+            pagination={false}
+            scroll={{ x: 'max-content' }}
+            className="premium-table"
+            rowClassName={(record: any) => (record.status === 'Inactive' || record.status === 'Suspended') ? 'inactive-row' : ''}
+          />
+        )}
+      </Drawer>
 
       {/* Payslip Drawer */}
       <Drawer

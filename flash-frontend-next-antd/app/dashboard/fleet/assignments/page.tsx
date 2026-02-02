@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Table, Button, Space, Tag, Drawer, Form, Input, DatePicker, Select, message, Popconfirm, Card, Row, Col, Statistic } from 'antd';
 import { PlusOutlined, CarOutlined, CheckCircleOutlined, ClockCircleOutlined } from '@ant-design/icons';
 import { vehicleAssignmentApi, vehicleApi, employeeApi } from '@/lib/api';
@@ -23,6 +23,35 @@ export default function VehicleAssignmentsPage() {
     loadVehicles();
     loadEmployees();
   }, []);
+
+  const currentFilteredAssignments = useMemo(() => {
+    let list = assignments;
+    if (searchText.trim()) {
+      const words = searchText.toLowerCase().trim().split(/\s+/);
+      list = assignments.filter(a => {
+        const vId = String(a.vehicle_id || '').toLowerCase();
+        const vModel = String(a.make_model || '').toLowerCase();
+        const vPlate = String(a.license_plate || '').toLowerCase();
+        const eId = String(a.employee_id || '').toLowerCase();
+        const eName = String(a.employee_full_name || '').toLowerCase();
+        const loc = String(a.location || '').toLowerCase();
+        const purp = String(a.purpose || '').toLowerCase();
+
+        return words.every(word =>
+          vId.includes(word) || vModel.includes(word) || vPlate.includes(word) ||
+          eId.includes(word) || eName.includes(word) ||
+          loc.includes(word) || purp.includes(word)
+        );
+      });
+    }
+
+    // Sort by date descending
+    return [...list].sort((a, b) => {
+      const dateA = dayjs(String(a.from_date || ''));
+      const dateB = dayjs(String(b.from_date || ''));
+      return dateB.valueOf() - dateA.valueOf();
+    });
+  }, [assignments, searchText]);
 
   const loadVehicles = async () => {
     try {
@@ -60,7 +89,7 @@ export default function VehicleAssignmentsPage() {
 
   const loadEmployees = async () => {
     try {
-      const response = await employeeApi.getAll();
+      const response = await employeeApi.getAll({ limit: '10000' });
       console.log('=== EMPLOYEES API RESPONSE ===');
       console.log('Full response:', response);
       console.log('Response data:', response.data);
@@ -120,6 +149,10 @@ export default function VehicleAssignmentsPage() {
   const handleAdd = () => {
     setEditingAssignment(null);
     form.resetFields();
+    form.setFieldsValue({
+      date: dayjs(),
+      status: 'active'
+    });
     setDrawerVisible(true);
   };
 
@@ -128,13 +161,29 @@ export default function VehicleAssignmentsPage() {
     form.setFieldsValue({
       vehicle_id: record.vehicle_id,
       employee_id: record.employee_id,
-      dates: record.from_date && record.to_date ? [dayjs(String(record.from_date)), dayjs(String(record.to_date))] : null,
+      date: record.from_date ? dayjs(String(record.from_date)) : null,
       purpose: record.purpose,
       location: record.location,
       status: record.status || 'active',
     });
     setDrawerVisible(true);
   };
+
+  const employeeOptions = useMemo(() => {
+    if (!employees || !Array.isArray(employees)) return [];
+    return employees.map((emp) => ({
+      value: emp.employee_id,
+      label: `${emp.employee_id || 'N/A'} | ${emp.full_name || ''} ${emp.rank ? `(${emp.rank})` : ''} | ${emp.fss_no || ''}`,
+    }));
+  }, [employees]);
+
+  const vehicleOptions = useMemo(() => {
+    if (!vehicles || !Array.isArray(vehicles)) return [];
+    return vehicles.map((v) => ({
+      value: v.vehicle_id,
+      label: `${v.vehicle_id || 'N/A'} | ${v.make_model || ''} ${v.license_plate ? `(${v.license_plate})` : ''} | ${v.vehicle_type || ''}`,
+    }));
+  }, [vehicles]);
 
   const handleDelete = async (id: number) => {
     try {
@@ -152,8 +201,8 @@ export default function VehicleAssignmentsPage() {
       const data = {
         vehicle_id: values.vehicle_id,
         employee_id: values.employee_id,
-        from_date: values.dates ? values.dates[0].format('YYYY-MM-DD') : null,
-        to_date: values.dates ? values.dates[1].format('YYYY-MM-DD') : null,
+        from_date: values.date ? values.date.format('YYYY-MM-DD') : null,
+        to_date: null, // End date removed as per user request
         purpose: values.purpose,
         location: values.location,
         status: values.status,
@@ -179,27 +228,43 @@ export default function VehicleAssignmentsPage() {
       title: 'Vehicle',
       dataIndex: 'vehicle_id',
       key: 'vehicle_id',
-      width: 120,
-      render: (text: string) => <span style={{ fontSize: '11px', fontWeight: 600 }}>{text}</span>
+      width: 150,
+      render: (id: string, record: any) => (
+        <div style={{ fontSize: '11px' }}>
+          <div style={{ fontWeight: 600 }}>{id}</div>
+          <div style={{ color: '#8c8c8c', fontSize: '10px' }}>
+            {record.make_model || ''} {record.vehicle_type ? `(${record.vehicle_type})` : ''}
+          </div>
+        </div>
+      )
+    },
+    {
+      title: 'License Plate',
+      dataIndex: 'license_plate',
+      key: 'license_plate',
+      width: 110,
+      render: (plate: string) => <Tag color="blue" style={{ fontSize: '10px' }}>{plate || 'N/A'}</Tag>
     },
     {
       title: 'Employee',
       dataIndex: 'employee_id',
       key: 'employee_id',
-      width: 100,
-      render: (text: string) => <span style={{ fontSize: '11px' }}>{text}</span>
+      width: 180,
+      render: (id: string, record: any) => (
+        <div style={{ fontSize: '11px' }}>
+          <div style={{ fontWeight: 600 }}>{id}</div>
+          {record.employee_full_name && (
+            <div style={{ color: '#8c8c8c', fontSize: '10px' }}>
+              {record.employee_full_name} {record.employee_rank ? `| ${record.employee_rank}` : ''}
+            </div>
+          )}
+        </div>
+      )
     },
     {
-      title: 'From Date',
+      title: 'Date',
       dataIndex: 'from_date',
       key: 'from_date',
-      width: 110,
-      render: (date: string) => <span style={{ fontSize: '11px' }}>{date ? dayjs(date).format('DD MMM YYYY') : '-'}</span>
-    },
-    {
-      title: 'To Date',
-      dataIndex: 'to_date',
-      key: 'to_date',
       width: 110,
       render: (date: string) => <span style={{ fontSize: '11px' }}>{date ? dayjs(date).format('DD MMM YYYY') : '-'}</span>
     },
@@ -262,15 +327,12 @@ export default function VehicleAssignmentsPage() {
     },
   ];
 
-  const filteredAssignments = assignments.filter(assignment =>
-    String(assignment.vehicle_id || '').toLowerCase().includes(searchText.toLowerCase()) ||
-    String(assignment.employee_id || '').toLowerCase().includes(searchText.toLowerCase()) ||
-    String(assignment.location || '').toLowerCase().includes(searchText.toLowerCase())
-  );
+  // Filtered assignments calculated above with getFilteredAssignments()
 
-  const totalAssignments = filteredAssignments.length;
-  const activeCount = filteredAssignments.filter(a => a.status === 'active').length;
-  const completedCount = filteredAssignments.filter(a => a.status === 'completed').length;
+
+  const totalAssignments = currentFilteredAssignments.length;
+  const activeCount = currentFilteredAssignments.filter(a => a.status === 'active').length;
+  const completedCount = currentFilteredAssignments.filter(a => a.status === 'completed').length;
 
   return (
     <div style={{ padding: '24px' }}>
@@ -281,6 +343,7 @@ export default function VehicleAssignmentsPage() {
             placeholder="Search assignments..."
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
+            allowClear
             style={{ width: 250 }}
           />
           <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
@@ -324,7 +387,7 @@ export default function VehicleAssignmentsPage() {
 
       <Table
         columns={columns}
-        dataSource={filteredAssignments}
+        dataSource={currentFilteredAssignments}
         rowKey="id"
         loading={loading}
         size="small"
@@ -370,14 +433,11 @@ export default function VehicleAssignmentsPage() {
             <Select
               showSearch
               placeholder="Select vehicle"
-              optionFilterProp="children"
+              optionFilterProp="label"
               filterOption={(input, option) =>
-                (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                (String(option?.label) ?? '').toLowerCase().includes(input.toLowerCase())
               }
-              options={vehicles && vehicles.length > 0 ? vehicles.map((v) => ({
-                value: v.vehicle_id,
-                label: `${v.vehicle_id || 'N/A'} - ${v.make_model || ''}`,
-              })) : []}
+              options={vehicleOptions}
               notFoundContent={!vehicles || vehicles.length === 0 ? <span style={{ color: '#999' }}>No vehicles available</span> : null}
             />
           </Form.Item>
@@ -390,23 +450,21 @@ export default function VehicleAssignmentsPage() {
             <Select
               showSearch
               placeholder="Select employee"
-              optionFilterProp="children"
+              optionFilterProp="label"
               filterOption={(input, option) =>
-                (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                (String(option?.label) || '').toLowerCase().includes(input.toLowerCase())
               }
-              options={employees && employees.length > 0 ? employees.map((emp) => ({
-                value: emp.employee_id,
-                label: `${emp.employee_id || 'N/A'} - ${emp.full_name || ''}`,
-              })) : []}
+              options={employeeOptions}
               notFoundContent={!employees || employees.length === 0 ? <span style={{ color: '#999' }}>No employees available</span> : null}
             />
           </Form.Item>
 
           <Form.Item
-            name="dates"
+            name="date"
             label="Assignment Period"
+            rules={[{ required: true, message: 'Please select date' }]}
           >
-            <RangePicker style={{ width: '100%' }} />
+            <DatePicker style={{ width: '100%' }} />
           </Form.Item>
 
           <Form.Item

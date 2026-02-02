@@ -76,6 +76,7 @@ const DEFAULT_FIELDS: FieldConfig[] = [
   { id: 'education', label: 'Education', name: 'education', span: 6, component: 'input', placeholder: 'Matric/Inter/Graduate', section: 'Basic Identification' },
   { id: 'phone', label: 'Mobile No', name: 'phone', span: 6, component: 'input', placeholder: '03001234567', section: 'Basic Identification' },
   { id: 'email', label: 'Email', name: 'email', span: 6, component: 'input', placeholder: 'email@example.com', section: 'Basic Identification' },
+  { id: 'main_number', label: 'Main Number', name: 'main_number', span: 6, component: 'input', placeholder: '03001234567', section: 'Basic Identification' },
 
   {
     id: 'served_in', label: 'Person Status', name: 'served_in', span: 6, component: 'select', rules: [{ required: true, message: 'Person Status is required' }], section: 'Service Details',

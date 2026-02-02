@@ -57,7 +57,7 @@ export default function GeneralInventoryPage() {
 
   const loadEmployees = async () => {
     try {
-      const response = await employeeApi.getAll();
+      const response = await employeeApi.getAll({ limit: '10000' });
       console.log('Employees response:', response);
       let employeeList: Record<string, unknown>[] = [];
 
@@ -66,8 +66,8 @@ export default function GeneralInventoryPage() {
       } else if (response?.data) {
         if (Array.isArray(response.data)) {
           employeeList = response.data;
-        } else if (Array.isArray(response.data.employees)) {
-          employeeList = response.data.employees;
+        } else if (Array.isArray((response.data as any).employees)) {
+          employeeList = (response.data as any).employees;
         }
       }
 

@@ -85,8 +85,12 @@ class ApiClient {
     });
   }
 
-  async delete<T>(endpoint: string): Promise<ApiResponse<T>> {
-    return this.request<T>(endpoint, { method: "DELETE" });
+  async delete<T>(endpoint: string, body?: unknown): Promise<ApiResponse<T>> {
+    const options: RequestInit = { method: "DELETE" };
+    if (body) {
+      options.body = JSON.stringify(body);
+    }
+    return this.request<T>(endpoint, options);
   }
 
   async uploadFile<T>(
@@ -205,6 +209,18 @@ export const vehicleApi = {
   update: (id: string, data: Record<string, unknown>) =>
     api.put(`/api/vehicles/${id}`, data),
   delete: (id: string) => api.delete(`/api/vehicles/${id}`),
+  getCategories: () => api.get('/api/vehicles/categories'),
+  createCategory: (name: string) => api.post('/api/vehicles/categories', { name }),
+  updateCategory: (oldCategory: string, newCategory: string) =>
+    api.put('/api/vehicles/categories', { oldCategory, newCategory }),
+  deleteCategory: (category: string) =>
+    api.delete('/api/vehicles/categories', { category }),
+  getTypes: () => api.get('/api/vehicles/types'),
+  createType: (name: string) => api.post('/api/vehicles/types', { name }),
+  updateType: (oldType: string, newType: string) =>
+    api.put('/api/vehicles/types', { oldType, newType }),
+  deleteType: (type: string) =>
+    api.delete('/api/vehicles/types', { type }),
 
   // Documents
   getDocuments: (id: string) => api.get(`/api/vehicles/${id}/documents`),

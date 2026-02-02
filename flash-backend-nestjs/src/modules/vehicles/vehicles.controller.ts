@@ -38,9 +38,13 @@ export class VehiclesController {
   @Get()
   @ApiOperation({ summary: 'Get all vehicles' })
   @ApiQuery({ name: 'skip', required: false, type: Number })
-  @ApiQuery({ name: 'limit', required: false, type: Number })
-  async findAll(@Query('skip') skip?: number, @Query('limit') limit?: number) {
-    return this.vehiclesService.findAll(skip, limit);
+  @ApiQuery({ name: 'category', required: false, type: String })
+  async findAll(
+    @Query('skip') skip?: number, 
+    @Query('limit') limit?: number,
+    @Query('category') category?: string,
+  ) {
+    return this.vehiclesService.findAll(skip, limit, category);
   }
 
   @Post()
@@ -59,6 +63,54 @@ export class VehiclesController {
   @ApiOperation({ summary: 'Bulk import vehicles' })
   async importBulk(@Body() vehicles: any[]) {
     return this.vehiclesService.importBulk(vehicles);
+  }
+
+  @Get('categories')
+  @ApiOperation({ summary: 'Get distinct vehicle categories' })
+  async getCategories() {
+    return this.vehiclesService.getCategories();
+  }
+
+  @Post('categories')
+  @ApiOperation({ summary: 'Create a new vehicle category' })
+  async createCategory(@Body() body: { name: string }) {
+    return this.vehiclesService.addCategory(body.name);
+  }
+
+  @Put('categories')
+  @ApiOperation({ summary: 'Update vehicle category (bulk update)' })
+  async updateCategory(@Body() body: { oldCategory: string; newCategory: string }) {
+    return this.vehiclesService.updateCategory(body.oldCategory, body.newCategory);
+  }
+
+  @Delete('categories')
+  @ApiOperation({ summary: 'Delete vehicle category (mark as Uncategorized)' })
+  async deleteCategory(@Body() body: { category: string }) {
+    return this.vehiclesService.deleteCategory(body.category);
+  }
+
+  @Get('types')
+  @ApiOperation({ summary: 'Get distinct vehicle types' })
+  async getTypes() {
+    return this.vehiclesService.getTypes();
+  }
+
+  @Post('types')
+  @ApiOperation({ summary: 'Create a new vehicle type' })
+  async createType(@Body() body: { name: string }) {
+    return this.vehiclesService.addType(body.name);
+  }
+
+  @Put('types')
+  @ApiOperation({ summary: 'Update vehicle type (bulk update)' })
+  async updateType(@Body() body: { oldType: string; newType: string }) {
+    return this.vehiclesService.updateType(body.oldType, body.newType);
+  }
+
+  @Delete('types')
+  @ApiOperation({ summary: 'Delete vehicle type (mark as Other)' })
+  async deleteType(@Body() body: { type: string }) {
+    return this.vehiclesService.deleteType(body.type);
   }
 
   @Get(':vehicle_id')

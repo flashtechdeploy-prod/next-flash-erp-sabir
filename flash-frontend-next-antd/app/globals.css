@@ -82,3 +82,40 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+.inactive-row {
+  background-color: #FFE1E1 !important;
+}
+
+.inactive-row:hover>td {
+  background-color: #ffc9c9 !important;
+}
+
+/* Premium Payroll Styles */
+.client-panel .ant-collapse-header {
+  padding: 0 !important;
+  border-radius: 12px !important;
+}
+
+.client-panel .ant-collapse-content-box {
+  padding-top: 16px !important;
+  background-color: transparent !important;
+}
+
+.premium-table .ant-table-thead>tr>th {
+  background: #fafafa !important;
+  font-weight: 700 !important;
+  color: #475569 !important;
+  border-bottom: 2px solid #e2e8f0 !important;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+}
+
+.premium-table .ant-table-tbody>tr>td {
+  border-bottom: 1px solid #f1f5f9 !important;
+}
+
+.premium-table .ant-table-row:hover>td {
+  background-color: #f8fafc !important;
+}

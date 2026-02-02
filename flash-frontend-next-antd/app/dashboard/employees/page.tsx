@@ -488,6 +488,13 @@ export default function EmployeesPage() {
       ...getColumnSearchProps('mobile_number', 'Mobile Number'),
     },
     {
+      title: 'Main Number',
+      dataIndex: 'main_number',
+      key: 'main_number',
+      width: 130,
+      render: (text: string) => text || '-',
+    },
+    {
       title: 'Person Status',
       dataIndex: 'served_in',
       key: 'served_in',
@@ -713,6 +720,7 @@ export default function EmployeesPage() {
         }}
         scroll={{ x: 'max-content' }}
         className="compact-table"
+        rowClassName={(record) => (record.status === 'Inactive' || record.status === 'Suspended') ? 'inactive-row' : ''}
       />
 
       <Drawer

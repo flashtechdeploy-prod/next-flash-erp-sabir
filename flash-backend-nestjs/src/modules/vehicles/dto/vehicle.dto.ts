@@ -14,6 +14,7 @@ export class CreateVehicleDto {
   @ApiPropertyOptional() @IsString() @IsOptional() compliance?: string;
   @ApiPropertyOptional() @IsString() @IsOptional() government_permit?: string;
   @ApiPropertyOptional() @IsNumber() @IsOptional() fuel_limit_monthly?: number;
+  @ApiPropertyOptional() @IsString() @IsOptional() registration_date?: string;
 }
 
 export class UpdateVehicleDto {
@@ -21,11 +22,12 @@ export class UpdateVehicleDto {
   @ApiPropertyOptional() @IsString() @IsOptional() category?: string;
   @ApiPropertyOptional() @IsString() @IsOptional() make_model?: string;
   @ApiPropertyOptional() @IsString() @IsOptional() license_plate?: string;
-    @ApiPropertyOptional() @IsNumber() @IsOptional() fuel_limit_monthly?: number;
+  @ApiPropertyOptional() @IsNumber() @IsOptional() fuel_limit_monthly?: number;
   @ApiPropertyOptional() @IsString() @IsOptional() chassis_number?: string;
   @ApiPropertyOptional() @IsString() @IsOptional() asset_tag?: string;
   @ApiPropertyOptional() @IsInt() @IsOptional() year?: number;
   @ApiPropertyOptional() @IsString() @IsOptional() status?: string;
   @ApiPropertyOptional() @IsString() @IsOptional() compliance?: string;
   @ApiPropertyOptional() @IsString() @IsOptional() government_permit?: string;
+  @ApiPropertyOptional() @IsString() @IsOptional() registration_date?: string;
 }

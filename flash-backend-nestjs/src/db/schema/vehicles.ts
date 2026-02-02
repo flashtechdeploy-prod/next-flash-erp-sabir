@@ -21,6 +21,7 @@ export const vehicles = pgTable('vehicles', {
   compliance: text('compliance').default('compliant'),
   government_permit: text('government_permit').default('valid'),
     fuel_limit_monthly: real('fuel_limit_monthly'),
+  registration_date: text('registration_date'),
   created_at: timestamp('created_at').defaultNow(),
 });
 
@@ -95,5 +96,17 @@ export const fuelEntries = pgTable('fuel_entries', {
   vendor: text('vendor'),
   location: text('location'),
   notes: text('notes'),
+  created_at: timestamp('created_at').defaultNow(),
+});
+
+export const vehicleCategories = pgTable('vehicle_categories', {
+  id: serial('id').primaryKey(),
+  name: text('name').unique().notNull(),
+  created_at: timestamp('created_at').defaultNow(),
+});
+
+export const vehicleTypes = pgTable('vehicle_types', {
+  id: serial('id').primaryKey(),
+  name: text('name').unique().notNull(),
   created_at: timestamp('created_at').defaultNow(),
 });

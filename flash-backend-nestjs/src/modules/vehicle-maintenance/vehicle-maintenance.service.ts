@@ -33,8 +33,27 @@ export class VehicleMaintenanceService {
     const finalFilter = filters.length > 0 ? and(...filters) : undefined;
 
     return this.db
-      .select()
+      .select({
+        id: schema.vehicleMaintenance.id,
+        vehicle_id: schema.vehicleMaintenance.vehicle_id,
+        maintenance_date: schema.vehicleMaintenance.maintenance_date,
+        maintenance_type: schema.vehicleMaintenance.maintenance_type,
+        description: schema.vehicleMaintenance.description,
+        cost: schema.vehicleMaintenance.cost,
+        vendor: schema.vehicleMaintenance.vendor,
+        odometer_reading: schema.vehicleMaintenance.odometer_reading,
+        status: schema.vehicleMaintenance.status,
+        notes: schema.vehicleMaintenance.notes,
+        created_at: schema.vehicleMaintenance.created_at,
+        make_model: schema.vehicles.make_model,
+        license_plate: schema.vehicles.license_plate,
+        vehicle_type: schema.vehicles.vehicle_type,
+      })
       .from(schema.vehicleMaintenance)
+      .innerJoin(
+        schema.vehicles,
+        eq(schema.vehicleMaintenance.vehicle_id, schema.vehicles.vehicle_id),
+      )
       .where(finalFilter)
       .orderBy(desc(schema.vehicleMaintenance.id));
   }

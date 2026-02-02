@@ -57,6 +57,7 @@ export const employees = pgTable('employees', {
   home_contact: text('home_contact'),
   emergency_contact_name: text('emergency_contact_name'),
   emergency_contact_number: text('emergency_contact_number'),
+  main_number: text('main_number'),
 
   // Address
   address: text('address'),
@@ -199,6 +200,7 @@ export const employees = pgTable('employees', {
   // Metadata
   created_at: timestamp('created_at').defaultNow(),
   updated_at: timestamp('updated_at').defaultNow(),
+  photo: text('photo'),
 });
 
 /**

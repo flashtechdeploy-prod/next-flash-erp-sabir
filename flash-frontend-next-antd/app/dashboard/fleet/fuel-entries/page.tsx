@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Table, Button, Space, Drawer, Form, Input, DatePicker, Select, InputNumber, message, Popconfirm, Card, Row, Col, Statistic } from 'antd';
+import { useState, useEffect, useMemo } from 'react';
+import { Table, Button, Space, Drawer, Form, Input, DatePicker, Select, InputNumber, message, Popconfirm, Card, Row, Col, Statistic, Tag } from 'antd';
 import { PlusOutlined, DashboardOutlined } from '@ant-design/icons';
 import { fuelEntryApi, vehicleApi } from '@/lib/api';
 import dayjs from 'dayjs';
@@ -14,6 +14,37 @@ export default function FuelEntriesPage() {
   const [editingEntry, setEditingEntry] = useState<Record<string, unknown> | null>(null);
   const [form] = Form.useForm();
   const [searchText, setSearchText] = useState('');
+
+  const filteredEntries = useMemo(() => {
+    let list = entries;
+    if (searchText.trim()) {
+      const words = searchText.toLowerCase().trim().split(/\s+/);
+      list = entries.filter(e => {
+        const vId = String(e.vehicle_id || '').toLowerCase();
+        const vName = String(e.make_model || '').toLowerCase();
+        const vType = String(e.vehicle_type || '').toLowerCase();
+        const vendor = String(e.vendor || '').toLowerCase();
+        const loc = String(e.location || '').toLowerCase();
+
+        return words.every(word =>
+          vId.includes(word) ||
+          vName.includes(word) ||
+          vType.includes(word) ||
+          vendor.includes(word) ||
+          loc.includes(word)
+        );
+      });
+    }
+
+    // Sort by date descending
+    return [...list].sort((a, b) => {
+      const dateA = dayjs(String(a.entry_date || ''));
+      const dateB = dayjs(String(b.entry_date || ''));
+      if (dateB.isAfter(dateA)) return 1;
+      if (dateA.isAfter(dateB)) return -1;
+      return Number(b.id) - Number(a.id);
+    });
+  }, [entries, searchText]);
 
   useEffect(() => {
     loadData();
@@ -44,6 +75,10 @@ export default function FuelEntriesPage() {
   const handleAdd = () => {
     setEditingEntry(null);
     form.resetFields();
+    form.setFieldsValue({
+      entry_date: dayjs(),
+      fuel_type: 'petrol'
+    });
     setDrawerVisible(true);
   };
 
@@ -114,7 +149,27 @@ export default function FuelEntriesPage() {
 
   const columns = [
     { title: 'Date', dataIndex: 'entry_date', key: 'entry_date', width: 110, render: (d: string) => <span style={{ fontSize: '11px' }}>{dayjs(d).format('DD MMM YYYY')}</span> },
-    { title: 'Vehicle', dataIndex: 'vehicle_id', key: 'vehicle_id', width: 120, render: (t: string) => <span style={{ fontSize: '11px', fontWeight: 600 }}>{t}</span> },
+    {
+      title: 'Vehicle',
+      dataIndex: 'vehicle_id',
+      key: 'vehicle_id',
+      width: 150,
+      render: (id: string, record: any) => (
+        <div style={{ fontSize: '11px' }}>
+          <div style={{ fontWeight: 600 }}>{id}</div>
+          <div style={{ color: '#8c8c8c', fontSize: '10px' }}>
+            {record.make_model || ''} {record.vehicle_type ? `(${record.vehicle_type})` : ''}
+          </div>
+        </div>
+      )
+    },
+    {
+      title: 'License Plate',
+      dataIndex: 'license_plate',
+      key: 'license_plate',
+      width: 110,
+      render: (plate: string) => <Tag color="blue" style={{ fontSize: '10px' }}>{plate || 'N/A'}</Tag>
+    },
     { title: 'Type', dataIndex: 'fuel_type', key: 'fuel_type', width: 80, render: (t: string) => <span style={{ fontSize: '11px' }}>{t?.toUpperCase()}</span> },
     { title: 'Liters', dataIndex: 'liters', key: 'liters', width: 80, render: (v: number) => <span style={{ fontSize: '11px' }}>{v}</span> },
     { title: 'Cost (Rs.)', dataIndex: 'total_cost', key: 'total_cost', width: 100, render: (v: number) => <span style={{ fontSize: '11px' }}>Rs. {v?.toLocaleString()}</span> },
@@ -135,10 +190,7 @@ export default function FuelEntriesPage() {
     },
   ];
 
-  const filteredEntries = entries.filter(e =>
-    String(e.vehicle_id || '').toLowerCase().includes(searchText.toLowerCase())
-  );
-
+  // useMemo'd filters above
   const totalLiters = filteredEntries.reduce((sum, e) => sum + Number(e.liters || 0), 0);
   const totalCost = filteredEntries.reduce((sum, e) => sum + Number(e.total_cost || 0), 0);
 
@@ -147,7 +199,13 @@ export default function FuelEntriesPage() {
       <div style={{ marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 600 }}>Fuel Entries</h2>
         <Space>
-          <Input.Search placeholder="Search..." value={searchText} onChange={(e) => setSearchText(e.target.value)} style={{ width: 250 }} />
+          <Input.Search
+            placeholder="Search vehicle ID, name, vendor..."
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            allowClear
+            style={{ width: 300 }}
+          />
           <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>Add Entry</Button>
         </Space>
       </div>
@@ -177,7 +235,18 @@ export default function FuelEntriesPage() {
         <Form form={form} layout="vertical">
           <div style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white', padding: '12px 16px', marginBottom: '24px', borderRadius: '4px', fontSize: '14px', fontWeight: 600 }}>Fuel Entry Details</div>
           <Form.Item name="vehicle_id" label="Vehicle" rules={[{ required: true }]}>
-            <Select showSearch placeholder="Select vehicle" options={vehicles.map((v) => ({ value: v.vehicle_id, label: `${v.vehicle_id} - ${v.make_model || ''}` }))} />
+            <Select
+              showSearch
+              placeholder="Select vehicle"
+              optionFilterProp="label"
+              filterOption={(input, option) =>
+                (String(option?.label) ?? '').toLowerCase().includes(input.toLowerCase())
+              }
+              options={vehicles.map((v: any) => ({
+                value: v.vehicle_id,
+                label: `${v.vehicle_id} | ${v.make_model || ''} ${v.license_plate ? `(${v.license_plate})` : ''}`
+              }))}
+            />
           </Form.Item>
           <Form.Item name="entry_date" label="Date" rules={[{ required: true }]}><DatePicker style={{ width: '100%' }} /></Form.Item>
           <Form.Item name="fuel_type" label="Fuel Type" rules={[{ required: true }]}>

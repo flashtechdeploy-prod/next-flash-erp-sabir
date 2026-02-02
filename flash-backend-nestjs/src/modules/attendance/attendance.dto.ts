@@ -35,6 +35,16 @@ export class AttendanceRecordDto {
   @IsString()
   picture?: string;
 
+  @ApiPropertyOptional({ description: 'Check in time' })
+  @IsOptional()
+  @IsString()
+  check_in?: string;
+
+  @ApiPropertyOptional({ description: 'Check in date' })
+  @IsOptional()
+  @IsString()
+  check_in_date?: string;
+
   @ApiPropertyOptional({ description: 'Overtime minutes worked' })
   @IsOptional()
   @IsNumber()
@@ -67,6 +77,66 @@ export class AttendanceRecordDto {
   @IsOptional()
   @IsNumber()
   fine_amount?: number;
+
+  @ApiPropertyOptional({ description: 'Check out time' })
+  @IsOptional()
+  @IsString()
+  check_out?: string;
+
+  @ApiPropertyOptional({ description: 'Overtime start time' })
+  @IsOptional()
+  @IsString()
+  overtime_in?: string;
+
+  @ApiPropertyOptional({ description: 'Overtime end time' })
+  @IsOptional()
+  @IsString()
+  overtime_out?: string;
+
+  @ApiPropertyOptional({ description: 'Check out picture URL' })
+  @IsOptional()
+  @IsString()
+  check_out_picture?: string;
+
+  @ApiPropertyOptional({ description: 'Overtime in picture URL' })
+  @IsOptional()
+  @IsString()
+  overtime_in_picture?: string;
+
+  @ApiPropertyOptional({ description: 'Overtime out picture URL' })
+  @IsOptional()
+  @IsString()
+  overtime_out_picture?: string;
+
+  @ApiPropertyOptional({ description: 'Check out location (lat,lng JSON)' })
+  @IsOptional()
+  @IsString()
+  check_out_location?: string;
+
+  @ApiPropertyOptional({ description: 'Check out date' })
+  @IsOptional()
+  @IsString()
+  check_out_date?: string;
+
+  @ApiPropertyOptional({ description: 'Overtime in location (lat,lng JSON)' })
+  @IsOptional()
+  @IsString()
+  overtime_in_location?: string;
+
+  @ApiPropertyOptional({ description: 'Overtime in date' })
+  @IsOptional()
+  @IsString()
+  overtime_in_date?: string;
+
+  @ApiPropertyOptional({ description: 'Overtime out location (lat,lng JSON)' })
+  @IsOptional()
+  @IsString()
+  overtime_out_location?: string;
+
+  @ApiPropertyOptional({ description: 'Overtime out date' })
+  @IsOptional()
+  @IsString()
+  overtime_out_date?: string;
 }
 
 export class MarkSelfAttendanceDto {
@@ -100,6 +170,76 @@ export class MarkSelfAttendanceDto {
   @IsOptional()
   @IsString()
   leave_type?: string;
+
+  @ApiPropertyOptional({ description: 'Check in time' })
+  @IsOptional()
+  @IsString()
+  check_in?: string;
+
+  @ApiPropertyOptional({ description: 'Check in date' })
+  @IsOptional()
+  @IsString()
+  check_in_date?: string;
+
+  @ApiPropertyOptional({ description: 'Check out time' })
+  @IsOptional()
+  @IsString()
+  check_out?: string;
+
+  @ApiPropertyOptional({ description: 'Overtime start time' })
+  @IsOptional()
+  @IsString()
+  overtime_in?: string;
+
+  @ApiPropertyOptional({ description: 'Overtime end time' })
+  @IsOptional()
+  @IsString()
+  overtime_out?: string;
+
+  @ApiPropertyOptional({ description: 'Check out picture URL' })
+  @IsOptional()
+  @IsString()
+  check_out_picture?: string;
+
+  @ApiPropertyOptional({ description: 'Overtime in picture URL' })
+  @IsOptional()
+  @IsString()
+  overtime_in_picture?: string;
+
+  @ApiPropertyOptional({ description: 'Overtime out picture URL' })
+  @IsOptional()
+  @IsString()
+  overtime_out_picture?: string;
+
+  @ApiPropertyOptional({ description: 'Check out location (lat,lng JSON)' })
+  @IsOptional()
+  @IsString()
+  check_out_location?: string;
+
+  @ApiPropertyOptional({ description: 'Check out date' })
+  @IsOptional()
+  @IsString()
+  check_out_date?: string;
+
+  @ApiPropertyOptional({ description: 'Overtime in location (lat,lng JSON)' })
+  @IsOptional()
+  @IsString()
+  overtime_in_location?: string;
+
+  @ApiPropertyOptional({ description: 'Overtime in date' })
+  @IsOptional()
+  @IsString()
+  overtime_in_date?: string;
+
+  @ApiPropertyOptional({ description: 'Overtime out location (lat,lng JSON)' })
+  @IsOptional()
+  @IsString()
+  overtime_out_location?: string;
+
+  @ApiPropertyOptional({ description: 'Overtime out date' })
+  @IsOptional()
+  @IsString()
+  overtime_out_date?: string;
 }
 
 export class BulkUpsertAttendanceDto {

@@ -2,7 +2,7 @@ import { Injectable, NotFoundException, Inject, Logger } from '@nestjs/common';
 import { DRIZZLE } from '../../db/drizzle.module';
 import * as schema from '../../db/schema';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, sql, asc } from 'drizzle-orm';
 import { CloudStorageService } from '../../common/storage/cloud-storage.service';
 
 @Injectable()
@@ -15,13 +15,164 @@ export class VehiclesService {
     private cloudStorageService: CloudStorageService,
   ) {}
 
-  async findAll(skip = 0, limit = 100) {
+  async findAll(skip = 0, limit = 100, category?: string) {
+    const filters = [];
+    if (category) {
+      filters.push(eq(schema.vehicles.category, category));
+    }
+
     return this.db
       .select()
       .from(schema.vehicles)
+      .where(filters.length > 0 ? and(...filters) : undefined)
       .limit(limit)
       .offset(skip)
       .orderBy(desc(schema.vehicles.id));
+  }
+
+  async getCategories() {
+    const result = await this.db
+      .select()
+      .from(schema.vehicleCategories)
+      .orderBy(asc(schema.vehicleCategories.name));
+    
+    // If table is empty, fall back to distinct categories from vehicles table to avoid losing data
+    if (result.length === 0) {
+      const distinctResult = await this.db
+        .selectDistinct({ name: schema.vehicles.category })
+        .from(schema.vehicles)
+        .where(sql`${schema.vehicles.category} IS NOT NULL AND ${schema.vehicles.category} != ''`);
+      
+      // Auto-populate the categories table if it's empty but vehicles have categories
+      if (distinctResult.length > 0) {
+        for (const r of distinctResult) {
+          if (r.name) {
+            await this.addCategory(r.name);
+          }
+        }
+        return distinctResult.map(r => r.name).sort();
+      }
+    }
+    
+    return result.map((r) => r.name);
+  }
+
+  async addCategory(name: string) {
+    if (!name) return { message: 'Invalid input' };
+    try {
+      const [result] = await this.db
+        .insert(schema.vehicleCategories)
+        .values({ name })
+        .onConflictDoNothing()
+        .returning();
+      return result || { message: 'Category already exists' };
+    } catch (error) {
+      this.logger.error('Failed to add category:', error);
+      throw error;
+    }
+  }
+
+  async updateCategory(oldCategory: string, newCategory: string) {
+    if (!oldCategory || !newCategory) return { message: 'Invalid input' };
+    
+    // Update dictionary
+    await this.db
+      .update(schema.vehicleCategories)
+      .set({ name: newCategory })
+      .where(eq(schema.vehicleCategories.name, oldCategory));
+
+    // Update vehicles
+    await this.db
+      .update(schema.vehicles)
+      .set({ category: newCategory })
+      .where(eq(schema.vehicles.category, oldCategory));
+      
+    return { message: 'Category updated successfully' };
+  }
+
+  async deleteCategory(category: string) {
+    // Delete from dictionary
+    await this.db
+      .delete(schema.vehicleCategories)
+      .where(eq(schema.vehicleCategories.name, category));
+
+    // Update vehicles to 'Uncategorized'
+    await this.db
+      .update(schema.vehicles)
+      .set({ category: 'Uncategorized' })
+      .where(eq(schema.vehicles.category, category));
+      
+    return { message: 'Category deleted (vehicles moved to Uncategorized)' };
+  }
+
+  async getTypes() {
+    const result = await this.db
+      .select()
+      .from(schema.vehicleTypes)
+      .orderBy(asc(schema.vehicleTypes.name));
+    
+    // If table is empty, fall back to distinct types from vehicles table
+    if (result.length === 0) {
+      const distinctResult = await this.db
+        .selectDistinct({ name: schema.vehicles.vehicle_type })
+        .from(schema.vehicles)
+        .where(sql`${schema.vehicles.vehicle_type} IS NOT NULL AND ${schema.vehicles.vehicle_type} != ''`);
+      
+      if (distinctResult.length > 0) {
+        for (const r of distinctResult) {
+          if (r.name) {
+            await this.addType(r.name);
+          }
+        }
+        return distinctResult.map(r => r.name).sort();
+      }
+    }
+    
+    return result.map((r) => r.name);
+  }
+
+  async addType(name: string) {
+    if (!name) return { message: 'Invalid input' };
+    try {
+      const [result] = await this.db
+        .insert(schema.vehicleTypes)
+        .values({ name })
+        .onConflictDoNothing()
+        .returning();
+      return result || { message: 'Type already exists' };
+    } catch (error) {
+      this.logger.error('Failed to add vehicle type:', error);
+      throw error;
+    }
+  }
+
+  async updateType(oldType: string, newType: string) {
+    if (!oldType || !newType) return { message: 'Invalid input' };
+    
+    await this.db
+      .update(schema.vehicleTypes)
+      .set({ name: newType })
+      .where(eq(schema.vehicleTypes.name, oldType));
+
+    await this.db
+      .update(schema.vehicles)
+      .set({ vehicle_type: newType })
+      .where(eq(schema.vehicles.vehicle_type, oldType));
+      
+    return { message: 'Vehicle type updated successfully' };
+  }
+
+  async deleteType(type: string) {
+    await this.db
+      .delete(schema.vehicleTypes)
+      .where(eq(schema.vehicleTypes.name, type));
+
+    await this.db
+      .update(schema.vehicles)
+      .set({ vehicle_type: 'Other' })
+      .where(eq(schema.vehicles.vehicle_type, type));
+      
+    return { message: 'Vehicle type deleted (vehicles moved to Other)' };
   }
 
   async findOne(vehicleId: string) {

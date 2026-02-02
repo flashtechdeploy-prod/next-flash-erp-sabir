@@ -27,12 +27,34 @@ export class FuelEntriesService {
 
     const finalFilter = filters.length > 0 ? and(...filters) : undefined;
 
-    return this.db
-      .select()
+    const results = await this.db
+      .select({
+        id: schema.fuelEntries.id,
+        vehicle_id: schema.fuelEntries.vehicle_id,
+        entry_date: schema.fuelEntries.entry_date,
+        fuel_type: schema.fuelEntries.fuel_type,
+        liters: schema.fuelEntries.liters,
+        price_per_liter: schema.fuelEntries.price_per_liter,
+        total_cost: schema.fuelEntries.total_cost,
+        odometer_km: schema.fuelEntries.odometer_km,
+        vendor: schema.fuelEntries.vendor,
+        location: schema.fuelEntries.location,
+        notes: schema.fuelEntries.notes,
+        created_at: schema.fuelEntries.created_at,
+        make_model: schema.vehicles.make_model,
+        vehicle_type: schema.vehicles.vehicle_type,
+        license_plate: schema.vehicles.license_plate,
+      })
       .from(schema.fuelEntries)
+      .innerJoin(
+        schema.vehicles,
+        eq(schema.fuelEntries.vehicle_id, schema.vehicles.vehicle_id),
+      )
       .where(finalFilter)
       .limit(query.limit || 100)
       .orderBy(desc(schema.fuelEntries.id));
+
+    return results;
   }
 
   async findOne(id: number) {

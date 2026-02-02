@@ -901,6 +901,7 @@ export default function EmployeeDetailPage() {
               <Field label="Height" value={employee.height} />
               <Field label="Education" value={employee.education} />
               <Field label="Mobile" value={employee.phone || employee.mobile_no || employee.mobile_number} />
+              <Field label="Main Number" value={employee.main_number} />
               <Field label="Email" value={employee.email} />
             </div>
           </div>

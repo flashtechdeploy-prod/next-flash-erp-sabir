@@ -52,6 +52,7 @@ export class CreateEmployeeDto {
   @IsString()
   @IsOptional()
   emergency_contact_number?: string;
+  @ApiPropertyOptional() @IsString() @IsOptional() main_number?: string;
 
   // Address
   @ApiPropertyOptional() @IsString() @IsOptional() address?: string;

@@ -57,13 +57,13 @@ export default function VehicleDetailPage() {
     try {
       const startOfMonth = dayjs().startOf('month').format('YYYY-MM-DD');
       const endOfMonth = dayjs().endOf('month').format('YYYY-MM-DD');
-      
-      const response = await fuelEntryApi.getAll({ 
+
+      const response = await fuelEntryApi.getAll({
         vehicle_id: vehicleId,
         from_date: startOfMonth,
         to_date: endOfMonth
       });
-      
+
       if (!response.error) {
         const entries = (response.data as any)?.fuel_entries || (response.data as any) || [];
         const totalLiters = entries.reduce((sum: number, entry: any) => sum + (Number(entry.liters) || 0), 0);
@@ -78,19 +78,22 @@ export default function VehicleDetailPage() {
 
   useEffect(() => {
     fetchVehicle();
-      fetchMonthlyFuelUsage();
+    fetchMonthlyFuelUsage();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vehicleId]);
 
   const handleUpdate = async (values: Record<string, unknown>) => {
-    const response = await vehicleApi.update(vehicleId, values);
+    // Exclude vehicle_id from the update payload
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { vehicle_id, ...updateData } = values;
+    const response = await vehicleApi.update(vehicleId, updateData);
     if (response.error) {
       message.error(response.error);
       return;
     }
     message.success('Vehicle updated');
     setEditDrawerVisible(false);
-      fetchMonthlyFuelUsage();
+    fetchMonthlyFuelUsage();
     fetchVehicle();
   };
 
@@ -106,10 +109,10 @@ export default function VehicleDetailPage() {
 
   const handleUpload = async (values: { file: { file: File }; title?: string }) => {
     if (!values.file) return;
-    
+
     const formData = new FormData();
     const file = values.file.file;
-    
+
     if (values.title) {
       const originalExtension = file.name.split('.').pop();
       const newFilename = `${values.title}.${originalExtension}`;
@@ -122,7 +125,7 @@ export default function VehicleDetailPage() {
     const response = uploadType === 'document'
       ? await vehicleApi.uploadDocument(vehicleId, formData)
       : await vehicleApi.uploadImage(vehicleId, formData);
-      
+
     if (response.error) {
       message.error(response.error);
       return;
@@ -165,7 +168,7 @@ export default function VehicleDetailPage() {
     if (!printContent) return;
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
-    
+
     printWindow.document.write(`<!DOCTYPE html><html><head>
       <title>Vehicle Report - ${vehicle?.vehicle_id}</title>
       <style>
@@ -198,22 +201,22 @@ export default function VehicleDetailPage() {
 
   const documents = (vehicle.documents as Array<Record<string, unknown>>) || [];
   const images = (vehicle.images as Array<Record<string, unknown>>) || [];
-  
+
   console.log('Documents array:', documents);
   console.log('Images array:', images);
 
   const documentColumns = [
-    { 
-      title: 'Preview', 
-      dataIndex: 'url', 
-      key: 'preview', 
+    {
+      title: 'Preview',
+      dataIndex: 'url',
+      key: 'preview',
       width: 80,
       render: (url: string) => {
         if (!url) return null;
         const decodedPath = decodeURIComponent(url);
         const fullUrl = decodedPath.startsWith('http') ? decodedPath : `${API_BASE}${decodedPath}`;
         const isPdf = decodedPath?.match(/\.pdf$/i);
-        
+
         if (isPdf) {
           return (
             <div onClick={() => handlePreviewFile(url)} style={{ width: 50, height: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f5f5f5', borderRadius: 4, cursor: 'pointer', border: '1px solid #d9d9d9' }}>
@@ -228,10 +231,10 @@ export default function VehicleDetailPage() {
         );
       }
     },
-    { 
-      title: 'Title', 
-      dataIndex: 'title', 
-      key: 'title', 
+    {
+      title: 'Title',
+      dataIndex: 'title',
+      key: 'title',
       width: 250,
       render: (title: string, record: Record<string, unknown>) => {
         // If title exists, show it; otherwise show filename without extension
@@ -246,9 +249,9 @@ export default function VehicleDetailPage() {
     },
     { title: 'File Name', dataIndex: 'filename', key: 'filename', ellipsis: true },
     { title: 'Uploaded', dataIndex: 'created_at', key: 'created_at', width: 120, render: (date: string) => date ? new Date(date).toLocaleDateString() : '-' },
-    { 
-      title: 'Actions', 
-      key: 'actions', 
+    {
+      title: 'Actions',
+      key: 'actions',
       width: 120,
       render: (_: unknown, record: Record<string, unknown>) => (
         <Space>
@@ -290,6 +293,7 @@ export default function VehicleDetailPage() {
               <Field label="Category" value={vehicle.category} />
               <Field label="Make/Model" value={vehicle.make_model} />
               <Field label="License Plate" value={vehicle.license_plate} />
+              <Field label="Registration Date" value={vehicle.registration_date} />
               <Field label="Chassis Number" value={vehicle.chassis_number} />
               <Field label="Asset Tag" value={vehicle.asset_tag} />
               <Field label="Year" value={vehicle.year} />
@@ -305,30 +309,30 @@ export default function VehicleDetailPage() {
         <Card className="mb-6" title="Monthly Fuel Monitoring" loading={loadingFuelData}>
           <Row gutter={16}>
             <Col span={8}>
-              <Statistic 
-                title="Fuel Limit (Liters)" 
-                value={Number(vehicle.fuel_limit_monthly)} 
+              <Statistic
+                title="Fuel Limit (Liters)"
+                value={Number(vehicle.fuel_limit_monthly)}
                 precision={2}
                 suffix="L"
               />
             </Col>
             <Col span={8}>
-              <Statistic 
-                title="Current Usage (This Month)" 
-                value={monthlyFuelUsage} 
+              <Statistic
+                title="Current Usage (This Month)"
+                value={monthlyFuelUsage}
                 precision={2}
                 suffix="L"
-                valueStyle={{ 
-                  color: monthlyFuelUsage > Number(vehicle.fuel_limit_monthly) ? '#cf1322' : 
-                         monthlyFuelUsage > Number(vehicle.fuel_limit_monthly) * 0.8 ? '#faad14' : '#3f8600' 
+                valueStyle={{
+                  color: monthlyFuelUsage > Number(vehicle.fuel_limit_monthly) ? '#cf1322' :
+                    monthlyFuelUsage > Number(vehicle.fuel_limit_monthly) * 0.8 ? '#faad14' : '#3f8600'
                 }}
               />
             </Col>
             <Col span={8}>
-              <Statistic 
-                title="Status" 
+              <Statistic
+                title="Status"
                 value={monthlyFuelUsage > Number(vehicle.fuel_limit_monthly) ? 'Exceeded' : 'Within Limit'}
-                valueStyle={{ 
+                valueStyle={{
                   color: monthlyFuelUsage > Number(vehicle.fuel_limit_monthly) ? '#cf1322' : '#3f8600',
                   fontSize: '16px'
                 }}
@@ -337,17 +341,17 @@ export default function VehicleDetailPage() {
             </Col>
           </Row>
           <div className="mt-4">
-            <Progress 
-              percent={Math.min((monthlyFuelUsage / Number(vehicle.fuel_limit_monthly)) * 100, 100)} 
+            <Progress
+              percent={Math.min((monthlyFuelUsage / Number(vehicle.fuel_limit_monthly)) * 100, 100)}
               status={
-                monthlyFuelUsage > Number(vehicle.fuel_limit_monthly) ? 'exception' : 
-                monthlyFuelUsage > Number(vehicle.fuel_limit_monthly) * 0.8 ? 'normal' : 
-                'success'
+                monthlyFuelUsage > Number(vehicle.fuel_limit_monthly) ? 'exception' :
+                  monthlyFuelUsage > Number(vehicle.fuel_limit_monthly) * 0.8 ? 'normal' :
+                    'success'
               }
               strokeColor={
-                monthlyFuelUsage > Number(vehicle.fuel_limit_monthly) ? '#ff4d4f' : 
-                monthlyFuelUsage > Number(vehicle.fuel_limit_monthly) * 0.8 ? '#faad14' : 
-                '#52c41a'
+                monthlyFuelUsage > Number(vehicle.fuel_limit_monthly) ? '#ff4d4f' :
+                  monthlyFuelUsage > Number(vehicle.fuel_limit_monthly) * 0.8 ? '#faad14' :
+                    '#52c41a'
               }
             />
             {monthlyFuelUsage > Number(vehicle.fuel_limit_monthly) && (
@@ -433,8 +437,8 @@ export default function VehicleDetailPage() {
         }
       >
         <Form form={uploadForm} layout="vertical" onFinish={handleUpload}>
-          <Form.Item 
-            label="Document Title" 
+          <Form.Item
+            label="Document Title"
             name="title"
             rules={[{ required: true, message: 'Please enter document title' }]}
           >

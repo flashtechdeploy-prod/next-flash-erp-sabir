@@ -12,6 +12,10 @@ import {
   message,
   Popconfirm,
   Tag,
+  Modal,
+  Form,
+  Row,
+  Col,
 } from 'antd';
 import {
   PlusOutlined,
@@ -45,6 +49,40 @@ export default function VehiclesPage() {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
 
+  // Category Management State
+  const [categories, setCategories] = useState<string[]>([]);
+  const [categoryModalVisible, setCategoryModalVisible] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<string | null>(null);
+  const [categoryForm] = Form.useForm();
+
+  // Vehicle Type Management State
+  const [vehicleTypes, setVehicleTypes] = useState<string[]>([]);
+  const [typeModalVisible, setTypeModalVisible] = useState(false);
+  const [editingType, setEditingType] = useState<string | null>(null);
+  const [typeForm] = Form.useForm();
+
+  const fetchCategories = async () => {
+    try {
+      const response = await vehicleApi.getCategories();
+      if (!response.error && Array.isArray(response.data)) {
+        setCategories(response.data as string[]);
+      }
+    } catch (error) {
+      console.error('Failed to fetch categories:', error);
+    }
+  };
+
+  const fetchVehicleTypes = async () => {
+    try {
+      const response = await vehicleApi.getTypes();
+      if (!response.error && Array.isArray(response.data)) {
+        setVehicleTypes(response.data as string[]);
+      }
+    } catch (error) {
+      console.error('Failed to fetch vehicle types:', error);
+    }
+  };
+
   const fetchVehicles = async () => {
     setLoading(true);
     const response = await vehicleApi.getAll();
@@ -60,7 +98,74 @@ export default function VehiclesPage() {
 
   useEffect(() => {
     fetchVehicles();
+    fetchCategories();
+    fetchVehicleTypes();
   }, []);
+
+  const handleManageCategories = () => {
+    fetchCategories();
+    setCategoryModalVisible(true);
+  };
+
+  const handleEditCategory = (category: string) => {
+    setEditingCategory(category);
+    categoryForm.setFieldsValue({ name: category });
+  };
+
+  const handleDeleteCategory = async (category: string) => {
+    try {
+      await vehicleApi.deleteCategory(category);
+      message.success('Category deleted');
+      fetchCategories();
+      fetchVehicles();
+    } catch (error) {
+      console.error('Delete error:', error);
+    }
+  };
+
+  const handleCategorySubmit = async (values: { name: string }) => {
+    const response = editingCategory
+      ? await vehicleApi.updateCategory(editingCategory, values.name)
+      : await vehicleApi.createCategory(values.name);
+
+    if (!response.error) {
+      message.success(`Category ${editingCategory ? 'updated' : 'created'}`);
+      setEditingCategory(null);
+      categoryForm.resetFields();
+      fetchCategories();
+      fetchVehicles();
+    }
+  };
+
+  const handleTypeEdit = (type: string) => {
+    setEditingType(type);
+    typeForm.setFieldsValue({ name: type });
+  };
+
+  const handleTypeDelete = async (type: string) => {
+    try {
+      await vehicleApi.deleteType(type);
+      message.success('Type deleted');
+      fetchVehicleTypes();
+      fetchVehicles();
+    } catch (error) {
+      console.error('Delete error:', error);
+    }
+  };
+
+  const handleTypeSubmit = async (values: { name: string }) => {
+    const response = editingType
+      ? await vehicleApi.updateType(editingType, values.name)
+      : await vehicleApi.createType(values.name);
+
+    if (!response.error) {
+      message.success(`Type ${editingType ? 'updated' : 'created'}`);
+      setEditingType(null);
+      typeForm.resetFields();
+      fetchVehicleTypes();
+      fetchVehicles();
+    }
+  };
 
   const handleCreate = () => {
     setEditingVehicle(null);
@@ -73,8 +178,15 @@ export default function VehiclesPage() {
   };
 
   const handleFormSubmit = async (values: Record<string, unknown>) => {
+    let payload = values;
+    if (editingVehicle) {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { vehicle_id, ...rest } = values;
+      payload = rest;
+    }
+
     const response = editingVehicle
-      ? await vehicleApi.update(editingVehicle.vehicle_id, values)
+      ? await vehicleApi.update(editingVehicle.vehicle_id, payload)
       : await vehicleApi.create(values);
 
     if (response.error) {
@@ -135,6 +247,12 @@ export default function VehiclesPage() {
       dataIndex: 'year',
       key: 'year',
       width: 80,
+    },
+    {
+      title: 'Reg. Date',
+      dataIndex: 'registration_date',
+      key: 'registration_date',
+      width: 110,
     },
     {
       title: 'Status',
@@ -206,6 +324,12 @@ export default function VehiclesPage() {
         <Button icon={<ReloadOutlined />} onClick={() => fetchVehicles()}>
           Refresh
         </Button>
+        <Button onClick={handleManageCategories}>
+          Manage Categories
+        </Button>
+        <Button onClick={() => setTypeModalVisible(true)}>
+          Manage Vehicle Types
+        </Button>
       </div>
 
       <Table
@@ -232,6 +356,140 @@ export default function VehiclesPage() {
           allVehicles={vehicles}
         />
       </Drawer>
+
+      {/* Category Management Modal */}
+      <Modal
+        title="Manage Vehicle Categories"
+        open={categoryModalVisible}
+        onCancel={() => {
+          setCategoryModalVisible(false);
+          setEditingCategory(null);
+          categoryForm.resetFields();
+        }}
+        footer={null}
+        width={600}
+      >
+        <Form
+          form={categoryForm}
+          onFinish={handleCategorySubmit}
+          layout="inline"
+          className="mb-6"
+        >
+          <Form.Item
+            name="name"
+            rules={[{ required: true, message: 'Please input category name' }]}
+            style={{ flex: 1 }}
+          >
+            <Input placeholder="Enter category name" />
+          </Form.Item>
+          <Form.Item>
+            <Button type="primary" htmlType="submit">
+              {editingCategory ? 'Update' : 'Add'}
+            </Button>
+            {editingCategory && (
+              <Button
+                style={{ marginLeft: 8 }}
+                onClick={() => {
+                  setEditingCategory(null);
+                  categoryForm.resetFields();
+                }}
+              >
+                Cancel
+              </Button>
+            )}
+          </Form.Item>
+        </Form>
+
+        <Table
+          dataSource={categories.map(c => ({ name: c }))}
+          columns={[
+            { title: 'Category Name', dataIndex: 'name', key: 'name' },
+            {
+              title: 'Actions',
+              key: 'actions',
+              width: 150,
+              render: (_, record) => (
+                <Space>
+                  <Button type="link" onClick={() => handleEditCategory(record.name)}>Edit</Button>
+                  <Popconfirm title="Delete category?" onConfirm={() => handleDeleteCategory(record.name)}>
+                    <Button type="link" danger>Delete</Button>
+                  </Popconfirm>
+                </Space>
+              )
+            }
+          ]}
+          size="small"
+          pagination={{ pageSize: 5 }}
+          rowKey="name"
+        />
+      </Modal>
+
+      {/* Vehicle Type Management Modal */}
+      <Modal
+        title="Manage Vehicle Types"
+        open={typeModalVisible}
+        onCancel={() => {
+          setTypeModalVisible(false);
+          setEditingType(null);
+          typeForm.resetFields();
+        }}
+        footer={null}
+        width={600}
+      >
+        <Form
+          form={typeForm}
+          onFinish={handleTypeSubmit}
+          layout="inline"
+          className="mb-6"
+        >
+          <Form.Item
+            name="name"
+            rules={[{ required: true, message: 'Please input type name' }]}
+            style={{ flex: 1 }}
+          >
+            <Input placeholder="Enter type name" />
+          </Form.Item>
+          <Form.Item>
+            <Button type="primary" htmlType="submit">
+              {editingType ? 'Update' : 'Add'}
+            </Button>
+            {editingType && (
+              <Button
+                style={{ marginLeft: 8 }}
+                onClick={() => {
+                  setEditingType(null);
+                  typeForm.resetFields();
+                }}
+              >
+                Cancel
+              </Button>
+            )}
+          </Form.Item>
+        </Form>
+
+        <Table
+          dataSource={vehicleTypes.map(t => ({ name: t }))}
+          columns={[
+            { title: 'Type Name', dataIndex: 'name', key: 'name' },
+            {
+              title: 'Actions',
+              key: 'actions',
+              width: 150,
+              render: (_, record) => (
+                <Space>
+                  <Button type="link" onClick={() => handleTypeEdit(record.name)}>Edit</Button>
+                  <Popconfirm title="Delete type?" onConfirm={() => handleTypeDelete(record.name)}>
+                    <Button type="link" danger>Delete</Button>
+                  </Popconfirm>
+                </Space>
+              )
+            }
+          ]}
+          size="small"
+          pagination={{ pageSize: 5 }}
+          rowKey="name"
+        />
+      </Modal>
 
       <style jsx global>{`
         .compact-table .ant-table {

@@ -7,14 +7,12 @@ import {
   real,
 } from 'drizzle-orm/pg-core';
 
-/**
- * ATTENDANCE SCHEMA - Supports GPS and selfie
- */
+
 export const attendance = pgTable('attendance', {
   id: serial('id').primaryKey(),
   employee_id: text('employee_id').notNull(),
   date: text('date').notNull(),
-  status: text('status').notNull(), // present, absent, leave, late
+  status: text('status').notNull(),
   note: text('note'),
   overtime_minutes: integer('overtime_minutes'),
   overtime_rate: real('overtime_rate'),
@@ -22,9 +20,23 @@ export const attendance = pgTable('attendance', {
   late_deduction: real('late_deduction'),
   leave_type: text('leave_type'),
   fine_amount: real('fine_amount'),
-  location: text('location'), // JSON string: {lat, lng} (optional)
-  initial_location: text('initial_location'), // JSON string: {lat, lng} captured at selfie time
-  picture: text('picture'), // URL or file path (optional)
+  location: text('location'),
+  initial_location: text('initial_location'),
+  picture: text('picture'), 
+  check_in: text('check_in'),
+  check_in_date: text('check_in_date'),
+  check_out: text('check_out'), 
+  check_out_date: text('check_out_date'),
+  check_out_picture: text('check_out_picture'),
+  check_out_location: text('check_out_location'),
+  overtime_in: text('overtime_in'),
+  overtime_in_date: text('overtime_in_date'),
+  overtime_in_picture: text('overtime_in_picture'),
+  overtime_in_location: text('overtime_in_location'),
+  overtime_out: text('overtime_out'),
+  overtime_out_date: text('overtime_out_date'),
+  overtime_out_picture: text('overtime_out_picture'),
+  overtime_out_location: text('overtime_out_location'),
   created_at: timestamp('created_at').defaultNow(),
   updated_at: timestamp('updated_at').defaultNow(),
 });

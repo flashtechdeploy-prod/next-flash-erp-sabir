@@ -92,6 +92,21 @@ export class AttendanceController {
       location: body.location,
       initial_location: body.initial_location,
       leave_type: body.leave_type,
+      check_in: body.check_in,
+      check_in_date: body.check_in_date,
+      check_out: body.check_out,
+      check_out_date: body.check_out_date,
+      check_out_picture: body.check_out_picture,
+      check_out_location: body.check_out_location,
+      overtime_in: body.overtime_in,
+      overtime_in_date: body.overtime_in_date,
+      overtime_in_picture: body.overtime_in_picture,
+      overtime_in_location: body.overtime_in_location,
+      overtime_out: body.overtime_out,
+      overtime_out_date: body.overtime_out_date,
+      overtime_out_picture: body.overtime_out_picture,
+      overtime_out_location: body.overtime_out_location,
+      overtime_minutes: body.overtime_minutes ? Number(body.overtime_minutes) : undefined,
     };
 
     console.log('Processed Record for markSelf:', JSON.stringify(record, null, 2));

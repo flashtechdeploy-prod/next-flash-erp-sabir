@@ -52,11 +52,24 @@ export class VehicleAssignmentsService {
         cost: schema.vehicleAssignments.cost,
         status: schema.vehicleAssignments.status,
         created_at: schema.vehicleAssignments.created_at,
+        make_model: schema.vehicles.make_model,
+        license_plate: schema.vehicles.license_plate,
+        vehicle_type: schema.vehicles.vehicle_type,
+        employee_full_name: schema.employees.full_name,
+        employee_rank: schema.employees.rank,
       })
       .from(schema.vehicleAssignments)
+      .innerJoin(
+        schema.vehicles,
+        eq(schema.vehicleAssignments.vehicle_id, schema.vehicles.vehicle_id),
+      )
+      .leftJoin(
+        schema.employees,
+        eq(schema.vehicleAssignments.employee_id, schema.employees.employee_id),
+      )
       .where(finalFilter)
       .limit(limit)
-      .orderBy(desc(schema.vehicleAssignments.id));
+      .orderBy(desc(schema.vehicleAssignments.from_date), desc(schema.vehicleAssignments.id));
   }
 
   async findOne(id: number) {

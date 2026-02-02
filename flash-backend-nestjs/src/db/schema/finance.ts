@@ -65,9 +65,7 @@ export const expenses = pgTable('expenses', {
 export const invoices = pgTable('invoices', {
   id: serial('id').primaryKey(),
   invoice_id: text('invoice_id').unique().notNull(),
-  client_id: integer('client_id')
-    .notNull()
-    .references(() => clients.id),
+  client_id: text('client_id').notNull(),
   amount: real('amount').notNull(),
   due_date: text('due_date').notNull(),
   status: text('status').default('unpaid'),
@@ -76,9 +74,7 @@ export const invoices = pgTable('invoices', {
 
 export const client_payments = pgTable('client_payments', {
   id: serial('id').primaryKey(),
-  client_id: integer('client_id')
-    .notNull()
-    .references(() => clients.id),
+  client_id: text('client_id').notNull(),
   invoice_id: text('invoice_id').references(() => invoices.invoice_id),
   amount: real('amount').notNull(),
   payment_date: text('payment_date').notNull(),

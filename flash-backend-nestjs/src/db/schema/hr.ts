@@ -8,22 +8,6 @@ import {
 } from 'drizzle-orm/pg-core';
 import { employees } from './employees';
 
-export const attendance = pgTable('attendance', {
-  id: serial('id').primaryKey(),
-  employee_id: text('employee_id')
-    .notNull()
-    .references(() => employees.employee_id),
-  date: text('date').notNull(),
-  status: text('status').notNull(), // present, late, absent, leave, unmarked
-  note: text('note'),
-  overtime_minutes: integer('overtime_minutes'),
-  overtime_rate: real('overtime_rate'),
-  late_minutes: integer('late_minutes'),
-  late_deduction: real('late_deduction'),
-  leave_type: text('leave_type'),
-  fine_amount: real('fine_amount'),
-  created_at: timestamp('created_at').defaultNow(),
-});
 
 export const leavePeriods = pgTable('leave_periods', {
   id: serial('id').primaryKey(),

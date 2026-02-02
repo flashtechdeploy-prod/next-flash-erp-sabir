@@ -18,6 +18,20 @@ interface AttendanceRecord {
   location?: string | null;
   initial_location?: string | null;
   picture?: string | null;
+  check_in?: string | null;
+  check_in_date?: string | null;
+  check_out?: string | null;
+  check_out_date?: string | null;
+  check_out_picture?: string | null;
+  check_out_location?: string | null;
+  overtime_in?: string | null;
+  overtime_in_date?: string | null;
+  overtime_in_picture?: string | null;
+  overtime_in_location?: string | null;
+  overtime_out?: string | null;
+  overtime_out_date?: string | null;
+  overtime_out_picture?: string | null;
+  overtime_out_location?: string | null;
 }
 
 @Injectable()
@@ -27,6 +41,33 @@ export class AttendanceService {
     private db: NodePgDatabase<typeof schema>,
     private cloudStorageService: CloudStorageService,
   ) {}
+
+  private calculateMinutesBetween(
+    startTime?: string | null,
+    startDate?: string | null,
+    endTime?: string | null,
+    endDate?: string | null,
+  ): number | null {
+    if (!startTime || !endTime) return null;
+    
+    try {
+      // Use provided date or fallback to a dummy date if missing
+      const startD = startDate || '2000-01-01';
+      const endD = endDate || startD;
+      
+      const start = new Date(`${startD}T${startTime}`);
+      const end = new Date(`${endD}T${endTime}`);
+      
+      if (isNaN(start.getTime()) || isNaN(end.getTime())) return null;
+      
+      const diffMs = end.getTime() - start.getTime();
+      const diffMins = Math.round(diffMs / (1000 * 60));
+      
+      return diffMins > 0 ? diffMins : 0;
+    } catch (e) {
+      return null;
+    }
+  }
 
   async findByDate(date: string) {
     try {
@@ -48,6 +89,20 @@ export class AttendanceService {
           location: schema.attendance.location,
           initial_location: schema.attendance.initial_location,
           picture: schema.attendance.picture,
+          check_in: schema.attendance.check_in,
+          check_in_date: schema.attendance.check_in_date,
+          check_out: schema.attendance.check_out,
+          check_out_date: schema.attendance.check_out_date,
+          check_out_picture: schema.attendance.check_out_picture,
+          check_out_location: schema.attendance.check_out_location,
+          overtime_in: schema.attendance.overtime_in,
+          overtime_in_date: schema.attendance.overtime_in_date,
+          overtime_in_picture: schema.attendance.overtime_in_picture,
+          overtime_in_location: schema.attendance.overtime_in_location,
+          overtime_out: schema.attendance.overtime_out,
+          overtime_out_date: schema.attendance.overtime_out_date,
+          overtime_out_picture: schema.attendance.overtime_out_picture,
+          overtime_out_location: schema.attendance.overtime_out_location,
           created_at: schema.attendance.created_at,
         })
         .from(schema.attendance)
@@ -67,8 +122,6 @@ export class AttendanceService {
         .select({
           id: schema.attendance.id,
           employee_id: schema.attendance.employee_id,
-          fss_id: schema.employees.fss_no,
-          employee_name: schema.employees.full_name,
           date: schema.attendance.date,
           status: schema.attendance.status,
           note: schema.attendance.note,
@@ -81,7 +134,6 @@ export class AttendanceService {
           created_at: schema.attendance.created_at,
         })
         .from(schema.attendance)
-        .leftJoin(schema.employees, eq(schema.attendance.employee_id, schema.employees.employee_id))
         .where(between(schema.attendance.date, fromDate, toDate))
         .orderBy(asc(schema.attendance.date), asc(schema.attendance.employee_id));
       
@@ -109,6 +161,23 @@ export class AttendanceService {
           late_deduction: schema.attendance.late_deduction,
           leave_type: schema.attendance.leave_type,
           fine_amount: schema.attendance.fine_amount,
+          location: schema.attendance.location,
+          initial_location: schema.attendance.initial_location,
+          picture: schema.attendance.picture,
+          check_in: schema.attendance.check_in,
+          check_in_date: schema.attendance.check_in_date,
+          check_out: schema.attendance.check_out,
+          check_out_date: schema.attendance.check_out_date,
+          check_out_picture: schema.attendance.check_out_picture,
+          check_out_location: schema.attendance.check_out_location,
+          overtime_in: schema.attendance.overtime_in,
+          overtime_in_date: schema.attendance.overtime_in_date,
+          overtime_in_picture: schema.attendance.overtime_in_picture,
+          overtime_in_location: schema.attendance.overtime_in_location,
+          overtime_out: schema.attendance.overtime_out,
+          overtime_out_date: schema.attendance.overtime_out_date,
+          overtime_out_picture: schema.attendance.overtime_out_picture,
+          overtime_out_location: schema.attendance.overtime_out_location,
           created_at: schema.attendance.created_at,
         })
         .from(schema.attendance)
@@ -148,12 +217,26 @@ export class AttendanceService {
             ),
           );
 
+        console.log(`[bulkUpsert] Employee: ${record.employee_id}, Date: ${date}, Existing: ${existing?.id || 'NO'}`);
+        console.log(`[bulkUpsert] Data to save:`, JSON.stringify({
+          status: record.status,
+          check_in: record.check_in,
+          check_out: record.check_out,
+          note: record.note
+        }));
+
         const data = {
           employee_id: record.employee_id,
           date: date,
           status: record.status,
           note: record.note || null,
-          overtime_minutes: record.overtime_minutes || null,
+          overtime_minutes: record.overtime_minutes || 
+            this.calculateMinutesBetween(
+              record.overtime_in, 
+              record.overtime_in_date, 
+              record.overtime_out, 
+              record.overtime_out_date
+            ) || null,
           overtime_rate: record.overtime_rate || null,
           late_minutes: record.late_minutes || null,
           late_deduction: record.late_deduction || null,
@@ -162,16 +245,32 @@ export class AttendanceService {
           location: record.location || null,
           initial_location: record.initial_location || null,
           picture: record.picture || null,
+          check_in: record.check_in || null,
+          check_in_date: record.check_in_date || null,
+          check_out: record.check_out || null,
+          check_out_date: record.check_out_date || null,
+          check_out_picture: record.check_out_picture || null,
+          check_out_location: record.check_out_location || null,
+          overtime_in: record.overtime_in || null,
+          overtime_in_date: record.overtime_in_date || null,
+          overtime_in_picture: record.overtime_in_picture || null,
+          overtime_in_location: record.overtime_in_location || null,
+          overtime_out: record.overtime_out || null,
+          overtime_out_date: record.overtime_out_date || null,
+          overtime_out_picture: record.overtime_out_picture || null,
+          overtime_out_location: record.overtime_out_location || null,
         };
 
         if (existing) {
-          await this.db
+          const res = await this.db
             .update(schema.attendance)
             .set(data)
             .where(eq(schema.attendance.id, existing.id));
+          console.log(`[bulkUpsert] Update result for ${record.employee_id}: SUCCESS`);
           updated++;
         } else {
-          await this.db.insert(schema.attendance).values(data);
+          const res = await this.db.insert(schema.attendance).values(data);
+          console.log(`[bulkUpsert] Insert result for ${record.employee_id}: SUCCESS`);
           created++;
         }
         upserted++;
@@ -342,6 +441,23 @@ export class AttendanceService {
           late_minutes: schema.attendance.late_minutes,
           fine_amount: schema.attendance.fine_amount,
           leave_type: schema.attendance.leave_type,
+          location: schema.attendance.location,
+          initial_location: schema.attendance.initial_location,
+          picture: schema.attendance.picture,
+          check_in: schema.attendance.check_in,
+          check_in_date: schema.attendance.check_in_date,
+          check_out: schema.attendance.check_out,
+          check_out_date: schema.attendance.check_out_date,
+          check_out_picture: schema.attendance.check_out_picture,
+          check_out_location: schema.attendance.check_out_location,
+          overtime_in: schema.attendance.overtime_in,
+          overtime_in_date: schema.attendance.overtime_in_date,
+          overtime_in_picture: schema.attendance.overtime_in_picture,
+          overtime_in_location: schema.attendance.overtime_in_location,
+          overtime_out: schema.attendance.overtime_out,
+          overtime_out_date: schema.attendance.overtime_out_date,
+          overtime_out_picture: schema.attendance.overtime_out_picture,
+          overtime_out_location: schema.attendance.overtime_out_location,
         })
         .from(schema.attendance)
         .leftJoin(schema.employees, eq(schema.attendance.employee_id, schema.employees.employee_id))
@@ -388,23 +504,43 @@ export class AttendanceService {
           ),
         );
 
-      const data = {
+      const data: any = {
         employee_id: employeeId,
         date: date,
-        status: record.status,
-        note: record.note || null,
-        overtime_minutes: record.overtime_minutes || null,
-        overtime_rate: record.overtime_rate || null,
-        late_minutes: record.late_minutes || null,
-        late_deduction: record.late_deduction || null,
-        leave_type: record.leave_type || null,
-        fine_amount: record.fine_amount || null,
-        location: record.location || null,
-        initial_location: record.initial_location || null,
-        picture: pictureUrl || null,
-        created_at: new Date(),
+        status: record.status || 'present',
         updated_at: new Date(),
       };
+
+      // Only set fields that are provided in the request
+      if (record.note !== undefined) data.note = record.note;
+      if (record.overtime_minutes !== undefined) data.overtime_minutes = record.overtime_minutes;
+      if (record.overtime_rate !== undefined) data.overtime_rate = record.overtime_rate;
+      if (record.late_minutes !== undefined) data.late_minutes = record.late_minutes;
+      if (record.late_deduction !== undefined) data.late_deduction = record.late_deduction;
+      if (record.leave_type !== undefined) data.leave_type = record.leave_type;
+      if (record.fine_amount !== undefined) data.fine_amount = record.fine_amount;
+      if (record.location !== undefined) data.location = record.location;
+      if (record.initial_location !== undefined) data.initial_location = record.initial_location;
+      if (pictureUrl !== undefined) data.picture = pictureUrl;
+      if (record.check_in !== undefined) data.check_in = record.check_in;
+      if (record.check_in_date !== undefined) data.check_in_date = record.check_in_date;
+      if (record.check_out !== undefined) data.check_out = record.check_out;
+      if (record.check_out_date !== undefined) data.check_out_date = record.check_out_date;
+      if (record.check_out_picture !== undefined) data.check_out_picture = record.check_out_picture;
+      if (record.check_out_location !== undefined) data.check_out_location = record.check_out_location;
+      if (record.overtime_in !== undefined) data.overtime_in = record.overtime_in;
+      if (record.overtime_in_date !== undefined) data.overtime_in_date = record.overtime_in_date;
+      if (record.overtime_in_picture !== undefined) data.overtime_in_picture = record.overtime_in_picture;
+      if (record.overtime_in_location !== undefined) data.overtime_in_location = record.overtime_in_location;
+      if (record.overtime_out !== undefined) data.overtime_out = record.overtime_out;
+      if (record.overtime_out_date !== undefined) data.overtime_out_date = record.overtime_out_date;
+      if (record.overtime_out_picture !== undefined) data.overtime_out_picture = record.overtime_out_picture;
+      if (record.overtime_out_location !== undefined) data.overtime_out_location = record.overtime_out_location;
+
+      // Handle overtime calculation if not explicitly provided but times are there
+      if (data.overtime_minutes === undefined && (record.overtime_in || record.overtime_out)) {
+         // We might need to fetch existing if only one is provided, but for now we'll just skip auto-calc in markSelf if partial
+      }
 
       console.log('Final data object for DB (upsert):', JSON.stringify(data, null, 2));
 
@@ -414,7 +550,7 @@ export class AttendanceService {
           .set(data)
           .where(eq(schema.attendance.id, existing.id));
       } else {
-        // Insert new record
+        // Insert new record - for new records we want to ensure nulls for missing fields (except those with defaults)
         await this.db.insert(schema.attendance).values(data);
       }
 
@@ -449,6 +585,20 @@ export class AttendanceService {
         location: schema.attendance.location,
         initial_location: schema.attendance.initial_location,
         picture: schema.attendance.picture,
+        check_in: schema.attendance.check_in,
+        check_in_date: schema.attendance.check_in_date,
+        check_out: schema.attendance.check_out,
+        check_out_date: schema.attendance.check_out_date,
+        check_out_picture: schema.attendance.check_out_picture,
+        check_out_location: schema.attendance.check_out_location,
+        overtime_in: schema.attendance.overtime_in,
+        overtime_in_date: schema.attendance.overtime_in_date,
+        overtime_in_picture: schema.attendance.overtime_in_picture,
+        overtime_in_location: schema.attendance.overtime_in_location,
+        overtime_out: schema.attendance.overtime_out,
+        overtime_out_date: schema.attendance.overtime_out_date,
+        overtime_out_picture: schema.attendance.overtime_out_picture,
+        overtime_out_location: schema.attendance.overtime_out_location,
         created_at: schema.attendance.created_at,
       })
       .from(schema.attendance)
@@ -511,6 +661,20 @@ export class AttendanceService {
         location: schema.attendance.location,
         initial_location: schema.attendance.initial_location,
         picture: schema.attendance.picture,
+        check_in: schema.attendance.check_in,
+        check_in_date: schema.attendance.check_in_date,
+        check_out: schema.attendance.check_out,
+        check_out_date: schema.attendance.check_out_date,
+        check_out_picture: schema.attendance.check_out_picture,
+        check_out_location: schema.attendance.check_out_location,
+        overtime_in: schema.attendance.overtime_in,
+        overtime_in_date: schema.attendance.overtime_in_date,
+        overtime_in_picture: schema.attendance.overtime_in_picture,
+        overtime_in_location: schema.attendance.overtime_in_location,
+        overtime_out: schema.attendance.overtime_out,
+        overtime_out_date: schema.attendance.overtime_out_date,
+        overtime_out_picture: schema.attendance.overtime_out_picture,
+        overtime_out_location: schema.attendance.overtime_out_location,
         created_at: schema.attendance.created_at,
       })
       .from(schema.attendance)
@@ -525,6 +689,7 @@ export class AttendanceService {
    */
   async getFullDaySheet(date: string) {
     try {
+      console.log(`[getFullDaySheet] Fetching for date: ${date}`);
       const records = await this.db
         .select({
           employee_id: schema.employees.employee_id,
@@ -541,6 +706,20 @@ export class AttendanceService {
           location: schema.attendance.location,
           initial_location: schema.attendance.initial_location,
           picture: schema.attendance.picture,
+          check_in: schema.attendance.check_in,
+          check_in_date: schema.attendance.check_in_date,
+          check_out: schema.attendance.check_out,
+          check_out_date: schema.attendance.check_out_date,
+          check_out_picture: schema.attendance.check_out_picture,
+          check_out_location: schema.attendance.check_out_location,
+          overtime_in: schema.attendance.overtime_in,
+          overtime_in_date: schema.attendance.overtime_in_date,
+          overtime_in_picture: schema.attendance.overtime_in_picture,
+          overtime_in_location: schema.attendance.overtime_in_location,
+          overtime_out: schema.attendance.overtime_out,
+          overtime_out_date: schema.attendance.overtime_out_date,
+          overtime_out_picture: schema.attendance.overtime_out_picture,
+          overtime_out_location: schema.attendance.overtime_out_location,
           date: sql<string>`${date}`,
         })
         .from(schema.employees)
@@ -552,6 +731,12 @@ export class AttendanceService {
           ),
         )
         .orderBy(desc(sql`CAST(NULLIF(${schema.employees.fss_no}, '') AS INTEGER)`));
+
+      const markedCount = records.filter(r => r.status && r.status !== 'unmarked').length;
+      console.log(`[getFullDaySheet] Total records: ${records.length}, Marked: ${markedCount}`);
+      if (markedCount > 0) {
+        console.log(`[getFullDaySheet] First marked record:`, JSON.stringify(records.find(r => r.status && r.status !== 'unmarked')));
+      }
 
       return records;
     } catch (error) {
