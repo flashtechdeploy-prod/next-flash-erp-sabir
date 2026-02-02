@@ -66,6 +66,47 @@ const parseGPS = (locStr: string | null | undefined) => {
   return null;
 };
 
+const getOvertimeMinutes = (record: any, selectedDateStr: string) => {
+  if (!record.overtime_in || !record.overtime_out) {
+    return record.overtime_minutes || 0;
+  }
+
+  try {
+    const parseToMinutes = (timeStr: string) => {
+      const parts = timeStr.split(':');
+      const h = parseInt(parts[0], 10) || 0;
+      const m = parseInt(parts[1], 10) || 0;
+      return h * 60 + m;
+    };
+
+    const inMins = parseToMinutes(record.overtime_in);
+    const outMins = parseToMinutes(record.overtime_out);
+
+    // If we have explicit dates, use them for high-precision
+    if (record.overtime_in_date || record.overtime_out_date) {
+      const startD = record.overtime_in_date || selectedDateStr;
+      const endD = record.overtime_out_date || startD;
+      const start = dayjs(`${startD}T${record.overtime_in.padStart(5, '0')}`);
+      const end = dayjs(`${endD}T${record.overtime_out.padStart(5, '0')}`);
+      if (start.isValid() && end.isValid()) {
+        const diff = end.diff(start, 'minute');
+        return diff > 0 ? diff : 0;
+      }
+    }
+
+    // Fallback/Standard: Simple same-day or cross-day logic
+    let diff = outMins - inMins;
+    if (diff < 0) {
+      // Assume overnight if out time is less than in time
+      diff += 1440; // 24 hours
+    }
+    return diff > 0 ? diff : 0;
+  } catch (e) {
+    console.error('OT Calc Error:', e);
+    return record.overtime_minutes || 0;
+  }
+};
+
 interface AttendanceRecord {
   id?: number;
   employee_id: string;
@@ -131,11 +172,17 @@ export default function AttendancePage() {
 
     const data = response.data as AttendanceRecord[];
     console.log(`[fetchFullSheet] Loaded ${data.length} employees.`);
-    console.log(`[fetchFullSheet] Samples with status:`, data.filter(r => r.status && r.status !== 'unmarked').slice(0, 5).map(r => ({ id: r.employee_id, status: r.status, check_in: r.check_in })));
-    setAttendance(data);
+
+    // Auto-calculate overtime if times are present but minutes are not
+    const processedData = data.map(r => ({
+      ...r,
+      overtime_minutes: r.overtime_minutes || getOvertimeMinutes(r, dateStr)
+    }));
+
+    setAttendance(processedData);
 
     // Map minimal employee data for local filtering/lookups if needed
-    setEmployees(data.map(r => ({
+    setEmployees(processedData.map(r => ({
       employee_id: r.employee_id,
       full_name: r.employee_name,
       fss_no: r.fss_id
@@ -252,7 +299,7 @@ export default function AttendancePage() {
     attendance.forEach(r => {
       if (r.check_in && r.check_out) {
         try {
-          const checkInDate = r.check_in_date || dayjs().format('YYYY-MM-DD');
+          const checkInDate = r.check_in_date || selectedDate.format('YYYY-MM-DD');
           const checkOutDate = r.check_out_date || checkInDate;
           const checkIn = dayjs(`${checkInDate}T${r.check_in}`);
           const checkOut = dayjs(`${checkOutDate}T${r.check_out}`);
@@ -273,7 +320,7 @@ export default function AttendancePage() {
       // First check if overtime_in and overtime_out are set
       if (r.overtime_in && r.overtime_out) {
         try {
-          const otInDate = r.overtime_in_date || dayjs().format('YYYY-MM-DD');
+          const otInDate = r.overtime_in_date || selectedDate.format('YYYY-MM-DD');
           const otOutDate = r.overtime_out_date || otInDate;
           const otIn = dayjs(`${otInDate}T${r.overtime_in}`);
           const otOut = dayjs(`${otOutDate}T${r.overtime_out}`);
@@ -443,6 +490,35 @@ export default function AttendancePage() {
           </div>
         </div>
       )
+    },
+    {
+      title: 'Work Duration',
+      key: 'duration',
+      width: 100,
+      align: 'center' as const,
+      render: (_: unknown, record: AttendanceRecord) => {
+        if (!record.check_in || !record.check_out) return '-';
+        try {
+          const startD = record.check_in_date || selectedDate.format('YYYY-MM-DD');
+          const endD = record.check_out_date || startD;
+          const start = dayjs(`${startD}T${record.check_in}`);
+          const end = dayjs(`${endD}T${record.check_out}`);
+          if (start.isValid() && end.isValid()) {
+            const diff = end.diff(start, 'minute');
+            if (diff <= 0) return '-';
+            const h = Math.floor(diff / 60);
+            const m = diff % 60;
+            return (
+              <Tooltip title={`Start: ${record.check_in} | End: ${record.check_out}`}>
+                <Tag color="cyan" style={{ border: 'none', borderRadius: '4px', cursor: 'help' }}>
+                  {h}h {m}m
+                </Tag>
+              </Tooltip>
+            );
+          }
+        } catch (e) { }
+        return '-';
+      },
     },
     {
       title: 'Out Pic',
@@ -701,43 +777,68 @@ export default function AttendancePage() {
       },
     },
     {
-      title: 'OT Days',
-      key: 'ot_days',
-      width: 180,
+      title: 'OT Hours',
+      key: 'ot_hours',
+      width: 200,
       align: 'center' as const,
-      render: (_: unknown, record: AttendanceRecord) => (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
-          <Switch
-            checked={!!record.overtime_minutes}
-            onChange={(checked) => {
-              setAttendance(prev =>
-                prev.map(r =>
-                  r.employee_id === record.employee_id
-                    ? { ...r, overtime_minutes: checked ? 480 : 0 }
-                    : r
-                )
-              );
-            }}
-            size="small"
-          />
-          <InputNumber
-            value={record.overtime_minutes ? Math.round(record.overtime_minutes / 60) : 0}
-            onChange={(val) => {
-              setAttendance(prev =>
-                prev.map(r =>
-                  r.employee_id === record.employee_id
-                    ? { ...r, overtime_minutes: (val || 0) * 60 }
-                    : r
-                )
-              );
-            }}
-            size="small"
-            style={{ width: '50px' }}
-            min={0}
-          />
-          <span style={{ fontSize: '12px', color: '#999' }}>Days</span>
-        </div>
-      ),
+      render: (_: unknown, record: AttendanceRecord) => {
+        const h = record.overtime_minutes ? Math.floor(record.overtime_minutes / 60) : 0;
+        const m = record.overtime_minutes ? record.overtime_minutes % 60 : 0;
+        const isAuto = record.overtime_in && record.overtime_out;
+
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+            <div className="flex items-center gap-2">
+              <Switch
+                checked={!!record.overtime_minutes}
+                onChange={(checked) => {
+                  setAttendance(prev =>
+                    prev.map(r =>
+                      r.employee_id === record.employee_id
+                        ? { ...r, overtime_minutes: checked ? 480 : 0 }
+                        : r
+                    )
+                  );
+                }}
+                size="small"
+              />
+              <Tooltip title={isAuto ? `Calculated from ${record.overtime_in} to ${record.overtime_out}` : 'Manual hours entry'}>
+                <InputNumber
+                  value={h}
+                  onChange={(val) => {
+                    setAttendance(prev =>
+                      prev.map(r =>
+                        r.employee_id === record.employee_id
+                          ? { ...r, overtime_minutes: (val || 0) * 60 + m }
+                          : r
+                      )
+                    );
+                  }}
+                  size="small"
+                  style={{ width: '50px' }}
+                  min={0}
+                />
+              </Tooltip>
+              <span style={{ fontSize: '12px', color: '#64748b' }}>Hrs</span>
+            </div>
+            {isAuto && (
+              <Badge
+                count="AUTO"
+                style={{
+                  backgroundColor: '#f97316',
+                  fontSize: '9px',
+                  height: '14px',
+                  lineHeight: '14px',
+                  borderRadius: '4px'
+                }}
+              />
+            )}
+            {!isAuto && (record.overtime_minutes ?? 0) > 0 && m > 0 && (
+              <span style={{ fontSize: '10px', color: '#94a3b8' }}>+{m}m</span>
+            )}
+          </div>
+        );
+      },
     },
     {
       title: 'Late',
@@ -845,6 +946,23 @@ export default function AttendancePage() {
             className="hover:bg-slate-50 transition-colors rounded-xl"
             style={{ width: 160 }}
           />
+          <Button
+            icon={<ClockCircleOutlined />}
+            onClick={() => {
+              const selectedDateStr = selectedDate.format('YYYY-MM-DD');
+              setAttendance(prev =>
+                prev.map(r => ({
+                  ...r,
+                  overtime_minutes: getOvertimeMinutes(r, selectedDateStr)
+                }))
+              );
+              message.success('Recalculated overtime for all records');
+            }}
+            size="large"
+            className="rounded-xl border-orange-200 text-orange-600 hover:bg-orange-50"
+          >
+            Calc OT
+          </Button>
           <Button
             type="primary"
             icon={<SaveOutlined />}
@@ -1323,18 +1441,43 @@ export default function AttendancePage() {
               ),
             },
             {
-              title: 'Late (min)',
-              dataIndex: 'late_minutes',
-              key: 'late_minutes',
+              title: 'Duration',
+              key: 'duration',
               width: 100,
-              render: (val: number) => val || '-',
+              render: (_: unknown, record: AttendanceRecord) => {
+                if (!record.check_in || !record.check_out) return '-';
+                try {
+                  const startD = record.check_in_date || record.date;
+                  const endD = record.check_out_date || startD;
+                  const start = dayjs(`${startD}T${record.check_in}`);
+                  const end = dayjs(`${endD}T${record.check_out}`);
+                  if (start.isValid() && end.isValid()) {
+                    const diff = end.diff(start, 'minute');
+                    if (diff <= 0) return '-';
+                    return (
+                      <Tooltip title={`In: ${record.check_in} | Out: ${record.check_out}`}>
+                        <Tag color="cyan">{Math.floor(diff / 60)}h {diff % 60}m</Tag>
+                      </Tooltip>
+                    );
+                  }
+                } catch (e) { }
+                return '-';
+              },
             },
             {
-              title: 'OT (min)',
-              dataIndex: 'overtime_minutes',
-              key: 'overtime_minutes',
+              title: 'Overtime',
+              key: 'overtime',
               width: 100,
-              render: (val: number) => val || '-',
+              render: (_: unknown, record: AttendanceRecord) => {
+                if (!record.overtime_minutes) return '-';
+                const h = Math.floor(record.overtime_minutes / 60);
+                const m = record.overtime_minutes % 60;
+                return (
+                  <Tooltip title={record.overtime_in ? `OT In: ${record.overtime_in} | OT Out: ${record.overtime_out}` : 'Manual Entry'}>
+                    <Tag color="orange">{h}h {m}m</Tag>
+                  </Tooltip>
+                );
+              },
             },
             {
               title: 'Fine',
