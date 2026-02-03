@@ -90,7 +90,8 @@ export class EmployeesService {
     )
       .limit(limit)
       .offset(skip)
-      .orderBy(desc(sql`CAST(COALESCE(${schema.employees.fss_no}, '0') AS INTEGER)`));
+      .orderBy(desc(schema.employees.fss_no));
+
 
     if (with_total) {
       const results = await (this.db
