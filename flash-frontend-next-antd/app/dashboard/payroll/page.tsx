@@ -220,8 +220,11 @@ function PayrollContent() {
         presentDays, lateDays, absentDays, leaveDays, preDays, curDays,
         totalDays: totalPaidDays, totalOvertimeMinutes, totalFines, basicSalary,
         allowances: parseFloat(String(emp.allowances || '0')),
-        allow_other: allowOther, eobi, taxFineAdv, totalSalary,
-        grossSalary: Math.round(grossSalaryBase + allowOther),
+        totalSalary,
+        allow_other: allowOther, eobi, taxFineAdv,
+        perDaySalary: Math.round(perDaySalary),
+        grossSalary: Math.round(grossSalaryBase + overtimePay + allowOther),
+
         overtimePay: Math.round(overtimePay),
         otRate: otRate,
         ot_amount_override: sheetEntry?.ot_amount_override,
@@ -506,6 +509,7 @@ function PayrollContent() {
 
 
     { title: 'Basic Salary', dataIndex: 'totalSalary', key: 'totalSalary', width: 110, render: (v: number) => v.toLocaleString() },
+    { title: 'Per Day', dataIndex: 'perDaySalary', key: 'perDaySalary', width: 100, render: (v: number) => v.toLocaleString() },
     {
       title: 'Pre. Days',
       dataIndex: 'preDays',
