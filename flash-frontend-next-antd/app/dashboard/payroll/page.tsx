@@ -154,6 +154,13 @@ function PayrollContent() {
       attGroupMap.get(eid)?.push(a);
     });
 
+    const prevAttGroupMap = new Map<string, any[]>();
+    rawPrevAttendance.forEach((a: any) => {
+      const eid = String(a.employee_id);
+      if (!prevAttGroupMap.has(eid)) prevAttGroupMap.set(eid, []);
+      prevAttGroupMap.get(eid)?.push(a);
+    });
+
     const fromDateObj = month.subtract(1, 'month').date(26);
     const toDateObj = month.date(25);
     const workingDays = toDateObj.diff(fromDateObj, 'day') + 1;
@@ -165,10 +172,20 @@ function PayrollContent() {
       const sheetEntry = sheetEntryMap.get(empId);
 
       let presentDays = 0, absentDays = 0, leaveDays = 0, lateDays = 0, totalFines = 0, totalOvertimeMinutes = 0, otDaysCount = 0;
+      let preDaysCount = 0, curDaysCount = 0;
+
+      const splitDate = month.startOf('month');
 
       empAttendance.forEach((a: any) => {
         const status = String(a.status).toLowerCase();
-        if (status === 'present' || status === 'late') presentDays++;
+        const aDate = dayjs(a.date);
+        const isPre = aDate.isBefore(splitDate);
+
+        if (status === 'present' || status === 'late') {
+          presentDays++;
+          if (isPre) preDaysCount++;
+          else curDaysCount++;
+        }
         if (status === 'absent') absentDays++;
         if (status === 'leave') leaveDays++;
         if (status === 'late') lateDays++;
@@ -189,8 +206,8 @@ function PayrollContent() {
       let totalSalary = parseFloat(String(emp.total_salary || '0'));
       if (totalSalary === 0) totalSalary = basicSalary;
 
-      const preDays = sheetEntry?.pre_days_override ?? 0;
-      const curDays = sheetEntry?.cur_days_override ?? presentDays;
+      const preDays = sheetEntry?.pre_days_override ?? preDaysCount;
+      const curDays = sheetEntry?.cur_days_override ?? curDaysCount;
       const totalPaidDays = preDays + curDays + leaveDays;
       const perDaySalary = totalSalary / workingDays;
       const otRate = sheetEntry?.ot_rate_override ?? 700;
@@ -242,12 +259,6 @@ function PayrollContent() {
     setPayrollData(calculated);
 
     // Prev month calc
-    const prevAttGroupMap = new Map<string, any[]>();
-    rawPrevAttendance.forEach((a: any) => {
-      const eid = String(a.employee_id);
-      if (!prevAttGroupMap.has(eid)) prevAttGroupMap.set(eid, []);
-      prevAttGroupMap.get(eid)?.push(a);
-    });
     const prevSheetEntryMap = new Map();
     rawPrevSheetEntries.forEach((s: any) => prevSheetEntryMap.set(Number(s.employee_db_id), s));
 
@@ -519,7 +530,7 @@ function PayrollContent() {
     { title: 'Basic Salary', dataIndex: 'totalSalary', key: 'totalSalary', width: 110, render: (v: number) => v.toLocaleString() },
     { title: 'Per Day', dataIndex: 'perDaySalary', key: 'perDaySalary', width: 100, render: (v: number) => v.toLocaleString() },
     {
-      title: 'Pre. Days',
+      title: `${month.subtract(1, 'month').format('MMM.')} Days`,
       dataIndex: 'preDays',
       key: 'preDays',
       width: 90,
@@ -535,7 +546,7 @@ function PayrollContent() {
       )
     },
     {
-      title: 'Cur. Days',
+      title: `${month.format('MMM.')} Days`,
       dataIndex: 'curDays',
       key: 'curDays',
       width: 90,
