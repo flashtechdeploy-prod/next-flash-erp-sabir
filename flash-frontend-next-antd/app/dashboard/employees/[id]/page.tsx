@@ -887,67 +887,112 @@ export default function EmployeeDetailPage() {
 
       <Card className="mb-6">
         <div ref={printRef}>
+          {/* Profile Photo Section */}
           <div className="section">
-            <div className="section-title">Basic Identification</div>
+            <div className="section-title">Profile Photo</div>
             <div className="field-grid">
-              <Field label="Employee ID" value={employee.employee_id} />
-              <Field label="Full Name" value={employee.full_name} />
-              <Field label="Father Name" value={employee.father_name} />
-              <Field label="CNIC" value={employee.cnic || employee.cnic_no} />
-              <Field label="CNIC Expiry" value={employee.cnic_expiry_date} />
-              <Field label="Date of Birth" value={employee.date_of_birth || employee.dob} />
-              <Field label="Blood Group" value={employee.blood_group} />
-              <Field label="Gender" value={employee.gender} />
-              <Field label="Height" value={employee.height} />
-              <Field label="Education" value={employee.education} />
-              <Field label="Mobile" value={employee.phone || employee.mobile_no || employee.mobile_number} />
-              <Field label="Main Number" value={employee.main_number} />
-              <Field label="Email" value={employee.email} />
+              {employee.profile_photo ? (
+                <Image src={getFullFileUrl(employee.profile_photo)} alt="Profile" width={150} />
+              ) : (
+                <div style={{ width: 150, height: 150, backgroundColor: '#f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  No Photo
+                </div>
+              )}
             </div>
           </div>
 
+          {/* Enrolment Details */}
           <div className="section">
-            <div className="section-title">Service Details</div>
+            <div className="section-title">Enrolment Details</div>
             <div className="field-grid">
               <Field label="FSS Number" value={employee.fss_no} />
-              <Field label="Person Status" value={employee.served_in} />
               <Field label="Rank" value={employee.rank} />
               <Field label="Unit" value={employee.unit} />
-              <Field label="Status" value={employee.status} />
-              <Field label="Enrolled As" value={employee.enrolled_as} />
               <Field label="Date of Enrolment" value={employee.date_of_enrolment} />
-              <Field label="Deployed At" value={employee.deployed_at} />
-              <Field label="Pay (Rs)" value={employee.pay_rs} />
-              <Field label="Medical Category" value={employee.medical_category} />
+              <Field label="Date of Re-Enrolment" value={employee.date_of_re_enrolment} />
+              <Field label="Status" value={employee.status} />
               <Field label="Interviewed By" value={employee.interviewed_by} />
               <Field label="Introduced By" value={employee.introduced_by} />
+              <Field label="Enrolled As" value={employee.enrolled_as} />
+              <Field label="Deployed At" value={employee.deployed_at} />
+              <Field label="Pay (Rs)" value={employee.pay_rs} />
               <Field label="BDM" value={employee.bdm} />
+              <Field label="Person Status" value={employee.person_status} />
+              <Field label="Past Experience" value={employee.served_in} />
+              <Field label="Experience in Security" value={employee.experience_in_security} />
+              <Field label="Cause of Discharge" value={employee.cause_of_discharge} />
+              <Field label="Medical Category" value={employee.medical_category} />
+              <Field label="Previous Employment" value={employee.previous_employment} />
+              <Field label="Original Document Held" value={employee.original_document_held} />
+            </div>
+          </div>
+
+          {/* Bio Data */}
+          <div className="section">
+            <div className="section-title">Bio Data</div>
+            <div className="field-grid">
+              <Field label="Full Name" value={employee.full_name} />
+              <Field label="Blood Group" value={employee.blood_group} />
+              <Field label="Gender" value={employee.gender} />
+              <Field label="Father Name" value={employee.father_name} />
+              <Field label="CNIC" value={employee.cnic || employee.cnic_no} />
+              <Field label="CNIC Expiry" value={employee.cnic_expiry_date || employee.cnic_expiry} />
+              <Field label="Date of Birth" value={employee.date_of_birth || employee.dob} />
+              <Field label="Height" value={employee.height} />
+              <Field label="Civil Education" value={employee.education} />
+              <Field label="Bio Data" value={employee.bio_data} />
+              <Field label="Domicile" value={employee.domicile} />
+              <Field label="Languages Spoken" value={employee.languages_spoken} />
+              <Field label="Medical Category" value={employee.medical_category} />
+              <Field label="Personal Mobile No" value={employee.phone || employee.mobile_no || employee.mobile_number} />
+              <Field label="Email" value={employee.email} />
+              <Field label="Main Number" value={employee.main_number} />
               <Field label="EOBI Number" value={employee.eobi_no} />
             </div>
           </div>
 
+          {/* Permanent Address */}
           <div className="section">
-            <div className="section-title">Address Information</div>
+            <div className="section-title">Permanent Address</div>
             <div className="field-grid">
-              <div className="field address-field">
-                <div className="field-label"><strong>Permanent Address:</strong></div>
-                <div className="field-value">
-                  {[employee.permanent_village, employee.permanent_post_office,
-                  employee.permanent_thana, employee.permanent_tehsil, employee.permanent_district]
-                    .filter(Boolean).join(', ') || (employee.permanent_address as string) || '-'}
-                </div>
-              </div>
-              <div className="field address-field">
-                <div className="field-label"><strong>Present Address:</strong></div>
-                <div className="field-value">
-                  {[employee.present_village, employee.present_post_office,
-                  employee.present_thana, employee.present_tehsil, employee.present_district]
-                    .filter(Boolean).join(', ') || '-'}
-                </div>
-              </div>
+              <Field label="Village/Mohalla" value={employee.permanent_village} />
+              <Field label="Post Office" value={employee.permanent_post_office} />
+              <Field label="Thana" value={employee.permanent_thana} />
+              <Field label="Tehsil" value={employee.permanent_tehsil} />
+              <Field label="District" value={employee.permanent_district} />
             </div>
           </div>
 
+          {/* Present Address */}
+          <div className="section">
+            <div className="section-title">Present Address</div>
+            <div className="field-grid">
+              <Field label="Village/Mohalla" value={employee.present_village} />
+              <Field label="Post Office" value={employee.present_post_office} />
+              <Field label="Thana" value={employee.present_thana} />
+              <Field label="Tehsil" value={employee.present_tehsil} />
+              <Field label="District" value={employee.present_district} />
+            </div>
+          </div>
+
+          {/* Banking & Salary Information */}
+          <div className="section">
+            <div className="section-title">Banking & Salary Information</div>
+            <div className="field-grid">
+              <Field label="Basic Salary" value={employee.basic_salary} />
+              <Field label="Allowances" value={employee.allowances} />
+              <Field label="Total Salary" value={employee.total_salary} />
+              <Field label="Bank Name" value={employee.bank_name} />
+              <Field label="Account Number" value={employee.account_number || employee.bank_account_number} />
+              <Field label="IFSC Code" value={employee.ifsc_code} />
+              <Field label="PAN Name" value={employee.pan_name} />
+              <Field label="Insurance" value={employee.insurance} />
+              <Field label="Social Security #" value={employee.social_security} />
+              <Field label="EOBI Number" value={employee.eobi_no} />
+            </div>
+          </div>
+
+          {/* Family & Next of Kin */}
           <div className="section">
             <div className="section-title">Family & Next of Kin</div>
             <div className="field-grid">
@@ -955,30 +1000,56 @@ export default function EmployeeDetailPage() {
               <Field label="Daughters" value={employee.daughters} />
               <Field label="Brothers" value={employee.brothers} />
               <Field label="Sisters" value={employee.sisters} />
+              <Field label="Emergency Contact Name" value={employee.emergency_contact_name} />
+              <Field label="Emergency Contact Number" value={employee.emergency_contact_number} />
               <Field label="NOK Name" value={employee.nok_name || employee.next_of_kin_name} />
               <Field label="NOK CNIC" value={employee.nok_cnic_no || employee.next_of_kin_cnic} />
               <Field label="NOK Mobile" value={employee.nok_mobile_no || employee.next_of_kin_mobile_number} />
-              <Field label="Emergency Contact" value={employee.emergency_contact_number} />
             </div>
           </div>
 
+          {/* Verification & Documents */}
           <div className="section">
             <div className="section-title">Verification & Documents</div>
             <div className="field-grid">
-              <Field label="SHO Verification" value={employee.sho_verification_date} />
-              <Field label="SSP Verification" value={employee.ssp_verification_date} />
-              <Field label="Al-Khidmat Verification" value={employee.verified_by_khidmat_markaz} />
+              <Field label="Documents Held" value={employee.documents_held || employee.original_document_held} />
+              <Field label="Documents Handed Over To" value={employee.documents_handed_over_to} />
+              <Field label="Photo on Document" value={employee.photo_on_doc} />
+              <Field label="Original Document Held" value={employee.original_document_held} />
               <Field label="Agreement Date" value={employee.agreement_date} />
-              <Field label="Social Security #" value={employee.social_security} />
-              <Field label="Documents Held" value={employee.original_document_held || employee.documents_held} />
-              <div className="field address-field">
-                <div className="field-label"><strong>Insurance:</strong></div>
-                <div className="field-value">{String(employee.insurance || '-')}</div>
-              </div>
-              <div className="field address-field">
-                <div className="field-label"><strong>Remarks:</strong></div>
-                <div className="field-value">{String(employee.remarks || '-')}</div>
-              </div>
+              <Field label="Other Documents" value={employee.other_documents} />
+              <Field label="SHO Verification Date" value={employee.sho_verification_date} />
+              <Field label="SSP Verification Date" value={employee.ssp_verification_date} />
+              <Field label="Verified by Khidmat Markaz" value={employee.verified_by_khidmat_markaz} />
+              <Field label="Verified by SHO" value={employee.verified_by_sho} />
+              <Field label="Verified by SSP" value={employee.verified_by_ssp} />
+            </div>
+          </div>
+
+          {/* Signatures & Biometrics */}
+          <div className="section">
+            <div className="section-title">Signatures & Biometrics</div>
+            <div className="field-grid">
+              <Field label="Signature Recording Officer" value={employee.signature_recording_officer} />
+              <Field label="Signature Individual" value={employee.signature_individual} />
+              <Field label="Thumb Impression" value={employee.thumb_impression} />
+              <Field label="Index Impression" value={employee.index_impression} />
+              <Field label="Left Hand Thumb" value={employee.left_hand_thumb} />
+              <Field label="Left Hand Index" value={employee.left_hand_index} />
+              <Field label="Right Hand Thumb" value={employee.right_hand_thumb} />
+              <Field label="Right Hand Index" value={employee.right_hand_index} />
+            </div>
+          </div>
+
+          {/* Additional Information */}
+          <div className="section">
+            <div className="section-title">Additional Information</div>
+            <div className="field-grid">
+              <Field label="Government ID" value={employee.government_id} />
+              <Field label="Employee Status" value={employee.employment_status} />
+              <Field label="Allocation Status" value={employee.allocation_status} />
+              <Field label="Left Reason" value={employee.left_reason} />
+              <Field label="Remarks" value={employee.remarks} />
             </div>
           </div>
         </div>

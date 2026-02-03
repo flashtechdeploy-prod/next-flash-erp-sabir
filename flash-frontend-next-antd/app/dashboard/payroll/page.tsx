@@ -76,6 +76,7 @@ function PayrollContent() {
   const [payslipDrawerVisible, setPayslipDrawerVisible] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<PayrollEmployee | null>(null);
   const [summaryModalVisible, setSummaryModalVisible] = useState(false);
+  const [editingValues, setEditingValues] = useState<Record<string, Record<string, any>>>({});
   const printRef = useRef<HTMLDivElement>(null);
   const summaryPrintRef = useRef<HTMLDivElement>(null);
   const payslipPrintRef = useRef<HTMLDivElement>(null);
@@ -199,7 +200,11 @@ function PayrollContent() {
       const curDays = sheetEntry?.cur_days_override ?? curDaysCount;
       const totalPaidDays = preDays + curDays + leaveDays;
       const perDaySalary = totalSalary / workingDays;
-      const otRate = sheetEntry?.ot_rate_override ?? 700;
+      
+      // Use edited OT Rate if available, otherwise use sheet entry or default
+      const editedOtRate = editingValues[empId]?.ot_rate_override;
+      const otRate = editedOtRate !== undefined ? editedOtRate : (sheetEntry?.ot_rate_override ?? 700);
+      
       const grossSalaryBase = totalPaidDays * perDaySalary;
 
       let overtimePay = 0;
@@ -208,9 +213,17 @@ function PayrollContent() {
       }
 
       const deductions = totalFines;
-      const allowOther = parseFloat(String(sheetEntry?.allow_other || '0'));
-      const eobi = parseFloat(String(sheetEntry?.eobi || '0'));
-      const taxFineAdv = parseFloat(String(sheetEntry?.fine_adv_extra || '0'));
+      
+      // Use edited values if available, otherwise use sheet entry
+      const editedAllowOther = editingValues[empId]?.allow_other;
+      const allowOther = editedAllowOther !== undefined ? editedAllowOther : parseFloat(String(sheetEntry?.allow_other || '0'));
+      
+      const editedEobi = editingValues[empId]?.eobi;
+      const eobi = editedEobi !== undefined ? editedEobi : parseFloat(String(sheetEntry?.eobi || '0'));
+      
+      const editedTaxFineAdv = editingValues[empId]?.fine_adv_extra;
+      const taxFineAdv = editedTaxFineAdv !== undefined ? editedTaxFineAdv : parseFloat(String(sheetEntry?.fine_adv_extra || '0'));
+      
       const netSalary = grossSalaryBase + overtimePay + allowOther - deductions - eobi - taxFineAdv;
       const assignment = (rawAssignments || []).find((a: any) => String(a.employee_id) === employeeId);
 
@@ -245,7 +258,7 @@ function PayrollContent() {
         remarks: sheetEntry?.remarks || '',
       };
     });
-  }, [rawEmployees, rawAttendance, rawSheetEntries, month, rawAssignments]);
+  }, [rawEmployees, rawAttendance, rawSheetEntries, month, rawAssignments, editingValues]);
 
   const prevMonthData = useMemo(() => {
     const relevantEmployees = rawEmployees.filter((e: any) =>
@@ -442,6 +455,16 @@ function PayrollContent() {
   ];
 
   const handleUpdateEntry = async (employeeDbId: number, field: string, value: any) => {
+    // Track the edited value locally for immediate display
+    setEditingValues(prev => ({
+      ...prev,
+      [employeeDbId]: {
+        ...prev[employeeDbId],
+        [field]: value
+      }
+    }));
+
+    // Update the sheet entries state
     setRawSheetEntries(prev => {
       const idx = prev.findIndex(s => Number(s.employee_db_id) === employeeDbId);
       if (idx > -1) {
@@ -461,10 +484,11 @@ function PayrollContent() {
         employee_db_id: employeeDbId,
         [field]: value
       }]);
-      message.success('Entry updated');
+      message.success('Entry updated successfully');
     } catch (error) {
       message.error('Failed to update entry');
-      // On failure, we could potentially reload data to revert, but keeping it simple for now
+      // On failure, reload to revert changes
+      loadData();
     } finally {
       setIsUpdating(false);
     }
@@ -485,6 +509,7 @@ function PayrollContent() {
 
   useEffect(() => {
     loadData();
+    setEditingValues({}); // Clear editing values when loading new data
   }, [loadData]);
 
   const handleMarkPaid = async (record: PayrollEmployee) => {
@@ -544,34 +569,46 @@ function PayrollContent() {
       dataIndex: 'preDays',
       key: 'preDays',
       width: 90,
-      render: (val: number, record: PayrollEmployee) => (
-        <InputNumber
-          key={`pre-${record.id}-${val}`}
-          min={0}
-          max={31}
-          defaultValue={val}
-          controls={false}
-          style={{ width: '100%', borderRadius: '6px' }}
-          onBlur={(e) => handleUpdateEntry(record.id, 'pre_days_override', Number(e.target.value) || 0)}
-        />
-      )
+      render: (val: number, record: PayrollEmployee) => {
+        const currentValue = editingValues[record.id]?.pre_days_override ?? val;
+        return (
+          <InputNumber
+            min={0}
+            max={31}
+            value={currentValue}
+            onChange={(newVal) => {
+              if (newVal !== null && newVal !== undefined) {
+                handleUpdateEntry(record.id, 'pre_days_override', newVal);
+              }
+            }}
+            controls={false}
+            style={{ width: '100%', borderRadius: '6px' }}
+          />
+        );
+      }
     },
     {
       title: `${month.format('MMM.')} Days`,
       dataIndex: 'curDays',
       key: 'curDays',
       width: 90,
-      render: (val: number, record: PayrollEmployee) => (
-        <InputNumber
-          key={`cur-${record.id}-${val}`}
-          min={0}
-          max={31}
-          defaultValue={val}
-          controls={false}
-          style={{ width: '100%', borderRadius: '6px' }}
-          onBlur={(e) => handleUpdateEntry(record.id, 'cur_days_override', Number(e.target.value) || 0)}
-        />
-      )
+      render: (val: number, record: PayrollEmployee) => {
+        const currentValue = editingValues[record.id]?.cur_days_override ?? val;
+        return (
+          <InputNumber
+            min={0}
+            max={31}
+            value={currentValue}
+            onChange={(newVal) => {
+              if (newVal !== null && newVal !== undefined) {
+                handleUpdateEntry(record.id, 'cur_days_override', newVal);
+              }
+            }}
+            controls={false}
+            style={{ width: '100%', borderRadius: '6px' }}
+          />
+        );
+      }
     },
 
     { title: 'Leave', dataIndex: 'leaveDays', key: 'leaveDays', width: 70 },
@@ -588,57 +625,93 @@ function PayrollContent() {
       dataIndex: 'otRate',
       key: 'otRate',
       width: 100,
-      render: (val: number, record: PayrollEmployee) => (
-        <InputNumber
-          key={`ot-${record.id}-${val}`}
-          defaultValue={val}
-          controls={false}
-          style={{ width: '100%', borderRadius: '6px' }}
-          onBlur={(e) => handleUpdateEntry(record.id, 'ot_rate_override', Number(e.target.value) || 0)}
-        />
-      )
+      render: (val: number, record: PayrollEmployee) => {
+        const currentValue = editingValues[record.id]?.ot_rate_override ?? val;
+        return (
+          <InputNumber
+            value={currentValue}
+            onChange={(newVal) => {
+              if (newVal !== null && newVal !== undefined) {
+                handleUpdateEntry(record.id, 'ot_rate_override', newVal);
+              }
+            }}
+            controls={false}
+            style={{ width: '100%', borderRadius: '6px' }}
+          />
+        );
+      }
     },
     {
       title: 'O.T Amount',
       dataIndex: 'overtimePay',
       key: 'overtimePay',
       width: 140,
-      render: (val: number) => (
-        <span style={{ color: '#10b981', fontWeight: 700, fontSize: '14px' }}>
-          Rs. {val.toLocaleString()}
-        </span>
-      )
+      render: (val: number, record: PayrollEmployee) => {
+        // Recalculate OT Amount based on potentially edited OT Rate
+        const currentOtRate = editingValues[record.id]?.ot_rate_override ?? record.otRate;
+        const calculatedOtAmount = Math.round(record.otDaysCount * currentOtRate);
+        return (
+          <span style={{ color: '#10b981', fontWeight: 700, fontSize: '14px' }}>
+            Rs. {calculatedOtAmount.toLocaleString()}
+          </span>
+        );
+      }
     },
     {
       title: 'Allow/Other',
       dataIndex: 'allow_other',
       key: 'allow_other',
       width: 110,
-      render: (val: number, record: PayrollEmployee) => (
-        <InputNumber
-          key={`allow-${record.id}-${val}`}
-          defaultValue={val}
-          controls={false}
-          style={{ width: '100%', borderRadius: '6px' }}
-          onBlur={(e) => handleUpdateEntry(record.id, 'allow_other', Number(e.target.value) || 0)}
-        />
-      )
+      render: (val: number, record: PayrollEmployee) => {
+        const currentValue = editingValues[record.id]?.allow_other ?? val;
+        return (
+          <InputNumber
+            value={currentValue}
+            onChange={(newVal) => {
+              if (newVal !== null && newVal !== undefined) {
+                handleUpdateEntry(record.id, 'allow_other', newVal);
+              }
+            }}
+            controls={false}
+            style={{ width: '100%', borderRadius: '6px' }}
+          />
+        );
+      }
     },
-    { title: 'Gross', dataIndex: 'grossSalary', key: 'grossSalary', width: 110, render: (v: number) => v.toLocaleString() },
+    {
+      title: 'Gross',
+      dataIndex: 'grossSalary',
+      key: 'grossSalary',
+      width: 110,
+      render: (v: number, record: PayrollEmployee) => {
+        // Recalculate Gross based on potentially edited values
+        const currentOtRate = editingValues[record.id]?.ot_rate_override ?? record.otRate;
+        const currentAllowOther = editingValues[record.id]?.allow_other ?? record.allow_other;
+        const calculatedOtAmount = Math.round(record.otDaysCount * currentOtRate);
+        const calculatedGross = Math.round(record.grossSalary - record.overtimePay - record.allow_other + calculatedOtAmount + currentAllowOther);
+        return calculatedGross.toLocaleString();
+      }
+    },
     {
       title: 'EOBI',
       dataIndex: 'eobi',
       key: 'eobi',
       width: 90,
-      render: (val: number, record: PayrollEmployee) => (
-        <InputNumber
-          key={`eobi-${record.id}-${val}`}
-          defaultValue={val}
-          controls={false}
-          style={{ width: '100%', borderRadius: '6px' }}
-          onBlur={(e) => handleUpdateEntry(record.id, 'eobi', Number(e.target.value) || 0)}
-        />
-      )
+      render: (val: number, record: PayrollEmployee) => {
+        const currentValue = editingValues[record.id]?.eobi ?? val;
+        return (
+          <InputNumber
+            value={currentValue}
+            onChange={(newVal) => {
+              if (newVal !== null && newVal !== undefined) {
+                handleUpdateEntry(record.id, 'eobi', newVal);
+              }
+            }}
+            controls={false}
+            style={{ width: '100%', borderRadius: '6px' }}
+          />
+        );
+      }
     },
     {
       title: 'Fine',
@@ -656,36 +729,56 @@ function PayrollContent() {
       dataIndex: 'taxFineAdv',
       key: 'taxFineAdv',
       width: 100,
-      render: (val: number, record: PayrollEmployee) => (
-        <InputNumber
-          key={`tax-${record.id}-${val}`}
-          defaultValue={val}
-          controls={false}
-          style={{ width: '100%', borderRadius: '6px' }}
-          onBlur={(e) => handleUpdateEntry(record.id, 'fine_adv_extra', Number(e.target.value) || 0)}
-        />
-      )
+      render: (val: number, record: PayrollEmployee) => {
+        const currentValue = editingValues[record.id]?.fine_adv_extra ?? val;
+        return (
+          <InputNumber
+            value={currentValue}
+            onChange={(newVal) => {
+              if (newVal !== null && newVal !== undefined) {
+                handleUpdateEntry(record.id, 'fine_adv_extra', newVal);
+              }
+            }}
+            controls={false}
+            style={{ width: '100%', borderRadius: '6px' }}
+          />
+        );
+      }
     },
     {
       title: 'Net Payable',
       dataIndex: 'netSalary',
       key: 'netSalary',
       width: 130,
-      render: (v: number) => <span style={{ fontSize: '15px', color: '#0369a1', fontWeight: 800 }}>{v.toLocaleString()}</span>
+      render: (v: number, record: PayrollEmployee) => {
+        // Recalculate Net Payable based on potentially edited values
+        const currentOtRate = editingValues[record.id]?.ot_rate_override ?? record.otRate;
+        const currentAllowOther = editingValues[record.id]?.allow_other ?? record.allow_other;
+        const currentEobi = editingValues[record.id]?.eobi ?? record.eobi;
+        const currentTaxFineAdv = editingValues[record.id]?.fine_adv_extra ?? record.taxFineAdv;
+        
+        const calculatedOtAmount = Math.round(record.otDaysCount * currentOtRate);
+        const baseNetSalary = record.grossSalary - record.overtimePay - record.allow_other;
+        const calculatedNetSalary = Math.round(baseNetSalary + calculatedOtAmount + currentAllowOther - record.totalFines - currentEobi - currentTaxFineAdv);
+        
+        return <span style={{ fontSize: '15px', color: '#0369a1', fontWeight: 800 }}>{calculatedNetSalary.toLocaleString()}</span>;
+      }
     },
     {
       title: 'Bank/Cash',
       dataIndex: 'bank_cash',
       key: 'bank_cash',
       width: 120,
-      render: (val: string, record: PayrollEmployee) => (
-        <Input
-          key={`bank-${record.id}-${val}`}
-          defaultValue={val}
-          style={{ width: '100%', borderRadius: '6px' }}
-          onBlur={(e) => handleUpdateEntry(record.id, 'bank_cash', e.target.value)}
-        />
-      )
+      render: (val: string, record: PayrollEmployee) => {
+        const currentValue = editingValues[record.id]?.bank_cash ?? val;
+        return (
+          <Input
+            value={currentValue}
+            onChange={(e) => handleUpdateEntry(record.id, 'bank_cash', e.target.value)}
+            style={{ width: '100%', borderRadius: '6px' }}
+          />
+        );
+      }
     },
     {
       title: 'Actions',
