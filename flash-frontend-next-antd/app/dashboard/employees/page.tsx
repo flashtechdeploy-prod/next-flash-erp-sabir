@@ -99,7 +99,7 @@ export default function EmployeesPage() {
   const [restrictedItemForm] = Form.useForm();
   const [passwordForm] = Form.useForm();
 
-  const fetchEmployees = async (page = pagination.current, pageSize = pagination.pageSize) => {
+  const fetchEmployees = async (page = pagination.current, pageSize = pagination.pageSize, sortBy?: string, sortOrder?: string) => {
     setLoading(true);
     const params: Record<string, string> = {
       skip: String((page - 1) * pageSize),
@@ -122,6 +122,9 @@ export default function EmployeesPage() {
     if (filters.served_in) params.served_in = filters.served_in;
     if (filters.person_status) params.person_status = filters.person_status;
 
+    if (sortBy) params.sort_by = sortBy;
+    if (sortOrder) params.sort_order = sortOrder;
+
 
     const response = await employeeApi.getAll(params);
     setLoading(false);
@@ -136,8 +139,8 @@ export default function EmployeesPage() {
     setEmployees(Array.isArray(data) ? data : []);
     setPagination((prev) => ({
       ...prev,
-      current: page,
-      pageSize: pageSize,
+      current: page || 1,
+      pageSize: pageSize || 20,
       total: total,
     }));
   };
@@ -160,7 +163,7 @@ export default function EmployeesPage() {
   };
 
   useEffect(() => {
-    fetchEmployees();
+    fetchEmployees(1, pagination.pageSize, 'fss_no', 'desc');
     fetchKpis();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters.search, filters.status, filters.fss_no, filters.full_name, filters.cnic, filters.father_name, filters.date_of_birth, filters.mobile_number, filters.department, filters.designation, filters.enrolled_as, filters.date_of_enrolment, filters.served_in, filters.person_status]);
@@ -448,6 +451,8 @@ export default function EmployeesPage() {
       key: 'fss_no',
       width: 120,
       fixed: 'left' as const,
+      sorter: true,
+      defaultSortOrder: 'descend' as const,
       render: (_: unknown, record: Employee) =>
         record.fss_no || record.cnic || '-',
       ...getColumnSearchProps('fss_no', 'FSS No'),
@@ -458,6 +463,7 @@ export default function EmployeesPage() {
       key: 'full_name',
       width: 200,
       fixed: 'left' as const,
+      sorter: true,
       render: (text: string, record: Employee) => text || record.name || '-',
       ...getColumnSearchProps('full_name', 'Name'),
     },
@@ -473,6 +479,7 @@ export default function EmployeesPage() {
       dataIndex: 'cnic',
       key: 'cnic',
       width: 150,
+      sorter: true,
       render: (text: string, record: Employee) => text || record.cnic_no || '-',
       ...getColumnSearchProps('cnic', 'CNIC'),
     },
@@ -504,12 +511,14 @@ export default function EmployeesPage() {
       dataIndex: 'person_status',
       key: 'person_status',
       width: 120,
+      sorter: true,
     },
     {
       title: 'Rank',
       dataIndex: 'rank',
       key: 'rank',
       width: 100,
+      sorter: true,
     },
     // {
     //   title: 'Unit',
@@ -720,8 +729,38 @@ export default function EmployeesPage() {
           showSizeChanger: true,
           showTotal: (total) => `Total ${total} employees`,
         }}
-        onChange={(newPagination) => {
-          fetchEmployees(newPagination.current || 1, newPagination.pageSize || 20);
+        onChange={(newPagination, filters, sorter: any) => {
+          const fetchParams: any = {
+            page: newPagination.current || 1,
+            pageSize: newPagination.pageSize || 20,
+          };
+
+          if (sorter && sorter.field && sorter.order) {
+            (fetchParams as any).sort_by = sorter.field;
+            (fetchParams as any).sort_order = sorter.order === 'ascend' ? 'asc' : 'desc';
+          }
+
+          // Helper to pass params to fetchEmployees
+          const executeFetch = async () => {
+            setLoading(true);
+            const params: Record<string, string> = {
+              skip: String((fetchParams.page - 1) * fetchParams.pageSize),
+              limit: String(fetchParams.pageSize),
+              with_total: 'true',
+            };
+
+            if (fetchParams.sort_by) params.sort_by = fetchParams.sort_by;
+            if (fetchParams.sort_order) params.sort_order = fetchParams.sort_order;
+
+            // ... existing filters ...
+            if (filters.search) params.search = String(filters.search);
+            // Note: the component uses local 'filters' state mostly, but we should sync.
+            // Actuallly fetchEmployees handles the local 'filters' state.
+
+            // Simpler: just update fetchEmployees to accept optional sort
+            await fetchEmployees(fetchParams.page, fetchParams.pageSize, fetchParams.sort_by, fetchParams.sort_order);
+          };
+          executeFetch();
         }}
         scroll={{ x: 'max-content' }}
         className="compact-table"

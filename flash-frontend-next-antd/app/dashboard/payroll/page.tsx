@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Table, Button, DatePicker, Space, Tag, Drawer, Popconfirm, Card, Statistic, App, Collapse, Spin, Empty, Col, Row, Input, InputNumber, Badge } from 'antd';
 import { PrinterOutlined, DollarOutlined, CheckCircleOutlined, ClockCircleOutlined, UserOutlined, SearchOutlined, RiseOutlined, FallOutlined, SafetyCertificateOutlined, EyeOutlined } from '@ant-design/icons';
 import { employeeApi, attendanceApi, payrollApi, clientApi } from '@/lib/api';
@@ -58,7 +58,6 @@ export default function PayrollPage() {
 function PayrollContent() {
   const { message } = App.useApp();
   const [month, setMonth] = useState<Dayjs>(dayjs());
-  const [payrollData, setPayrollData] = useState<PayrollEmployee[]>([]);
   const [rawEmployees, setRawEmployees] = useState<any[]>([]);
   const [rawAttendance, setRawAttendance] = useState<any[]>([]);
   const [rawAssignments, setRawAssignments] = useState<any[]>([]);
@@ -77,7 +76,6 @@ function PayrollContent() {
   const [payslipDrawerVisible, setPayslipDrawerVisible] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<PayrollEmployee | null>(null);
   const [summaryModalVisible, setSummaryModalVisible] = useState(false);
-  const [prevMonthData, setPrevMonthData] = useState<PayrollEmployee[]>([]);
   const printRef = useRef<HTMLDivElement>(null);
   const summaryPrintRef = useRef<HTMLDivElement>(null);
   const payslipPrintRef = useRef<HTMLDivElement>(null);
@@ -128,7 +126,7 @@ function PayrollContent() {
   }, [month, message]);
 
   // Reactive Calculation logic
-  useEffect(() => {
+  const payrollData = useMemo(() => {
     const empAssignmentMap = new Map<string, { client_id: number; client_name: string; site_name: string }>();
     rawAssignments.forEach((a: any) => {
       empAssignmentMap.set(String(a.employee_id), {
@@ -137,7 +135,6 @@ function PayrollContent() {
         site_name: String(a.site_name),
       });
     });
-
     const relevantEmployees = rawEmployees.filter((e: any) =>
       ['Active', 'active', 'Suspended', 'Inactive'].includes(String(e.status))
     );
@@ -154,18 +151,11 @@ function PayrollContent() {
       attGroupMap.get(eid)?.push(a);
     });
 
-    const prevAttGroupMap = new Map<string, any[]>();
-    rawPrevAttendance.forEach((a: any) => {
-      const eid = String(a.employee_id);
-      if (!prevAttGroupMap.has(eid)) prevAttGroupMap.set(eid, []);
-      prevAttGroupMap.get(eid)?.push(a);
-    });
-
     const fromDateObj = month.subtract(1, 'month').date(26);
     const toDateObj = month.date(25);
     const workingDays = toDateObj.diff(fromDateObj, 'day') + 1;
 
-    const calculated: PayrollEmployee[] = relevantEmployees.map((emp: any) => {
+    return relevantEmployees.map((emp: any) => {
       const employeeId = String(emp.employee_id);
       const empId = Number(emp.id);
       const empAttendance = attGroupMap.get(employeeId) || [];
@@ -201,7 +191,6 @@ function PayrollContent() {
         }
       });
 
-      console.log(emp, "emp")
       const basicSalary = parseFloat(String(emp.basic_salary || '0')) || parseFloat(String(emp.salary || '0')) || parseFloat(String(emp.pay_rs || '0'));
       let totalSalary = parseFloat(String(emp.total_salary || '0'));
       if (totalSalary === 0) totalSalary = basicSalary;
@@ -223,7 +212,7 @@ function PayrollContent() {
       const eobi = parseFloat(String(sheetEntry?.eobi || '0'));
       const taxFineAdv = parseFloat(String(sheetEntry?.fine_adv_extra || '0'));
       const netSalary = grossSalaryBase + overtimePay + allowOther - deductions - eobi - taxFineAdv;
-      const assignment = empAssignmentMap.get(employeeId);
+      const assignment = (rawAssignments || []).find((a: any) => String(a.employee_id) === employeeId);
 
       return {
         ...emp,
@@ -256,13 +245,24 @@ function PayrollContent() {
         remarks: sheetEntry?.remarks || '',
       };
     });
-    setPayrollData(calculated);
+  }, [rawEmployees, rawAttendance, rawSheetEntries, month, rawAssignments]);
 
-    // Prev month calc
+  const prevMonthData = useMemo(() => {
+    const relevantEmployees = rawEmployees.filter((e: any) =>
+      ['Active', 'active', 'Suspended', 'Inactive'].includes(String(e.status))
+    );
+
+    const prevAttGroupMap = new Map<string, any[]>();
+    rawPrevAttendance.forEach((a: any) => {
+      const eid = String(a.employee_id);
+      if (!prevAttGroupMap.has(eid)) prevAttGroupMap.set(eid, []);
+      prevAttGroupMap.get(eid)?.push(a);
+    });
+
     const prevSheetEntryMap = new Map();
     rawPrevSheetEntries.forEach((s: any) => prevSheetEntryMap.set(Number(s.employee_db_id), s));
 
-    const prevPayroll = relevantEmployees.map((emp: any) => {
+    return relevantEmployees.map((emp: any) => {
       const employeeId = String(emp.employee_id);
       const empAttendance = prevAttGroupMap.get(employeeId) || [];
       const sheetEntry = prevSheetEntryMap.get(Number(emp.id));
@@ -274,17 +274,18 @@ function PayrollContent() {
       });
       const bSal = parseFloat(String(emp.basic_salary || '0')) || parseFloat(String(emp.salary || '0'));
       const tSal = parseFloat(String(emp.total_salary || 0)) || bSal;
+
       const prevFromDateObj = month.subtract(2, 'month').date(26);
       const prevToDateObj = month.subtract(1, 'month').date(25);
       const prevWorkingDays = prevToDateObj.diff(prevFromDateObj, 'day') + 1;
-      const totalPaid = (sheetEntry?.pre_days_override ?? 0) + (sheetEntry?.cur_days_override ?? pDays) + lDays;
 
+      const totalPaid = (sheetEntry?.pre_days_override ?? 0) + (sheetEntry?.cur_days_override ?? pDays) + lDays;
       const gSal = totalPaid * (tSal / prevWorkingDays);
-      const asgn = empAssignmentMap.get(employeeId);
-      return { ...emp, client_id: asgn?.client_id, site_name: asgn?.site_name, netSalary: Math.round(gSal) };
+
+      const assignment = (rawAssignments || []).find((a: any) => String(a.employee_id) === employeeId);
+      return { ...emp, client_id: assignment?.client_id, site_name: assignment?.site_name, netSalary: Math.round(gSal) };
     });
-    setPrevMonthData(prevPayroll);
-  }, [rawEmployees, rawAttendance, rawAssignments, rawSheetEntries, rawPrevAttendance, rawPrevSheetEntries, month]);
+  }, [rawEmployees, rawPrevAttendance, rawPrevSheetEntries, month, rawAssignments]);
 
   const filteredData = payrollData.filter((emp: PayrollEmployee) =>
     emp.full_name.toLowerCase().includes(searchText.toLowerCase()) ||
@@ -441,20 +442,29 @@ function PayrollContent() {
   ];
 
   const handleUpdateEntry = async (employeeDbId: number, field: string, value: any) => {
+    setRawSheetEntries(prev => {
+      const idx = prev.findIndex(s => Number(s.employee_db_id) === employeeDbId);
+      if (idx > -1) {
+        const next = [...prev];
+        next[idx] = { ...next[idx], [field]: value };
+        return next;
+      }
+      return [...prev, { employee_db_id: employeeDbId, [field]: value }];
+    });
+
     setIsUpdating(true);
     try {
-      const fromDate = month.startOf('month').format('YYYY-MM-DD');
-      const toDate = month.endOf('month').format('YYYY-MM-DD');
+      const fromDate = month.subtract(1, 'month').date(26).format('YYYY-MM-DD');
+      const toDate = month.date(25).format('YYYY-MM-DD');
 
-      const entry = {
+      await payrollApi.bulkUpsertSheetEntries(fromDate, toDate, [{
         employee_db_id: employeeDbId,
         [field]: value
-      };
-
-      await payrollApi.bulkUpsertSheetEntries(fromDate, toDate, [entry]);
-      await loadData();
+      }]);
+      message.success('Entry updated');
     } catch (error) {
       message.error('Failed to update entry');
+      // On failure, we could potentially reload data to revert, but keeping it simple for now
     } finally {
       setIsUpdating(false);
     }
@@ -536,12 +546,13 @@ function PayrollContent() {
       width: 90,
       render: (val: number, record: PayrollEmployee) => (
         <InputNumber
+          key={`pre-${record.id}-${val}`}
           min={0}
           max={31}
           defaultValue={val}
           controls={false}
           style={{ width: '100%', borderRadius: '6px' }}
-          onBlur={(e) => handleUpdateEntry(record.id, 'pre_days_override', Number(e.target.value))}
+          onBlur={(e) => handleUpdateEntry(record.id, 'pre_days_override', Number(e.target.value) || 0)}
         />
       )
     },
@@ -552,12 +563,13 @@ function PayrollContent() {
       width: 90,
       render: (val: number, record: PayrollEmployee) => (
         <InputNumber
+          key={`cur-${record.id}-${val}`}
           min={0}
           max={31}
           defaultValue={val}
           controls={false}
           style={{ width: '100%', borderRadius: '6px' }}
-          onBlur={(e) => handleUpdateEntry(record.id, 'cur_days_override', Number(e.target.value))}
+          onBlur={(e) => handleUpdateEntry(record.id, 'cur_days_override', Number(e.target.value) || 0)}
         />
       )
     },
@@ -578,10 +590,11 @@ function PayrollContent() {
       width: 100,
       render: (val: number, record: PayrollEmployee) => (
         <InputNumber
+          key={`ot-${record.id}-${val}`}
           defaultValue={val}
           controls={false}
           style={{ width: '100%', borderRadius: '6px' }}
-          onBlur={(e) => handleUpdateEntry(record.id, 'ot_rate_override', Number(e.target.value))}
+          onBlur={(e) => handleUpdateEntry(record.id, 'ot_rate_override', Number(e.target.value) || 0)}
         />
       )
     },
@@ -603,10 +616,11 @@ function PayrollContent() {
       width: 110,
       render: (val: number, record: PayrollEmployee) => (
         <InputNumber
+          key={`allow-${record.id}-${val}`}
           defaultValue={val}
           controls={false}
           style={{ width: '100%', borderRadius: '6px' }}
-          onBlur={(e) => handleUpdateEntry(record.id, 'allow_other', Number(e.target.value))}
+          onBlur={(e) => handleUpdateEntry(record.id, 'allow_other', Number(e.target.value) || 0)}
         />
       )
     },
@@ -618,10 +632,11 @@ function PayrollContent() {
       width: 90,
       render: (val: number, record: PayrollEmployee) => (
         <InputNumber
+          key={`eobi-${record.id}-${val}`}
           defaultValue={val}
           controls={false}
           style={{ width: '100%', borderRadius: '6px' }}
-          onBlur={(e) => handleUpdateEntry(record.id, 'eobi', Number(e.target.value))}
+          onBlur={(e) => handleUpdateEntry(record.id, 'eobi', Number(e.target.value) || 0)}
         />
       )
     },
@@ -643,10 +658,11 @@ function PayrollContent() {
       width: 100,
       render: (val: number, record: PayrollEmployee) => (
         <InputNumber
+          key={`tax-${record.id}-${val}`}
           defaultValue={val}
           controls={false}
           style={{ width: '100%', borderRadius: '6px' }}
-          onBlur={(e) => handleUpdateEntry(record.id, 'fine_adv_extra', Number(e.target.value))}
+          onBlur={(e) => handleUpdateEntry(record.id, 'fine_adv_extra', Number(e.target.value) || 0)}
         />
       )
     },
@@ -664,6 +680,7 @@ function PayrollContent() {
       width: 120,
       render: (val: string, record: PayrollEmployee) => (
         <Input
+          key={`bank-${record.id}-${val}`}
           defaultValue={val}
           style={{ width: '100%', borderRadius: '6px' }}
           onBlur={(e) => handleUpdateEntry(record.id, 'bank_cash', e.target.value)}
@@ -897,6 +914,7 @@ function PayrollContent() {
       <div style={{ minHeight: '400px' }}>
         {filteredData.length > 0 ? (
           <Table
+            loading={loading || isUpdating}
             dataSource={clients.map((client: any) => {
               const clientGuards = filteredData.filter((emp: PayrollEmployee) => String(emp.client_id) === String(client.id));
               if (clientGuards.length === 0) return null;

@@ -169,30 +169,44 @@ export class PayrollService {
           ),
         );
 
-      const data = {
-        employee_db_id: entry.employee_db_id,
-        from_date: dto.from_date,
-        to_date: dto.to_date,
-        pre_days_override: entry.pre_days_override,
-        cur_days_override: entry.cur_days_override,
-        leave_encashment_days: entry.leave_encashment_days,
-        allow_other: entry.allow_other,
-        eobi: entry.eobi,
-        tax: entry.tax,
-        fine_adv_extra: entry.fine_adv_extra,
-        ot_rate_override: entry.ot_rate_override,
-        ot_amount_override: entry.ot_amount_override,
-        remarks: entry.remarks,
-        bank_cash: entry.bank_cash,
-      };
-
       if (existing) {
+        // For update, only include fields that are explicitly provided
+        const updateData: Record<string, any> = {};
+        if (entry.pre_days_override !== undefined) updateData.pre_days_override = entry.pre_days_override;
+        if (entry.cur_days_override !== undefined) updateData.cur_days_override = entry.cur_days_override;
+        if (entry.leave_encashment_days !== undefined) updateData.leave_encashment_days = entry.leave_encashment_days;
+        if (entry.allow_other !== undefined) updateData.allow_other = entry.allow_other;
+        if (entry.eobi !== undefined) updateData.eobi = entry.eobi;
+        if (entry.tax !== undefined) updateData.tax = entry.tax;
+        if (entry.fine_adv_extra !== undefined) updateData.fine_adv_extra = entry.fine_adv_extra;
+        if (entry.ot_rate_override !== undefined) updateData.ot_rate_override = entry.ot_rate_override;
+        if (entry.ot_amount_override !== undefined) updateData.ot_amount_override = entry.ot_amount_override;
+        if (entry.remarks !== undefined) updateData.remarks = entry.remarks;
+        if (entry.bank_cash !== undefined) updateData.bank_cash = entry.bank_cash;
+
         await this.db
           .update(schema.payrollSheetEntries)
-          .set(data)
+          .set(updateData)
           .where(eq(schema.payrollSheetEntries.id, (existing as { id: number }).id));
       } else {
-        await this.db.insert(schema.payrollSheetEntries).values(data);
+        // For insert, include all fields
+        const insertData = {
+          employee_db_id: entry.employee_db_id,
+          from_date: dto.from_date,
+          to_date: dto.to_date,
+          pre_days_override: entry.pre_days_override,
+          cur_days_override: entry.cur_days_override,
+          leave_encashment_days: entry.leave_encashment_days,
+          allow_other: entry.allow_other,
+          eobi: entry.eobi,
+          tax: entry.tax,
+          fine_adv_extra: entry.fine_adv_extra,
+          ot_rate_override: entry.ot_rate_override,
+          ot_amount_override: entry.ot_amount_override,
+          remarks: entry.remarks,
+          bank_cash: entry.bank_cash,
+        };
+        await this.db.insert(schema.payrollSheetEntries).values(insertData);
       }
       upserted++;
     }
