@@ -764,7 +764,8 @@ export class AttendanceService {
             eq(schema.attendance.date, date),
           ),
         )
-        .orderBy(desc(sql`CAST(NULLIF(${schema.employees.fss_no}, '') AS INTEGER)`));
+        .orderBy(desc(schema.employees.fss_no));
+
 
       const markedCount = records.filter(r => r.status && r.status !== 'unmarked').length;
       console.log(`[getFullDaySheet] Total records: ${records.length}, Marked: ${markedCount}`);
