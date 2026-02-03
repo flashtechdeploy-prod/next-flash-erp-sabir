@@ -151,6 +151,7 @@ export class PayrollService {
       tax?: number;
       fine_adv_extra?: number;
       ot_rate_override?: number;
+      ot_amount_override?: number;
       remarks?: string;
       bank_cash?: string;
     }>;
@@ -180,6 +181,7 @@ export class PayrollService {
         tax: entry.tax,
         fine_adv_extra: entry.fine_adv_extra,
         ot_rate_override: entry.ot_rate_override,
+        ot_amount_override: entry.ot_amount_override,
         remarks: entry.remarks,
         bank_cash: entry.bank_cash,
       };

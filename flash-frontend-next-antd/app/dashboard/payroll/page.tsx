@@ -34,6 +34,8 @@ interface PayrollEmployee extends Record<string, unknown> {
   totalSalary: number;
   grossSalary: number;
   overtimePay: number;
+  otRate: number;
+  ot_amount_override?: number;
   deductions: number;
   netSalary: number;
   paymentStatus: string;
@@ -56,6 +58,12 @@ function PayrollContent() {
   const { message } = App.useApp();
   const [month, setMonth] = useState<Dayjs>(dayjs());
   const [payrollData, setPayrollData] = useState<PayrollEmployee[]>([]);
+  const [rawEmployees, setRawEmployees] = useState<any[]>([]);
+  const [rawAttendance, setRawAttendance] = useState<any[]>([]);
+  const [rawAssignments, setRawAssignments] = useState<any[]>([]);
+  const [rawSheetEntries, setRawSheetEntries] = useState<any[]>([]);
+  const [rawPrevAttendance, setRawPrevAttendance] = useState<any[]>([]);
+  const [rawPrevSheetEntries, setRawPrevSheetEntries] = useState<any[]>([]);
   const [companySettings, setCompanySettings] = useState<any>(null);
   const [selectedClient, setSelectedClient] = useState<any | null>(null);
   const [selectedSite, setSelectedSite] = useState<any | null>(null);
@@ -102,181 +110,14 @@ function PayrollContent() {
         payrollApi.getSheetEntries(prevMonth.startOf('month').format('YYYY-MM-DD'), prevMonth.endOf('month').format('YYYY-MM-DD')),
       ]);
 
-      const empData = Array.isArray(empRes.data) ? empRes.data : (empRes.data as any)?.employees || [];
-      const attData = Array.isArray(attRes.data) ? attRes.data : [];
-      const assignData = Array.isArray(assignRes.data) ? assignRes.data : [];
-      const clientData = Array.isArray(clientRes.data) ? clientRes.data : [];
-      const sheetEntries = Array.isArray(sheetRes.data) ? sheetRes.data : [];
-
-      setClients(clientData);
-
-      const empAssignmentMap = new Map<string, { client_id: number; client_name: string; site_name: string }>();
-      assignData.forEach((a: any) => {
-        empAssignmentMap.set(String(a.employee_id), {
-          client_id: Number(a.client_id),
-          client_name: String(a.client_name),
-          site_name: String(a.site_name),
-        });
-      });
-
-      const relevantEmployees = empData.filter((e: Record<string, unknown>) =>
-        ['Active', 'active', 'Suspended', 'Inactive'].includes(String(e.status))
-      );
-      const sheetEntryMap = new Map();
-      sheetEntries.forEach((s: any) => {
-        sheetEntryMap.set(Number(s.employee_db_id), s);
-      });
-
-      // Optimized Attendance Grouping (O(M))
-      const attGroupMap = new Map<string, any[]>();
-      attData.forEach((a: any) => {
-        const eid = String(a.employee_id);
-        if (!attGroupMap.has(eid)) attGroupMap.set(eid, []);
-        attGroupMap.get(eid)?.push(a);
-      });
-
-      const workingDays = month.daysInMonth();
-
-      // Optimized Employee Processing (O(N))
-      const calculated: PayrollEmployee[] = relevantEmployees.map((emp: Record<string, unknown>) => {
-        const employeeId = String(emp.employee_id);
-        const empId = Number(emp.id);
-        const empAttendance = attGroupMap.get(employeeId) || [];
-        const sheetEntry = sheetEntryMap.get(empId);
-
-        // Single-pass calculation for attendance metrics
-        let presentDays = 0;
-        let absentDays = 0;
-        let leaveDays = 0;
-        let lateDays = 0;
-        let totalFines = 0;
-        let totalOvertimeMinutes = 0;
-
-        empAttendance.forEach((a: Record<string, unknown>) => {
-          const status = String(a.status).toLowerCase();
-          if (status === 'present' || status === 'late') presentDays++;
-          if (status === 'absent') absentDays++;
-          if (status === 'leave') leaveDays++;
-          if (status === 'late') lateDays++;
-
-          totalFines += (Number(a.fine_amount) || 0) + (Number(a.late_deduction) || 0);
-          totalOvertimeMinutes += (Number(a.overtime_minutes) || 0);
-        });
-        // Total Salary lookup with multiple fallbacks
-        const basicSalary = parseFloat(String(emp.basic_salary || '0')) || parseFloat(String(emp.salary || '0')) || parseFloat(String(emp.pay_rs || '0'));
-        let totalSalary = parseFloat(String(emp.total_salary || '0'));
-        if (totalSalary === 0) totalSalary = basicSalary;
-
-        // Overrides from sheet entries
-        const preDays = sheetEntry?.pre_days_override ?? 0;
-        const curDays = sheetEntry?.cur_days_override ?? presentDays;
-
-        // Total Paid Days count for the month
-        const totalPaidDays = preDays + curDays + leaveDays;
-
-        const perDaySalary = totalSalary / workingDays;
-
-        const grossSalaryBase = totalPaidDays * perDaySalary;
-        const overtimePay = (totalOvertimeMinutes / 60) * (perDaySalary / 8);
-        const deductions = totalFines; // Absents are already excluded from totalPaidDays
-
-        const allowOther = parseFloat(String(sheetEntry?.allow_other || '0'));
-        const eobi = parseFloat(String(sheetEntry?.eobi || '0'));
-        const taxFineAdv = parseFloat(String(sheetEntry?.fine_adv_extra || '0'));
-
-        const netSalary = grossSalaryBase + overtimePay + allowOther - deductions - eobi - taxFineAdv;
-
-        const assignment = empAssignmentMap.get(employeeId);
-
-        return {
-          ...emp,
-          id: empId,
-          employee_id: employeeId,
-          full_name: String(emp.full_name),
-          department: String(emp.department || "-"),
-          account_no: String(emp.account_no || '-'),
-          designation: String(emp.designation || "-"),
-          main_number: String(emp.main_number || "-"),
-          mobile_no: String(emp.mobile_no || emp.mobile_number || "-"),
-          client_id: assignment?.client_id || null,
-          client_name: assignment?.client_name || "Unassigned",
-          site_name: assignment?.site_name || "N/A",
-          presentDays,
-          lateDays,
-          absentDays,
-          leaveDays,
-          preDays,
-          curDays,
-          totalDays: totalPaidDays,
-          totalOvertimeMinutes,
-          totalFines,
-          basicSalary,
-          allowances: parseFloat(String(emp.allowances || '0')),
-          allow_other: allowOther,
-          eobi,
-          taxFineAdv,
-          totalSalary,
-          grossSalary: Math.round(grossSalaryBase + allowOther),
-          overtimePay: Math.round(overtimePay),
-          deductions: Math.round(deductions),
-          netSalary: Math.round(netSalary),
-          paymentStatus: 'unpaid',
-          bank_cash: sheetEntry?.bank_cash || 'MMBL',
-          remarks: sheetEntry?.remarks || '',
-        };
-      });
-      setPayrollData(calculated);
-
-      const prevAttendanceRecords = Array.isArray(prevAttRes.data) ? prevAttRes.data : [];
-      const prevSheetEntries = Array.isArray(prevSheetRes.data) ? prevSheetRes.data : [];
-
-      // Calculate previous month payroll
-      const prevAttGroupMap = new Map<string, any[]>();
-      prevAttendanceRecords.forEach((a: any) => {
-        const eid = String(a.employee_id);
-        if (!prevAttGroupMap.has(eid)) prevAttGroupMap.set(eid, []);
-        prevAttGroupMap.get(eid)?.push(a);
-      });
-
-      const prevSheetEntryMap = new Map();
-      prevSheetEntries.forEach((s: any) => {
-        prevSheetEntryMap.set(Number(s.employee_db_id), s);
-      });
-
-      const prevPayroll = relevantEmployees.map((emp: any) => {
-        const employeeId = String(emp.employee_id);
-        const empId = Number(emp.id);
-        const empAttendance = prevAttGroupMap.get(employeeId) || [];
-        const sheetEntry = prevSheetEntryMap.get(empId);
-
-        let presentDays = 0, leaveDays = 0;
-        empAttendance.forEach((a: any) => {
-          const status = String(a.status).toLowerCase();
-          if (status === 'present' || status === 'late') presentDays++;
-          if (status === 'leave') leaveDays++;
-        });
-
-        const basicSalary = parseFloat(String(emp.basic_salary || '0')) || parseFloat(String(emp.salary || '0')) || parseFloat(String(emp.pay_rs || '0'));
-        let totalSalary = parseFloat(String(emp.total_salary || '0'));
-        if (totalSalary === 0) totalSalary = basicSalary;
-
-        const preDays = sheetEntry?.pre_days_override ?? 0;
-        const curDays = sheetEntry?.cur_days_override ?? presentDays;
-        const totalPaidDays = preDays + curDays + leaveDays;
-        const perDaySalary = totalSalary / prevMonth.daysInMonth();
-        const grossSalaryBase = totalPaidDays * perDaySalary;
-
-        const assignment = empAssignmentMap.get(employeeId);
-        return {
-          ...emp,
-          client_id: assignment?.client_id,
-          site_name: assignment?.site_name,
-          netSalary: Math.round(grossSalaryBase)
-        };
-      });
-
-      setPrevMonthData(prevPayroll);
-    } catch (error: any) { // Changed error type to any for consistency
+      setRawEmployees(Array.isArray(empRes.data) ? empRes.data : (empRes.data as any)?.employees || []);
+      setRawAttendance(Array.isArray(attRes.data) ? attRes.data : []);
+      setRawAssignments(Array.isArray(assignRes.data) ? assignRes.data : []);
+      setClients(Array.isArray(clientRes.data) ? clientRes.data : []);
+      setRawSheetEntries(Array.isArray(sheetRes.data) ? sheetRes.data : []);
+      setRawPrevAttendance(Array.isArray(prevAttRes.data) ? prevAttRes.data : []);
+      setRawPrevSheetEntries(Array.isArray(prevSheetRes.data) ? prevSheetRes.data : []);
+    } catch (error: any) {
       message.error('Failed to load payroll data');
       console.error(error);
     } finally {
@@ -284,233 +125,155 @@ function PayrollContent() {
     }
   }, [month, message]);
 
-  const handleUpdateEntry = async (employeeDbId: number, field: string, value: any) => {
-    setIsUpdating(true);
-    try {
-      const fromDate = month.startOf('month').format('YYYY-MM-DD');
-      const toDate = month.endOf('month').format('YYYY-MM-DD');
-
-      const entry = {
-        employee_db_id: employeeDbId,
-        [field]: value
-      };
-
-      await payrollApi.bulkUpsertSheetEntries(fromDate, toDate, [entry]);
-      await loadData();
-    } catch (error) {
-      message.error('Failed to update entry');
-    } finally {
-      setIsUpdating(false);
-    }
-  };
-
-  const handleUpdateEmployee = async (employeeId: string, field: string, value: any) => {
-    setIsUpdating(true);
-    try {
-      await employeeApi.update(employeeId, { [field]: value });
-      await loadData();
-      message.success('Employee updated successfully');
-    } catch (error) {
-      message.error('Failed to update employee');
-    } finally {
-      setIsUpdating(false);
-    }
-  };
-
+  // Reactive Calculation logic
   useEffect(() => {
-    loadData();
-  }, [loadData]);
-
-  const handleMarkPaid = async (record: PayrollEmployee) => {
-    try {
-      await payrollApi.upsertPaymentStatus({
-        month: month.format('YYYY-MM'),
-        employee_id: record.employee_id,
-        status: 'paid',
+    const empAssignmentMap = new Map<string, { client_id: number; client_name: string; site_name: string }>();
+    rawAssignments.forEach((a: any) => {
+      empAssignmentMap.set(String(a.employee_id), {
+        client_id: Number(a.client_id),
+        client_name: String(a.client_name),
+        site_name: String(a.site_name),
       });
-      message.success('Marked as paid');
-      loadData();
-    } catch {
-      message.error('Failed to update payment status');
-    }
-  };
+    });
 
-  const handleViewPayslip = (record: PayrollEmployee) => {
-    setSelectedEmployee(record);
-    setPayslipDrawerVisible(true);
-  };
+    const relevantEmployees = rawEmployees.filter((e: any) =>
+      ['Active', 'active', 'Suspended', 'Inactive'].includes(String(e.status))
+    );
 
-  const columns = [
-    { title: 'FSS No', dataIndex: 'fss_no', key: 'fss_no', width: 90, fixed: 'left' as const, className: 'font-mono' },
-    {
-      title: 'Name',
-      dataIndex: 'full_name',
-      key: 'full_name',
-      width: 180,
-      fixed: 'left' as const,
-      render: (text: string) => <span style={{ fontWeight: 600, color: '#1e293b' }}>{text}</span>
-    },
+    const sheetEntryMap = new Map();
+    rawSheetEntries.forEach((s: any) => {
+      sheetEntryMap.set(Number(s.employee_db_id), s);
+    });
 
-    { title: 'cnic', dataIndex: 'cnic', key: 'cnic', width: 120 },
-    { title: 'mobile number', dataIndex: 'mobile_number', key: 'mobile_number', width: 120 },
-    {
-      title: 'Main Number',
-      dataIndex: 'main_number',
-      key: 'main_number',
-      width: 130,
-      render: (val: string, record: PayrollEmployee) => (
-        <Input
-          defaultValue={val}
-          placeholder="Enter main number"
-          style={{ width: '100%', borderRadius: '6px' }}
-          onBlur={(e) => handleUpdateEmployee(record.employee_id, 'main_number', e.target.value)}
-        />
-      )
-    },
+    const attGroupMap = new Map<string, any[]>();
+    rawAttendance.forEach((a: any) => {
+      const eid = String(a.employee_id);
+      if (!attGroupMap.has(eid)) attGroupMap.set(eid, []);
+      attGroupMap.get(eid)?.push(a);
+    });
 
-    { title: 'acccount number', dataIndex: 'account_number', key: 'account_number', width: 120 },
+    const workingDays = month.daysInMonth();
 
+    const calculated: PayrollEmployee[] = relevantEmployees.map((emp: any) => {
+      const employeeId = String(emp.employee_id);
+      const empId = Number(emp.id);
+      const empAttendance = attGroupMap.get(employeeId) || [];
+      const sheetEntry = sheetEntryMap.get(empId);
 
-    { title: 'Basic Salary', dataIndex: 'totalSalary', key: 'totalSalary', width: 110, render: (v: number) => v.toLocaleString() },
-    {
-      title: 'Pre. Days',
-      dataIndex: 'preDays',
-      key: 'preDays',
-      width: 90,
-      render: (val: number, record: PayrollEmployee) => (
-        <InputNumber
-          min={0}
-          max={31}
-          defaultValue={val}
-          controls={false}
-          style={{ width: '100%', borderRadius: '6px' }}
-          onBlur={(e) => handleUpdateEntry(record.id, 'pre_days_override', Number(e.target.value))}
-        />
-      )
-    },
-    {
-      title: 'Cur. Days',
-      dataIndex: 'curDays',
-      key: 'curDays',
-      width: 90,
-      render: (val: number, record: PayrollEmployee) => (
-        <InputNumber
-          min={0}
-          max={31}
-          defaultValue={val}
-          controls={false}
-          style={{ width: '100%', borderRadius: '6px' }}
-          onBlur={(e) => handleUpdateEntry(record.id, 'cur_days_override', Number(e.target.value))}
-        />
-      )
-    },
+      let presentDays = 0, absentDays = 0, leaveDays = 0, lateDays = 0, totalFines = 0, totalOvertimeMinutes = 0, otDaysCount = 0;
 
-    { title: 'Leave', dataIndex: 'leaveDays', key: 'leaveDays', width: 70 },
-    { title: 'Total', dataIndex: 'totalDays', key: 'totalDays', width: 70, render: (v: number) => <Tag color={v > 25 ? 'green' : 'orange'}>{v}</Tag> },
-    {
-      title: 'O.T',
-      key: 'ot_hours',
-      width: 70,
-      render: (r: any) => <span style={{ fontWeight: 600 }}>{Math.floor(r.totalOvertimeMinutes / 60)}h</span>
-    },
-    {
-      title: 'O.T Amount',
-      dataIndex: 'overtimePay',
-      key: 'overtimePay',
-      width: 110,
-      render: (v: number) => <span style={{ color: '#10b981', fontWeight: 600 }}>{v.toLocaleString()}</span>
-    },
-    {
-      title: 'Allow/Other',
-      dataIndex: 'allow_other',
-      key: 'allow_other',
-      width: 110,
-      render: (val: number, record: PayrollEmployee) => (
-        <InputNumber
-          defaultValue={val}
-          controls={false}
-          style={{ width: '100%', borderRadius: '6px' }}
-          onBlur={(e) => handleUpdateEntry(record.id, 'allow_other', Number(e.target.value))}
-        />
-      )
-    },
-    { title: 'Gross', dataIndex: 'grossSalary', key: 'grossSalary', width: 110, render: (v: number) => v.toLocaleString() },
-    {
-      title: 'EOBI',
-      dataIndex: 'eobi',
-      key: 'eobi',
-      width: 90,
-      render: (val: number, record: PayrollEmployee) => (
-        <InputNumber
-          defaultValue={val}
-          controls={false}
-          style={{ width: '100%', borderRadius: '6px' }}
-          onBlur={(e) => handleUpdateEntry(record.id, 'eobi', Number(e.target.value))}
-        />
-      )
-    },
-    {
-      title: 'Tax/Fine',
-      dataIndex: 'taxFineAdv',
-      key: 'taxFineAdv',
-      width: 100,
-      render: (val: number, record: PayrollEmployee) => (
-        <InputNumber
-          defaultValue={val}
-          controls={false}
-          style={{ width: '100%', borderRadius: '6px' }}
-          onBlur={(e) => handleUpdateEntry(record.id, 'fine_adv_extra', Number(e.target.value))}
-        />
-      )
-    },
-    {
-      title: 'Net Payable',
-      dataIndex: 'netSalary',
-      key: 'netSalary',
-      width: 130,
-      render: (v: number) => <span style={{ fontSize: '15px', color: '#0369a1', fontWeight: 800 }}>{v.toLocaleString()}</span>
-    },
-    {
-      title: 'Bank/Cash',
-      dataIndex: 'bank_cash',
-      key: 'bank_cash',
-      width: 120,
-      render: (val: string, record: PayrollEmployee) => (
-        <Input
-          defaultValue={val}
-          style={{ width: '100%', borderRadius: '6px' }}
-          onBlur={(e) => handleUpdateEntry(record.id, 'bank_cash', e.target.value)}
-        />
-      )
-    },
-    {
-      title: 'Actions',
-      key: 'actions',
-      width: 100,
-      fixed: 'right' as const,
-      render: (_: unknown, record: PayrollEmployee) => (
-        <Button
-          type="link"
-          size="middle"
-          onClick={() => handleViewPayslip(record)}
-          style={{ padding: '0 4px', fontWeight: 600 }}
-        >
-          View Payslip
-        </Button>
-      ),
-    },
-  ];
+      empAttendance.forEach((a: any) => {
+        const status = String(a.status).toLowerCase();
+        if (status === 'present' || status === 'late') presentDays++;
+        if (status === 'absent') absentDays++;
+        if (status === 'leave') leaveDays++;
+        if (status === 'late') lateDays++;
+        totalFines += (Number(a.fine_amount) || 0) + (Number(a.late_deduction) || 0);
+        totalOvertimeMinutes += (Number(a.overtime_minutes) || 0);
 
-  const totalGross = payrollData.reduce((sum, emp) => sum + (emp.grossSalary || 0), 0);
-  const totalDeductions = payrollData.reduce((sum, emp) => sum + (emp.deductions || 0) + (emp.eobi || 0) + (emp.taxFineAdv || 0), 0);
-  const totalOvertime = payrollData.reduce((sum, emp) => sum + (emp.overtimePay || 0), 0);
-  const totalNet = payrollData.reduce((sum, emp) => sum + (emp.netSalary || 0), 0);
+        // New logic: count days where both OT In and Out are marked
+        const hasOtIn = a.overtime_in && String(a.overtime_in).trim() !== '';
+        const hasOtOut = a.overtime_out && String(a.overtime_out).trim() !== '';
+
+        if (hasOtIn && hasOtOut) {
+          otDaysCount++;
+        }
+      });
+
+      console.log(emp, "emp")
+      const basicSalary = parseFloat(String(emp.basic_salary || '0')) || parseFloat(String(emp.salary || '0')) || parseFloat(String(emp.pay_rs || '0'));
+      let totalSalary = parseFloat(String(emp.total_salary || '0'));
+      if (totalSalary === 0) totalSalary = basicSalary;
+
+      const preDays = sheetEntry?.pre_days_override ?? 0;
+      const curDays = sheetEntry?.cur_days_override ?? presentDays;
+      const totalPaidDays = preDays + curDays + leaveDays;
+      const perDaySalary = totalSalary / workingDays;
+      const otRate = sheetEntry?.ot_rate_override ?? 700;
+      const grossSalaryBase = totalPaidDays * perDaySalary;
+
+      let overtimePay = 0;
+      if (otDaysCount > 0) {
+        overtimePay = otDaysCount * otRate;
+      }
+
+      const deductions = totalFines;
+      const allowOther = parseFloat(String(sheetEntry?.allow_other || '0'));
+      const eobi = parseFloat(String(sheetEntry?.eobi || '0'));
+      const taxFineAdv = parseFloat(String(sheetEntry?.fine_adv_extra || '0'));
+      const netSalary = grossSalaryBase + overtimePay + allowOther - deductions - eobi - taxFineAdv;
+      const assignment = empAssignmentMap.get(employeeId);
+
+      return {
+        ...emp,
+        id: empId,
+        employee_id: employeeId,
+        full_name: String(emp.full_name),
+        department: String(emp.department || "-"),
+        account_no: String(emp.account_no || '-'),
+        designation: String(emp.designation || "-"),
+        main_number: String(emp.main_number || "-"),
+        mobile_no: String(emp.mobile_no || emp.mobile_number || "-"),
+        client_id: assignment?.client_id || null,
+        client_name: assignment?.client_name || "Unassigned",
+        site_name: assignment?.site_name || "N/A",
+        presentDays, lateDays, absentDays, leaveDays, preDays, curDays,
+        totalDays: totalPaidDays, totalOvertimeMinutes, totalFines, basicSalary,
+        allowances: parseFloat(String(emp.allowances || '0')),
+        allow_other: allowOther, eobi, taxFineAdv, totalSalary,
+        grossSalary: Math.round(grossSalaryBase + allowOther),
+        overtimePay: Math.round(overtimePay),
+        otRate: otRate,
+        ot_amount_override: sheetEntry?.ot_amount_override,
+        deductions: Math.round(deductions),
+        netSalary: Math.round(netSalary),
+        paymentStatus: 'unpaid',
+        bank_cash: sheetEntry?.bank_cash || 'MMBL',
+        remarks: sheetEntry?.remarks || '',
+      };
+    });
+    setPayrollData(calculated);
+
+    // Prev month calc
+    const prevAttGroupMap = new Map<string, any[]>();
+    rawPrevAttendance.forEach((a: any) => {
+      const eid = String(a.employee_id);
+      if (!prevAttGroupMap.has(eid)) prevAttGroupMap.set(eid, []);
+      prevAttGroupMap.get(eid)?.push(a);
+    });
+    const prevSheetEntryMap = new Map();
+    rawPrevSheetEntries.forEach((s: any) => prevSheetEntryMap.set(Number(s.employee_db_id), s));
+
+    const prevPayroll = relevantEmployees.map((emp: any) => {
+      const employeeId = String(emp.employee_id);
+      const empAttendance = prevAttGroupMap.get(employeeId) || [];
+      const sheetEntry = prevSheetEntryMap.get(Number(emp.id));
+      let pDays = 0, lDays = 0;
+      empAttendance.forEach((a: any) => {
+        const s = String(a.status).toLowerCase();
+        if (s === 'present' || s === 'late') pDays++;
+        if (s === 'leave') lDays++;
+      });
+      const bSal = parseFloat(String(emp.basic_salary || '0')) || parseFloat(String(emp.salary || '0'));
+      const tSal = parseFloat(String(emp.total_salary || 0)) || bSal;
+      const totalPaid = (sheetEntry?.pre_days_override ?? 0) + (sheetEntry?.cur_days_override ?? pDays) + lDays;
+      const gSal = totalPaid * (tSal / month.subtract(1, 'month').daysInMonth());
+      const asgn = empAssignmentMap.get(employeeId);
+      return { ...emp, client_id: asgn?.client_id, site_name: asgn?.site_name, netSalary: Math.round(gSal) };
+    });
+    setPrevMonthData(prevPayroll);
+  }, [rawEmployees, rawAttendance, rawAssignments, rawSheetEntries, rawPrevAttendance, rawPrevSheetEntries, month]);
 
   const filteredData = payrollData.filter((emp: PayrollEmployee) =>
     emp.full_name.toLowerCase().includes(searchText.toLowerCase()) ||
     emp.employee_id.toLowerCase().includes(searchText.toLowerCase()) ||
     String(emp.fss_no || '').includes(searchText)
   );
+
+  const totalGross = payrollData.reduce((sum, emp) => sum + (emp.grossSalary || 0), 0);
+  const totalDeductions = payrollData.reduce((sum, emp) => sum + (emp.deductions || 0) + (emp.eobi || 0) + (emp.taxFineAdv || 0), 0);
+  const totalOvertime = payrollData.reduce((sum, emp) => sum + (emp.overtimePay || 0), 0);
+  const totalNet = payrollData.reduce((sum, emp) => sum + (emp.netSalary || 0), 0);
 
   // Build comprehensive client summary with sites and month comparison
   const buildClientSummary = () => {
@@ -652,6 +415,241 @@ function PayrollContent() {
           </span>
         );
       }
+    },
+  ];
+
+  const handleUpdateEntry = async (employeeDbId: number, field: string, value: any) => {
+    setIsUpdating(true);
+    try {
+      const fromDate = month.startOf('month').format('YYYY-MM-DD');
+      const toDate = month.endOf('month').format('YYYY-MM-DD');
+
+      const entry = {
+        employee_db_id: employeeDbId,
+        [field]: value
+      };
+
+      await payrollApi.bulkUpsertSheetEntries(fromDate, toDate, [entry]);
+      await loadData();
+    } catch (error) {
+      message.error('Failed to update entry');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleUpdateEmployee = async (employeeId: string, field: string, value: any) => {
+    setIsUpdating(true);
+    try {
+      await employeeApi.update(employeeId, { [field]: value });
+      await loadData();
+      message.success('Employee updated successfully');
+    } catch (error) {
+      message.error('Failed to update employee');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  const handleMarkPaid = async (record: PayrollEmployee) => {
+    try {
+      await payrollApi.upsertPaymentStatus({
+        month: month.format('YYYY-MM'),
+        employee_id: record.employee_id,
+        status: 'paid',
+      });
+      message.success('Marked as paid');
+      loadData();
+    } catch {
+      message.error('Failed to update payment status');
+    }
+  };
+
+  const handleViewPayslip = (record: PayrollEmployee) => {
+    setSelectedEmployee(record);
+    setPayslipDrawerVisible(true);
+  };
+
+  const columns = [
+    { title: 'FSS No', dataIndex: 'fss_no', key: 'fss_no', width: 90, fixed: 'left' as const, className: 'font-mono' },
+    {
+      title: 'Name',
+      dataIndex: 'full_name',
+      key: 'full_name',
+      width: 180,
+      fixed: 'left' as const,
+      render: (text: string) => <span style={{ fontWeight: 600, color: '#1e293b' }}>{text}</span>
+    },
+
+    { title: 'cnic', dataIndex: 'cnic', key: 'cnic', width: 120 },
+    { title: 'mobile number', dataIndex: 'mobile_number', key: 'mobile_number', width: 120 },
+    {
+      title: 'Main Number',
+      dataIndex: 'main_number',
+      key: 'main_number',
+      width: 130,
+      render: (val: string, record: PayrollEmployee) => (
+        <Input
+          defaultValue={val}
+          placeholder="Enter main number"
+          style={{ width: '100%', borderRadius: '6px' }}
+          onBlur={(e) => handleUpdateEmployee(record.employee_id, 'main_number', e.target.value)}
+        />
+      )
+    },
+
+    { title: 'acccount number', dataIndex: 'account_number', key: 'account_number', width: 120 },
+
+
+    { title: 'Basic Salary', dataIndex: 'totalSalary', key: 'totalSalary', width: 110, render: (v: number) => v.toLocaleString() },
+    {
+      title: 'Pre. Days',
+      dataIndex: 'preDays',
+      key: 'preDays',
+      width: 90,
+      render: (val: number, record: PayrollEmployee) => (
+        <InputNumber
+          min={0}
+          max={31}
+          defaultValue={val}
+          controls={false}
+          style={{ width: '100%', borderRadius: '6px' }}
+          onBlur={(e) => handleUpdateEntry(record.id, 'pre_days_override', Number(e.target.value))}
+        />
+      )
+    },
+    {
+      title: 'Cur. Days',
+      dataIndex: 'curDays',
+      key: 'curDays',
+      width: 90,
+      render: (val: number, record: PayrollEmployee) => (
+        <InputNumber
+          min={0}
+          max={31}
+          defaultValue={val}
+          controls={false}
+          style={{ width: '100%', borderRadius: '6px' }}
+          onBlur={(e) => handleUpdateEntry(record.id, 'cur_days_override', Number(e.target.value))}
+        />
+      )
+    },
+
+    { title: 'Leave', dataIndex: 'leaveDays', key: 'leaveDays', width: 70 },
+    { title: 'Total', dataIndex: 'totalDays', key: 'totalDays', width: 70, render: (v: number) => <Tag color={v > 25 ? 'green' : 'orange'}>{v}</Tag> },
+    {
+      title: 'O.T',
+      key: 'ot_hours',
+      width: 70,
+      render: (r: any) => <span style={{ fontWeight: 600 }}>{Math.floor(r.totalOvertimeMinutes / 60)}h</span>
+    },
+    {
+      title: 'O.T Rate',
+      dataIndex: 'otRate',
+      key: 'otRate',
+      width: 100,
+      render: (val: number, record: PayrollEmployee) => (
+        <InputNumber
+          defaultValue={val}
+          controls={false}
+          style={{ width: '100%', borderRadius: '6px' }}
+          onBlur={(e) => handleUpdateEntry(record.id, 'ot_rate_override', Number(e.target.value))}
+        />
+      )
+    },
+    {
+      title: 'O.T Amount',
+      dataIndex: 'overtimePay',
+      key: 'overtimePay',
+      width: 140,
+      render: (val: number) => (
+        <span style={{ color: '#10b981', fontWeight: 700, fontSize: '14px' }}>
+          Rs. {val.toLocaleString()}
+        </span>
+      )
+    },
+    {
+      title: 'Allow/Other',
+      dataIndex: 'allow_other',
+      key: 'allow_other',
+      width: 110,
+      render: (val: number, record: PayrollEmployee) => (
+        <InputNumber
+          defaultValue={val}
+          controls={false}
+          style={{ width: '100%', borderRadius: '6px' }}
+          onBlur={(e) => handleUpdateEntry(record.id, 'allow_other', Number(e.target.value))}
+        />
+      )
+    },
+    { title: 'Gross', dataIndex: 'grossSalary', key: 'grossSalary', width: 110, render: (v: number) => v.toLocaleString() },
+    {
+      title: 'EOBI',
+      dataIndex: 'eobi',
+      key: 'eobi',
+      width: 90,
+      render: (val: number, record: PayrollEmployee) => (
+        <InputNumber
+          defaultValue={val}
+          controls={false}
+          style={{ width: '100%', borderRadius: '6px' }}
+          onBlur={(e) => handleUpdateEntry(record.id, 'eobi', Number(e.target.value))}
+        />
+      )
+    },
+    {
+      title: 'Tax/Fine',
+      dataIndex: 'taxFineAdv',
+      key: 'taxFineAdv',
+      width: 100,
+      render: (val: number, record: PayrollEmployee) => (
+        <InputNumber
+          defaultValue={val}
+          controls={false}
+          style={{ width: '100%', borderRadius: '6px' }}
+          onBlur={(e) => handleUpdateEntry(record.id, 'fine_adv_extra', Number(e.target.value))}
+        />
+      )
+    },
+    {
+      title: 'Net Payable',
+      dataIndex: 'netSalary',
+      key: 'netSalary',
+      width: 130,
+      render: (v: number) => <span style={{ fontSize: '15px', color: '#0369a1', fontWeight: 800 }}>{v.toLocaleString()}</span>
+    },
+    {
+      title: 'Bank/Cash',
+      dataIndex: 'bank_cash',
+      key: 'bank_cash',
+      width: 120,
+      render: (val: string, record: PayrollEmployee) => (
+        <Input
+          defaultValue={val}
+          style={{ width: '100%', borderRadius: '6px' }}
+          onBlur={(e) => handleUpdateEntry(record.id, 'bank_cash', e.target.value)}
+        />
+      )
+    },
+    {
+      title: 'Actions',
+      key: 'actions',
+      width: 100,
+      fixed: 'right' as const,
+      render: (_: unknown, record: PayrollEmployee) => (
+        <Button
+          type="link"
+          size="middle"
+          onClick={() => handleViewPayslip(record)}
+          style={{ padding: '0 4px', fontWeight: 600 }}
+        >
+          View Payslip
+        </Button>
+      ),
     },
   ];
 

@@ -60,9 +60,15 @@ export class AttendanceService {
       
       if (isNaN(start.getTime()) || isNaN(end.getTime())) return null;
       
-      const diffMs = end.getTime() - start.getTime();
-      const diffMins = Math.round(diffMs / (1000 * 60));
+      let diffMs = end.getTime() - start.getTime();
       
+      // If diff is negative but dates are same, it likely crosses midnight (e.g. 20:00 to 06:00)
+      if (diffMs < 0 && startD === endD) {
+          const crossDayEnd = new Date(end.getTime() + 24 * 60 * 60 * 1000);
+          diffMs = crossDayEnd.getTime() - start.getTime();
+      }
+      
+      const diffMins = Math.round(diffMs / (1000 * 60));
       return diffMins > 0 ? diffMins : 0;
     } catch (e) {
       return null;
@@ -131,6 +137,10 @@ export class AttendanceService {
           late_deduction: schema.attendance.late_deduction,
           leave_type: schema.attendance.leave_type,
           fine_amount: schema.attendance.fine_amount,
+          overtime_in: schema.attendance.overtime_in,
+          overtime_in_date: schema.attendance.overtime_in_date,
+          overtime_out: schema.attendance.overtime_out,
+          overtime_out_date: schema.attendance.overtime_out_date,
           created_at: schema.attendance.created_at,
         })
         .from(schema.attendance)
@@ -208,7 +218,7 @@ export class AttendanceService {
       try {
         // Check if record exists
         const [existing] = await this.db
-          .select({ id: schema.attendance.id })
+          .select()
           .from(schema.attendance)
           .where(
             and(
@@ -218,48 +228,45 @@ export class AttendanceService {
           );
 
         console.log(`[bulkUpsert] Employee: ${record.employee_id}, Date: ${date}, Existing: ${existing?.id || 'NO'}`);
-        console.log(`[bulkUpsert] Data to save:`, JSON.stringify({
-          status: record.status,
-          check_in: record.check_in,
-          check_out: record.check_out,
-          note: record.note
-        }));
 
-        const data = {
+        // Construct update object with existing data as fallback to prevent null wipes
+        const data: any = {
           employee_id: record.employee_id,
           date: date,
-          status: record.status,
-          note: record.note || null,
-          overtime_minutes: record.overtime_minutes || 
-            this.calculateMinutesBetween(
-              record.overtime_in, 
-              record.overtime_in_date, 
-              record.overtime_out, 
-              record.overtime_out_date
-            ) || null,
-          overtime_rate: record.overtime_rate || null,
-          late_minutes: record.late_minutes || null,
-          late_deduction: record.late_deduction || null,
-          leave_type: record.leave_type || null,
-          fine_amount: record.fine_amount || null,
-          location: record.location || null,
-          initial_location: record.initial_location || null,
-          picture: record.picture || null,
-          check_in: record.check_in || null,
-          check_in_date: record.check_in_date || null,
-          check_out: record.check_out || null,
-          check_out_date: record.check_out_date || null,
-          check_out_picture: record.check_out_picture || null,
-          check_out_location: record.check_out_location || null,
-          overtime_in: record.overtime_in || null,
-          overtime_in_date: record.overtime_in_date || null,
-          overtime_in_picture: record.overtime_in_picture || null,
-          overtime_in_location: record.overtime_in_location || null,
-          overtime_out: record.overtime_out || null,
-          overtime_out_date: record.overtime_out_date || null,
-          overtime_out_picture: record.overtime_out_picture || null,
-          overtime_out_location: record.overtime_out_location || null,
+          status: record.status || existing?.status || 'present',
+          updated_at: new Date(),
         };
+
+        // Helper to safely set fields (only if provided in record, else preserve existing)
+        const setField = (key: string, val: any, existingVal: any) => {
+           if (val !== undefined && val !== null) data[key] = val;
+           else if (existingVal !== undefined && existingVal !== null) data[key] = existingVal;
+        };
+
+        setField('note', record.note, existing?.note);
+        setField('overtime_minutes', record.overtime_minutes, existing?.overtime_minutes);
+        setField('overtime_rate', record.overtime_rate, existing?.overtime_rate);
+        setField('late_minutes', record.late_minutes, existing?.late_minutes);
+        setField('late_deduction', record.late_deduction, existing?.late_deduction);
+        setField('leave_type', record.leave_type, existing?.leave_type);
+        setField('fine_amount', record.fine_amount, existing?.fine_amount);
+        setField('location', record.location, existing?.location);
+        setField('initial_location', record.initial_location, existing?.initial_location);
+        setField('picture', record.picture, existing?.picture);
+        setField('check_in', record.check_in, existing?.check_in);
+        setField('check_in_date', record.check_in_date, existing?.check_in_date);
+        setField('check_out', record.check_out, existing?.check_out);
+        setField('check_out_date', record.check_out_date, existing?.check_out_date);
+        setField('check_out_picture', record.check_out_picture, existing?.check_out_picture);
+        setField('check_out_location', record.check_out_location, existing?.check_out_location);
+        setField('overtime_in', record.overtime_in, existing?.overtime_in);
+        setField('overtime_in_date', record.overtime_in_date, existing?.overtime_in_date);
+        setField('overtime_in_picture', record.overtime_in_picture, existing?.overtime_in_picture);
+        setField('overtime_in_location', record.overtime_in_location, existing?.overtime_in_location);
+        setField('overtime_out', record.overtime_out, existing?.overtime_out);
+        setField('overtime_out_date', record.overtime_out_date, existing?.overtime_out_date);
+        setField('overtime_out_picture', record.overtime_out_picture, existing?.overtime_out_picture);
+        setField('overtime_out_location', record.overtime_out_location, existing?.overtime_out_location);
 
         if (existing) {
           const res = await this.db
@@ -472,99 +479,126 @@ export class AttendanceService {
   }
 
   /**
-   * Mark attendance for a single employee (self-service)
    */
-  async markSelf(employeeId: string, date: string, record: AttendanceRecord, file?: Express.Multer.File) {
+  async markSelf(employeeId: string, date: string, record: AttendanceRecord, file?: Express.Multer.File, type: string = 'check_in') {
     try {
-      let pictureUrl = record.picture;
+      const normalizedType = (type || 'check_in').toLowerCase();
+      
+      // Autoritative Pakistan Timezone Helpers
+      const now = new Date();
+      const dateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Karachi' }).format(now);
+      const timeStr = new Intl.DateTimeFormat('en-GB', { 
+          timeZone: 'Asia/Karachi', 
+          hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false 
+      }).format(now);
 
-      // Handle file upload if provided
+      console.log(`[markSelf] Processing ${normalizedType} for ID=${employeeId}, Date=${dateStr}, Time=${timeStr}`);
+
+      let pictureUrl = record.picture;
       if (file) {
-        console.log(`Uploading selfie to B2: ${file.originalname}`);
+        // Force type subfolder to be consistent with normalized type
         const uploadResult = await this.cloudStorageService.uploadFile(
           file.buffer,
           file.originalname,
           file.mimetype,
-          'attendance/selfie'
+          `attendance/${normalizedType}`
         );
         pictureUrl = uploadResult.url;
-        console.log(`Selfie uploaded successfully: ${pictureUrl}`);
-      } else {
-        console.log('No selfie file provided to AttendanceService');
+        console.log(`[markSelf] ${normalizedType} picture uploaded: ${pictureUrl}`);
       }
 
-      // Check if already marked today
+      // Find existing record for this employee and date
       const [existing] = await this.db
-        .select({ id: schema.attendance.id })
+        .select()
         .from(schema.attendance)
         .where(
           and(
             eq(schema.attendance.employee_id, employeeId),
-            eq(schema.attendance.date, date),
+            eq(schema.attendance.date, dateStr),
           ),
         );
 
+      // Start with existing data to prevent inadvertent wipes if we update only some fields
       const data: any = {
         employee_id: employeeId,
-        date: date,
-        status: record.status || 'present',
-        updated_at: new Date(),
+        date: dateStr,
+        status: record.status || existing?.status || 'present',
+        updated_at: now,
       };
 
-      // Only set fields that are provided in the request
-      if (record.note !== undefined) data.note = record.note;
-      if (record.overtime_minutes !== undefined) data.overtime_minutes = record.overtime_minutes;
-      if (record.overtime_rate !== undefined) data.overtime_rate = record.overtime_rate;
-      if (record.late_minutes !== undefined) data.late_minutes = record.late_minutes;
-      if (record.late_deduction !== undefined) data.late_deduction = record.late_deduction;
-      if (record.leave_type !== undefined) data.leave_type = record.leave_type;
-      if (record.fine_amount !== undefined) data.fine_amount = record.fine_amount;
-      if (record.location !== undefined) data.location = record.location;
-      if (record.initial_location !== undefined) data.initial_location = record.initial_location;
-      if (pictureUrl !== undefined) data.picture = pictureUrl;
-      if (record.check_in !== undefined) data.check_in = record.check_in;
-      if (record.check_in_date !== undefined) data.check_in_date = record.check_in_date;
-      if (record.check_out !== undefined) data.check_out = record.check_out;
-      if (record.check_out_date !== undefined) data.check_out_date = record.check_out_date;
-      if (record.check_out_picture !== undefined) data.check_out_picture = record.check_out_picture;
-      if (record.check_out_location !== undefined) data.check_out_location = record.check_out_location;
-      if (record.overtime_in !== undefined) data.overtime_in = record.overtime_in;
-      if (record.overtime_in_date !== undefined) data.overtime_in_date = record.overtime_in_date;
-      if (record.overtime_in_picture !== undefined) data.overtime_in_picture = record.overtime_in_picture;
-      if (record.overtime_in_location !== undefined) data.overtime_in_location = record.overtime_in_location;
-      if (record.overtime_out !== undefined) data.overtime_out = record.overtime_out;
-      if (record.overtime_out_date !== undefined) data.overtime_out_date = record.overtime_out_date;
-      if (record.overtime_out_picture !== undefined) data.overtime_out_picture = record.overtime_out_picture;
-      if (record.overtime_out_location !== undefined) data.overtime_out_location = record.overtime_out_location;
+      // Map fields based on logic type
+      const submissionLoc = record.location;
+      const selfieLoc = record.initial_location || submissionLoc;
 
-      // Handle overtime calculation if not explicitly provided but times are there
-      if (data.overtime_minutes === undefined && (record.overtime_in || record.overtime_out)) {
-         // We might need to fetch existing if only one is provided, but for now we'll just skip auto-calc in markSelf if partial
+      if (normalizedType === 'check_in') {
+          data.check_in = timeStr;
+          data.check_in_date = dateStr;
+          data.picture = pictureUrl;
+          if (submissionLoc) data.location = submissionLoc;
+          if (selfieLoc) data.initial_location = selfieLoc;
+      } else if (normalizedType === 'check_out') {
+          data.check_out = timeStr;
+          data.check_out_date = dateStr;
+          data.check_out_picture = pictureUrl;
+          if (submissionLoc) data.check_out_location = submissionLoc;
+      } else if (normalizedType === 'overtime_in') {
+          data.overtime_in = timeStr;
+          data.overtime_in_date = dateStr;
+          data.overtime_in_picture = pictureUrl;
+          if (submissionLoc) data.overtime_in_location = submissionLoc;
+      } else if (normalizedType === 'overtime_out') {
+          data.overtime_out = timeStr;
+          data.overtime_out_date = dateStr;
+          data.overtime_out_picture = pictureUrl;
+          if (submissionLoc) data.overtime_out_location = submissionLoc;
+
+          // Auto-calculate overtime minutes
+          const otIn = data.overtime_in || existing?.overtime_in;
+          const otInDate = data.overtime_in_date || existing?.overtime_in_date;
+          if (otIn) {
+              const mins = this.calculateMinutesBetween(otIn, otInDate, timeStr, dateStr);
+              if (mins !== null) data.overtime_minutes = mins;
+          }
       }
 
-      console.log('Final data object for DB (upsert):', JSON.stringify(data, null, 2));
+      // Note and Leave logic
+      if (record.note) data.note = record.note;
+      if (record.leave_type) data.leave_type = record.leave_type;
+
+      console.log(`[markSelf] DB Payload for ${normalizedType}:`, JSON.stringify(data, null, 2));
 
       if (existing) {
-        // Update existing record
         await this.db.update(schema.attendance)
           .set(data)
           .where(eq(schema.attendance.id, existing.id));
       } else {
-        // Insert new record - for new records we want to ensure nulls for missing fields (except those with defaults)
         await this.db.insert(schema.attendance).values(data);
       }
 
       // Auto-create leave periods if status is leave
-      if (record.status === 'leave' && record.leave_type) {
+      if (data.status === 'leave' && data.leave_type) {
         await this.autoCreateLeavePeriods([{
           employee_id: employeeId,
-          date: date,
-          leave_type: record.leave_type,
-          note: record.note,
+          date: dateStr,
+          leave_type: data.leave_type,
+          note: data.note,
         }]);
       }
 
-      return { success: true, message: 'Attendance marked successfully' };
+      // Fetch the definitive record to return (using desc ID to ensure latest if duplicates exist)
+      const [finalRecord] = await this.db
+        .select()
+        .from(schema.attendance)
+        .where(
+          and(
+            eq(schema.attendance.employee_id, employeeId),
+            eq(schema.attendance.date, dateStr),
+          ),
+        )
+        .orderBy(desc(schema.attendance.id))
+        .limit(1);
+
+      return finalRecord;
     } catch (error) {
       console.error(`Error marking self attendance for ${employeeId}:`, error);
       throw error;

@@ -35,6 +35,8 @@ export default function DashboardScreen() {
   const [selectedDate, setSelectedDate] = useState<string>(todayStr);
   const [selectedDayHistory, setSelectedDayHistory] = useState<any[]>([]);
   const [calendarMonth, setCalendarMonth] = useState<string>(todayStr);
+  const [attendancePhase, setAttendancePhase] = useState<'check_in' | 'check_out' | 'overtime_in' | 'overtime_out'>('check_in');
+  const [activeTab, setActiveTab] = useState<'standard' | 'overtime'>('standard');
   const router = useRouter();
 
   const goToPrevMonth = () => {
@@ -104,7 +106,34 @@ export default function DashboardScreen() {
       };
 
       const statusData = await safeJson(statusRes);
-      if (statusData) setTodayStatus(statusData);
+      console.log("Fetched Today Status:", statusData);
+
+      if (statusData) {
+        setTodayStatus(statusData);
+
+        // Unified Phase Detection
+        const hasCheckIn = !!(statusData.check_in && statusData.check_in.trim() !== '');
+        const hasCheckOut = !!(statusData.check_out && statusData.check_out.trim() !== '');
+        const hasOTIn = !!(statusData.overtime_in && statusData.overtime_in.trim() !== '');
+        const hasOTOut = !!(statusData.overtime_out && statusData.overtime_out.trim() !== '');
+
+        if (!hasCheckIn) {
+          setAttendancePhase('check_in');
+          setActiveTab('standard');
+        } else if (!hasCheckOut) {
+          setAttendancePhase('check_out');
+          setActiveTab('standard');
+        } else {
+          setActiveTab('overtime');
+          if (!hasOTIn) setAttendancePhase('overtime_in');
+          else if (!hasOTOut) setAttendancePhase('overtime_out');
+          else setAttendancePhase('check_in'); // All done
+        }
+      } else {
+        setTodayStatus(null);
+        setAttendancePhase('check_in');
+        setActiveTab('standard');
+      }
 
       const statsData = await safeJson(statsRes);
       if (statsData) setStats(statsData);
@@ -192,7 +221,6 @@ export default function DashboardScreen() {
   };
 
   const selectStatus = (attendanceStatus: string) => {
-    if (todayStatus) return;
     setStatus(attendanceStatus);
   };
 
@@ -216,10 +244,6 @@ export default function DashboardScreen() {
       Alert.alert('Action Required', 'Please take a live selfie first.');
       return;
     }
-    if (!status) {
-      Alert.alert('Action Required', 'Please select your status for today.');
-      return;
-    }
 
     setSubmitting(true);
     let { status: locStatus } = await Location.requestForegroundPermissionsAsync();
@@ -232,7 +256,6 @@ export default function DashboardScreen() {
       accuracy: Location.Accuracy.High,
     });
 
-    // Security check: verify location hasn't changed too much
     if (initialLocation) {
       const distance = calculateDistance(
         initialLocation.latitude,
@@ -256,14 +279,15 @@ export default function DashboardScreen() {
     }
 
     setLocation(loc.coords);
-    await submitAttendance(status, loc.coords, image);
+    await submitAttendance(attendancePhase, status || 'present', loc.coords, image);
   };
 
-  const submitAttendance = async (attendanceStatus: string, coords: any, imageUri: string) => {
+  const submitAttendance = async (phase: string, attendanceStatus: string, coords: any, imageUri: string) => {
     setSubmitting(true);
     try {
       const token = await AsyncStorage.getItem('token');
       const formData = new FormData();
+      formData.append('type', phase);
       formData.append('status', attendanceStatus);
       formData.append('location', JSON.stringify(coords));
       if (initialLocation) {
@@ -308,8 +332,33 @@ export default function DashboardScreen() {
       }
 
       if (res.ok) {
-        Alert.alert('Attendance Marked', 'Your status has been updated and synced with HR.');
-        fetchStats();
+        Alert.alert('Success', `${phase.replace('_', ' ').toUpperCase()} recorded successfully.`);
+        console.log("Submit Response Data:", data);
+
+        if (data && typeof data === 'object') {
+          setTodayStatus(data);
+
+          const hasCheckIn = !!(data.check_in && data.check_in.trim() !== '');
+          const hasCheckOut = !!(data.check_out && data.check_out.trim() !== '');
+          const hasOTIn = !!(data.overtime_in && data.overtime_in.trim() !== '');
+
+          // Proactive UI transition
+          if (!hasCheckIn) {
+            setAttendancePhase('check_in');
+            setActiveTab('standard');
+          } else if (!hasCheckOut) {
+            setAttendancePhase('check_out');
+            setActiveTab('standard');
+          } else {
+            setActiveTab('overtime');
+            if (!hasOTIn) setAttendancePhase('overtime_in');
+            else setAttendancePhase('overtime_out');
+          }
+        }
+
+        // Delay fetch to let DB settle and sync other stats
+        setTimeout(() => fetchStats(), 1500);
+
         setImage(null);
         setNote('');
         setStatus(''); // Reset status selection
@@ -402,42 +451,13 @@ export default function DashboardScreen() {
           </View>
           <Text style={styles.readyText}>{todayStatus ? 'Daily synchronization complete' : 'Ready to mark your attendance'}</Text>
 
-          {todayStatus ? (
+          {todayStatus && todayStatus.check_in && todayStatus.check_out && todayStatus.overtime_in && todayStatus.overtime_out ? (
             <View style={styles.capturedView}>
               <View style={styles.capturedIconCircle}>
-                <Ionicons name="checkmark" size={40} color="#fff" />
+                <Ionicons name="checkmark-done" size={40} color="#fff" />
               </View>
-              <Text style={styles.capturedTitle}>Attendance Active</Text>
-
-              <View style={styles.capturedBadgesRow}>
-                <View style={[styles.statusBadge, { backgroundColor: '#10b981', marginRight: 10 }]}>
-                  <Text style={[styles.statusLabel, { color: '#fff' }]}>{todayStatus.status.toUpperCase()}</Text>
-                </View>
-
-                <View style={[styles.syncBadge, { borderWidth: 1, borderColor: '#d1fae5' }]}>
-                  <Ionicons name="cloud-done" size={14} color="#10b981" />
-                  <Text style={styles.syncBadgeText}>Synced</Text>
-                </View>
-              </View>
-
-              <View style={[styles.gpsBadge, { flexDirection: 'column', height: 'auto', paddingVertical: 8 }]}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4 }}>
-                  <Ionicons name="location" size={12} color="#475569" />
-                  <Text style={styles.gpsBadgeText}>GPS Verification Secured</Text>
-                </View>
-
-                {todayStatus.initial_location && (
-                  <Text style={{ fontSize: 10, color: '#64748b' }}>
-                    Captured: {JSON.parse(todayStatus.initial_location).latitude.toFixed(6)}, {JSON.parse(todayStatus.initial_location).longitude.toFixed(6)}
-                  </Text>
-                )}
-
-                {todayStatus.location && (
-                  <Text style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>
-                    Final: {JSON.parse(todayStatus.location).latitude.toFixed(6)}, {JSON.parse(todayStatus.location).longitude.toFixed(6)}
-                  </Text>
-                )}
-              </View>
+              <Text style={styles.capturedTitle}>Shift Completed</Text>
+              <Text style={{ color: '#64748b', textAlign: 'center' }}>All attendance phases for today have been recorded.</Text>
             </View>
           ) : selectedDate !== todayStr ? (
             <View style={[styles.capturedView, { paddingVertical: 40 }]}>
@@ -451,90 +471,206 @@ export default function DashboardScreen() {
             </View>
           ) : (
             <View style={styles.attendanceForm}>
-              <TouchableOpacity style={styles.dashedCameraTrigger} onPress={takeSelfie} activeOpacity={0.7}>
-                {image ? (
-                  <Image source={{ uri: image }} style={styles.fullPreview} />
-                ) : (
-                  <View style={styles.cameraCenter}>
-                    <View style={styles.cameraIconBg}>
-                      <Ionicons name="camera" size={30} color="#2563eb" />
-                    </View>
-                    <Text style={styles.cameraPromptText}>Take a live selfie to verify</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-
-              <Text style={styles.selectStatusLabel}>SELECT YOUR STATUS</Text>
-              <View style={styles.statusBarRow}>
-                {['present', 'late', 'absent', 'leave'].map((s) => (
+              {/* Enhanced Tab Selector */}
+              {todayStatus?.check_out && (
+                <View style={styles.tabContainer}>
                   <TouchableOpacity
-                    key={s}
-                    onPress={() => selectStatus(s)}
+                    onPress={() => setActiveTab('standard')}
+                    style={[styles.tabBtn, activeTab === 'standard' && styles.tabBtnActive]}
+                  >
+                    <Ionicons name={"time" as any} size={16} color={activeTab === 'standard' ? '#2563eb' : '#64748b'} style={{ marginRight: 6 }} />
+                    <Text style={[styles.tabText, activeTab === 'standard' && styles.tabTextActive]}>Regular Shift</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => setActiveTab('overtime')}
+                    style={[styles.tabBtn, activeTab === 'overtime' && styles.tabBtnActive]}
+                  >
+                    <Ionicons name={"flash" as any} size={16} color={activeTab === 'overtime' ? '#7c3aed' : '#64748b'} style={{ marginRight: 6 }} />
+                    <Text style={[styles.tabText, activeTab === 'overtime' && styles.tabTextActive]}>Overtime</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              <View style={styles.phaseSelectorRow}>
+                {(activeTab === 'standard' ? [
+                  { id: 'check_in', label: 'CHECK IN', icon: 'enter-outline', color: '#2563eb', active: attendancePhase === 'check_in', done: !!todayStatus?.check_in },
+                  { id: 'check_out', label: 'CHECK OUT', icon: 'exit-outline', color: '#f59e0b', active: attendancePhase === 'check_out', done: !!todayStatus?.check_out },
+                ] : [
+                  { id: 'overtime_in', label: 'OT IN', icon: 'play-outline', color: '#7c3aed', active: attendancePhase === 'overtime_in', done: !!todayStatus?.overtime_in },
+                  { id: 'overtime_out', label: 'OT OUT', icon: 'stop-outline', color: '#10b981', active: attendancePhase === 'overtime_out', done: !!todayStatus?.overtime_out },
+                ]).map((phase) => (
+                  <TouchableOpacity
+                    key={phase.id}
+                    onPress={() => setAttendancePhase(phase.id as any)}
                     style={[
-                      styles.statusSelectBtn,
-                      status === s && styles.statusSelectBtnActive
+                      styles.phaseBtn,
+                      phase.active && { borderColor: phase.color, borderBottomWidth: 4 },
+                      phase.done && styles.phaseBtnDone
                     ]}
                   >
-                    <Text style={[styles.statusSelectText, status === s && styles.statusSelectTextActive]}>
-                      {s.toUpperCase()}
+                    <Ionicons name={phase.icon as any} size={14} color={phase.active ? phase.color : '#94a3b8'} style={{ marginRight: 4 }} />
+                    <Text style={[
+                      styles.phaseBtnText,
+                      phase.active && { color: phase.color, fontWeight: '900' },
+                      phase.done && styles.phaseBtnTextDone
+                    ]}>
+                      {phase.label}
                     </Text>
+                    {phase.done && <Ionicons name={"checkmark-circle" as any} size={12} color="#10b981" style={{ marginLeft: 4 }} />}
                   </TouchableOpacity>
                 ))}
               </View>
 
-              {status === 'leave' && (
-                <View style={styles.leavePickerContainer}>
-                  <Picker
-                    selectedValue={leaveType}
-                    onValueChange={(itemValue) => setLeaveType(itemValue)}
-                    style={styles.simplePicker}
-                  >
-                    <Picker.Item label="Casual Leave" value="casual" />
-                    <Picker.Item label="Sick Leave" value="sick" />
-                    <Picker.Item label="Annual Leave" value="annual" />
-                    <Picker.Item label="Unpaid Leave" value="unpaid" />
-                  </Picker>
-                </View>
-              )}
+              {/* Conditional Display: Phase Summary OR Submission Form */}
+              {(() => {
+                const isCurrentPhaseDone =
+                  (attendancePhase === 'check_in' && todayStatus?.check_in && todayStatus.check_in.trim() !== '') ||
+                  (attendancePhase === 'check_out' && todayStatus?.check_out && todayStatus.check_out.trim() !== '') ||
+                  (attendancePhase === 'overtime_in' && todayStatus?.overtime_in && todayStatus.overtime_in.trim() !== '') ||
+                  (attendancePhase === 'overtime_out' && todayStatus?.overtime_out && todayStatus.overtime_out.trim() !== '');
 
+                if (isCurrentPhaseDone) {
+                  const data = attendancePhase === 'check_in' ? { time: todayStatus?.check_in, picture: todayStatus?.picture, loc: todayStatus?.location } :
+                    attendancePhase === 'check_out' ? { time: todayStatus?.check_out, picture: todayStatus?.check_out_picture, loc: todayStatus?.check_out_location } :
+                      attendancePhase === 'overtime_in' ? { time: todayStatus?.overtime_in, picture: todayStatus?.overtime_in_picture, loc: todayStatus?.overtime_in_location } :
+                        { time: todayStatus?.overtime_out, picture: todayStatus?.overtime_out_picture, loc: todayStatus?.overtime_out_location };
 
+                  return (
+                    <View style={styles.phaseSummaryCard}>
+                      <View style={styles.summaryTopRow}>
+                        <View style={[styles.summaryStatusBadge, { backgroundColor: attendancePhase.includes('overtime') ? '#f5f3ff' : '#eff6ff' }]}>
+                          <Ionicons name="checkmark-circle" size={16} color={attendancePhase.includes('overtime') ? '#7c3aed' : '#2563eb'} />
+                          <Text style={[styles.summaryStatusText, { color: attendancePhase.includes('overtime') ? '#7c3aed' : '#2563eb' }]}>RECORDED</Text>
+                        </View>
+                        <Text style={styles.summaryTimeText}>{data.time}</Text>
+                      </View>
 
-              <TextInput
-                style={styles.whiteNoteInput}
-                placeholder="Attach a message for HR (optional)..."
-                value={note}
-                onChangeText={setNote}
-                placeholderTextColor="#94a3b8"
-              />
+                      {data.picture && (
+                        <Image source={{ uri: data.picture }} style={styles.summaryImage} />
+                      )}
 
-              {initialLocation && (
-                <View style={styles.locationDisplayRow}>
-                  <Ionicons name="camera-outline" size={16} color="#2563eb" />
-                  <Text style={styles.locationDisplayText}>Capture Location: {initialLocation.latitude.toFixed(6)}, {initialLocation.longitude.toFixed(6)}</Text>
-                </View>
-              )}
+                      {data.loc && (
+                        <TouchableOpacity
+                          style={styles.summaryLocationBtn}
+                          onPress={() => {
+                            try {
+                              const coords = JSON.parse(data.loc);
+                              Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${coords.latitude},${coords.longitude}`);
+                            } catch (e) { }
+                          }}
+                        >
+                          <Ionicons name="location" size={16} color="#64748b" />
+                          <Text style={styles.summaryLocationText}>View Captured Location</Text>
+                          <Ionicons name="chevron-forward" size={14} color="#94a3b8" />
+                        </TouchableOpacity>
+                      )}
 
-              {submitting && (
-                <View style={[styles.locationDisplayRow, { marginTop: 4 }]}>
-                  <Ionicons name="send-outline" size={16} color="#10b981" />
-                  <Text style={styles.locationDisplayText}>Finalizing Submission Location...</Text>
-                </View>
-              )}
+                      {attendancePhase === 'check_in' && todayStatus?.status && (
+                        <View style={styles.statusInfoRow}>
+                          <Text style={styles.statusInfoLabel}>Day Status:</Text>
+                          <Text style={[styles.statusInfoValue, { color: getStatusStyle(todayStatus.status).color }]}>
+                            {todayStatus.status.toUpperCase()}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  );
+                }
 
-              <TouchableOpacity
-                style={[styles.confirmBtn, (!image || !status || submitting) && styles.confirmBtnDisabled]}
-                onPress={handleManualSubmit}
-                disabled={!image || !status || submitting}
-              >
-                {submitting ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
+                return (
                   <>
-                    <Text style={styles.confirmBtnText}>CONFIRM ATTENDANCE</Text>
-                    <Ionicons name="arrow-forward" size={18} color="#fff" style={{ marginLeft: 8 }} />
+                    <TouchableOpacity
+                      style={[
+                        styles.dashedCameraTrigger,
+                        { borderColor: attendancePhase === 'check_in' ? '#2563eb' : attendancePhase === 'check_out' ? '#f59e0b' : attendancePhase === 'overtime_in' ? '#7c3aed' : '#10b981' }
+                      ]}
+                      onPress={takeSelfie}
+                      activeOpacity={0.7}
+                    >
+                      {image ? (
+                        <Image source={{ uri: image }} style={styles.fullPreview} />
+                      ) : (
+                        <View style={styles.cameraCenter}>
+                          <View style={[styles.cameraIconBg, { backgroundColor: attendancePhase === 'check_in' ? '#eff6ff' : attendancePhase === 'check_out' ? '#fff7ed' : attendancePhase === 'overtime_in' ? '#f5f3ff' : '#f0fdf4' }]}>
+                            <Ionicons
+                              name="camera"
+                              size={30}
+                              color={attendancePhase === 'check_in' ? '#2563eb' : attendancePhase === 'check_out' ? '#f59e0b' : attendancePhase === 'overtime_in' ? '#7c3aed' : '#10b981'}
+                            />
+                          </View>
+                          <Text style={[styles.cameraPromptText, { color: attendancePhase === 'check_in' ? '#2563eb' : attendancePhase === 'check_out' ? '#f59e0b' : attendancePhase === 'overtime_in' ? '#7c3aed' : '#10b981' }]}>
+                            Take {attendancePhase.replace('_', ' ').toUpperCase()} Selfie
+                          </Text>
+                        </View>
+                      )}
+                    </TouchableOpacity>
+
+                    {attendancePhase === 'check_in' && !todayStatus?.check_in && (
+                      <>
+                        <Text style={styles.selectStatusLabel}>SELECT YOUR STATUS</Text>
+                        <View style={styles.statusBarRow}>
+                          {['present', 'late', 'absent', 'leave'].map((s) => (
+                            <TouchableOpacity
+                              key={s}
+                              onPress={() => selectStatus(s)}
+                              style={[
+                                styles.statusSelectBtn,
+                                status === s && styles.statusSelectBtnActive
+                              ]}
+                            >
+                              <Text style={[styles.statusSelectText, status === s && styles.statusSelectTextActive]}>
+                                {s.toUpperCase()}
+                              </Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      </>
+                    )}
+
+                    {status === 'leave' && attendancePhase === 'check_in' && (
+                      <View style={styles.leavePickerContainer}>
+                        <Picker
+                          selectedValue={leaveType}
+                          onValueChange={(itemValue) => setLeaveType(itemValue)}
+                          style={styles.simplePicker}
+                        >
+                          <Picker.Item label="Casual Leave" value="casual" />
+                          <Picker.Item label="Sick Leave" value="sick" />
+                          <Picker.Item label="Annual Leave" value="annual" />
+                          <Picker.Item label="Unpaid Leave" value="unpaid" />
+                        </Picker>
+                      </View>
+                    )}
+
+                    <TextInput
+                      style={styles.whiteNoteInput}
+                      placeholder="Attach a message for HR (optional)..."
+                      value={note}
+                      onChangeText={setNote}
+                      placeholderTextColor="#94a3b8"
+                    />
+
+                    <TouchableOpacity
+                      style={[
+                        styles.confirmBtn,
+                        { backgroundColor: attendancePhase === 'check_in' ? '#2563eb' : attendancePhase === 'check_out' ? '#f59e0b' : attendancePhase === 'overtime_in' ? '#7c3aed' : '#10b981' },
+                        (!image || submitting) && styles.confirmBtnDisabled
+                      ]}
+                      onPress={handleManualSubmit}
+                      disabled={!image || submitting}
+                    >
+                      {submitting ? (
+                        <ActivityIndicator color="#fff" />
+                      ) : (
+                        <>
+                          <Text style={styles.confirmBtnText}>SUBMIT {attendancePhase.replace('_', ' ').toUpperCase()}</Text>
+                          <Ionicons name={"cloud-upload" as any} size={20} color="#fff" style={{ marginLeft: 12 }} />
+                        </>
+                      )}
+                    </TouchableOpacity>
                   </>
-                )}
-              </TouchableOpacity>
+                );
+              })()}
             </View>
           )}
         </View>
@@ -633,51 +769,77 @@ export default function DashboardScreen() {
         {selectedDayHistory.length > 0 ? (
           <View style={{ marginBottom: 20 }}>
             {selectedDayHistory.map((item, index) => {
-              const style = getStatusStyle(item.status);
-              return (
-                <View key={`sel-${index}`} style={styles.dayRecordCard}>
-                  <View style={styles.dayRecordHeader}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                      <View style={[styles.statusBadge, { backgroundColor: style.bg }]}>
-                        <Text style={[styles.statusLabel, { color: style.color }]}>{item.status.toUpperCase()}</Text>
-                      </View>
+              const phases = [
+                { id: 'check_in', label: 'CHECK IN', time: item.check_in, pic: item.picture, loc: item.location, icon: 'enter-outline', color: '#2563eb' },
+                { id: 'check_out', label: 'CHECK OUT', time: item.check_out, pic: item.check_out_picture, loc: item.check_out_location, icon: 'exit-outline', color: '#f59e0b' },
+                { id: 'overtime_in', label: 'OT IN', time: item.overtime_in, pic: item.overtime_in_picture, loc: item.overtime_in_location, icon: 'play-outline', color: '#7c3aed' },
+                { id: 'overtime_out', label: 'OT OUT', time: item.overtime_out, pic: item.overtime_out_picture, loc: item.overtime_out_location, icon: 'stop-outline', color: '#10b981' },
+              ].filter(p => !!p.time);
 
-                    </View>
-                    <Text style={styles.dayRecordTime}>
-                      {new Date(item.created_at || item.date).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}
-                    </Text>
-                  </View>
-                  {item.picture && (
-                    <Image
-                      source={{ uri: item.picture }}
-                      style={{ width: '100%', height: 200, borderRadius: 12, marginTop: 8, marginBottom: 8, backgroundColor: '#f1f5f9' }}
-                      resizeMode="cover"
-                    />
-                  )}
-                  {item.location && (
-                    <View style={{ marginTop: 8 }}>
-                      <TouchableOpacity
-                        onPress={() => Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${JSON.parse(item.location).latitude},${JSON.parse(item.location).longitude}`)}
-                        style={styles.dayLocationLink}
-                      >
-                        <Ionicons name="location-outline" size={14} color="#2563eb" />
-                        <Text style={styles.dayLocationText}>
-                          Submission Location: {JSON.parse(item.location).latitude.toFixed(6)}, {JSON.parse(item.location).longitude.toFixed(6)}
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
-                  {item.initial_location && (
-                    <View style={{ marginTop: 4 }}>
-                      <TouchableOpacity
-                        onPress={() => Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${JSON.parse(item.initial_location).latitude},${JSON.parse(item.initial_location).longitude}`)}
-                        style={styles.dayLocationLink}
-                      >
-                        <Ionicons name="camera-outline" size={14} color="#64748b" />
-                        <Text style={[styles.dayLocationText, { color: '#64748b' }]}>
-                          Selfie Location: {JSON.parse(item.initial_location).latitude.toFixed(6)}, {JSON.parse(item.initial_location).longitude.toFixed(6)}
-                        </Text>
-                      </TouchableOpacity>
+              return (
+                <View key={`record-${index}`} style={styles.recordWrapper}>
+                  {phases.length > 0 ? phases.map((phase, pIdx) => {
+                    const statusStyle = getStatusStyle(item.status);
+                    const isCheckIn = phase.id === 'check_in';
+
+                    return (
+                      <View key={`${phase.id}-${pIdx}`} style={styles.timelineItem}>
+                        <View style={styles.timelineSidebar}>
+                          <View style={[styles.timelineIconBg, { backgroundColor: phase.color + '15' }]}>
+                            <Ionicons name={phase.icon as any} size={16} color={phase.color} />
+                          </View>
+                          {pIdx < phases.length - 1 && <View style={styles.timelineConnector} />}
+                        </View>
+
+                        <View style={styles.timelineContent}>
+                          <View style={styles.timelineHeader}>
+                            <View>
+                              <Text style={[styles.timelineLabel, { color: phase.color }]}>{phase.label}</Text>
+                              <Text style={styles.timelineTime}>{phase.time}</Text>
+                            </View>
+                            {isCheckIn && (
+                              <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg }]}>
+                                <Text style={[styles.statusLabel, { color: statusStyle.color }]}>{item.status.toUpperCase()}</Text>
+                              </View>
+                            )}
+                          </View>
+
+                          {phase.pic && (
+                            <Image source={{ uri: phase.pic }} style={styles.timelineImage} />
+                          )}
+
+                          {phase.loc && (
+                            <TouchableOpacity
+                              style={styles.timelineLocationBtn}
+                              onPress={() => {
+                                try {
+                                  const coords = JSON.parse(phase.loc);
+                                  Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${coords.latitude},${coords.longitude}`);
+                                } catch (e) { }
+                              }}
+                            >
+                              <Ionicons name="location" size={12} color="#64748b" />
+                              <Text style={styles.timelineLocationText}>View Location</Text>
+                            </TouchableOpacity>
+                          )}
+
+                          {item.note && isCheckIn && (
+                            <View style={styles.timelineNoteBox}>
+                              <Ionicons name="chatbubble-outline" size={12} color="#64748b" />
+                              <Text style={styles.timelineNoteText}>{item.note}</Text>
+                            </View>
+                          )}
+                        </View>
+                      </View>
+                    );
+                  }) : (
+                    <View style={styles.dayRecordCard}>
+                      <View style={styles.dayRecordHeader}>
+                        <View style={[styles.statusBadge, { backgroundColor: getStatusStyle(item.status).bg }]}>
+                          <Text style={[styles.statusLabel, { color: getStatusStyle(item.status).color }]}>{item.status.toUpperCase()}</Text>
+                        </View>
+                        <Text style={styles.dayRecordTime}>{item.date}</Text>
+                      </View>
                     </View>
                   )}
                 </View>
@@ -741,9 +903,38 @@ const styles = StyleSheet.create({
   leavePickerContainer: { marginBottom: 20, backgroundColor: '#f8fafc', borderRadius: 16, overflow: 'hidden' },
   simplePicker: { height: 50, color: '#1e293b' },
   whiteNoteInput: { backgroundColor: '#f8fafc', borderRadius: 16, padding: 16, fontSize: 15, color: '#1e293b', marginBottom: 20, borderWidth: 1, borderColor: '#f1f5f9' },
-  confirmBtn: { backgroundColor: '#1e293b', height: 56, borderRadius: 18, flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
-  confirmBtnDisabled: { opacity: 0.7 },
-  confirmBtnText: { color: '#fff', fontSize: 15, fontWeight: '800', letterSpacing: 0.5 },
+  confirmBtn: { height: 64, borderRadius: 24, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 10, elevation: 6 },
+  confirmBtnDisabled: { opacity: 0.5 },
+  confirmBtnText: { color: '#fff', fontSize: 16, fontWeight: '900', letterSpacing: 1 },
+
+  // Timeline Styles
+  recordWrapper: { backgroundColor: '#fff', borderRadius: 24, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: '#f1f5f9', shadowColor: '#000', shadowOpacity: 0.02, shadowRadius: 10, elevation: 2 },
+  timelineItem: { flexDirection: 'row', gap: 12 },
+  timelineSidebar: { width: 32, alignItems: 'center' },
+  timelineIconBg: { width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
+  timelineConnector: { width: 2, flex: 1, backgroundColor: '#f1f5f9', marginVertical: 4 },
+  timelineContent: { flex: 1, paddingBottom: 20 },
+  timelineHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 },
+  timelineLabel: { fontSize: 10, fontWeight: '900', letterSpacing: 1 },
+  timelineTime: { fontSize: 16, fontWeight: '800', color: '#1e293b' },
+  timelineImage: { width: '100%', height: 160, borderRadius: 12, marginVertical: 8, backgroundColor: '#f8fafc' },
+  timelineLocationBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', paddingVertical: 4, paddingHorizontal: 8, borderRadius: 6, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#f1f5f9' },
+  timelineLocationText: { fontSize: 11, fontWeight: '700', color: '#64748b' },
+  timelineNoteBox: { flexDirection: 'row', gap: 6, marginTop: 8, padding: 8, borderRadius: 8, backgroundColor: '#f8fafc' },
+  timelineNoteText: { flex: 1, fontSize: 12, color: '#64748b', fontStyle: 'italic' },
+
+  // Summary Display
+  phaseSummaryCard: { backgroundColor: '#f8fafc', borderRadius: 24, padding: 16, borderWidth: 1, borderColor: '#eff6ff' },
+  summaryTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  summaryStatusBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  summaryStatusText: { fontSize: 11, fontWeight: '800' },
+  summaryTimeText: { fontSize: 15, fontWeight: '800', color: '#1e293b' },
+  summaryImage: { width: '100%', height: 200, borderRadius: 16, marginBottom: 12, backgroundColor: '#cbd5e1' },
+  summaryLocationBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', padding: 12, borderRadius: 12, gap: 8, borderWidth: 1, borderColor: '#e2e8f0' },
+  summaryLocationText: { flex: 1, fontSize: 13, fontWeight: '700', color: '#64748b' },
+  statusInfoRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12, paddingHorizontal: 4 },
+  statusInfoLabel: { fontSize: 12, fontWeight: '700', color: '#94a3b8' },
+  statusInfoValue: { fontSize: 12, fontWeight: '900' },
 
   // Captured State
   capturedView: { alignItems: 'center', paddingVertical: 10 },
@@ -801,5 +992,17 @@ const styles = StyleSheet.create({
   detailText: { fontSize: 13, color: '#64748b', fontWeight: '500' },
   locationDisplayRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12, backgroundColor: '#f0f7ff', padding: 8, borderRadius: 8 },
   locationDisplayText: { fontSize: 12, fontWeight: '600', color: '#1e40af' },
+  tabContainer: { flexDirection: 'row', backgroundColor: '#f1f5f9', borderRadius: 16, padding: 4, marginBottom: 20 },
+  tabBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 10, borderRadius: 12 },
+  tabBtnActive: { backgroundColor: '#fff', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 5, elevation: 1 },
+  tabText: { fontSize: 13, fontWeight: '700', color: '#64748b' },
+  tabTextActive: { color: '#1e293b' },
+  phaseSelectorRow: { flexDirection: 'row', gap: 8, marginBottom: 20 },
+  phaseBtn: { flex: 1, paddingVertical: 10, borderRadius: 12, backgroundColor: '#f1f5f9', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', borderWidth: 1, borderColor: 'transparent' },
+  phaseBtnActive: { backgroundColor: '#fff', borderColor: '#2563eb', shadowColor: '#2563eb', shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 },
+  phaseBtnDone: { backgroundColor: '#f0fdf4' },
+  phaseBtnText: { fontSize: 10, fontWeight: '800', color: '#64748b' },
+  phaseBtnTextActive: { color: '#2563eb' },
+  phaseBtnTextDone: { color: '#10b981' },
   bottomSpacer: { height: 40 },
 });

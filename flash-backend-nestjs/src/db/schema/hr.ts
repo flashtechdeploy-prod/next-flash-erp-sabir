@@ -37,6 +37,7 @@ export const payrollSheetEntries = pgTable('payroll_sheet_entries', {
   tax: real('tax'),
   fine_adv_extra: real('fine_adv_extra'),
   ot_rate_override: real('ot_rate_override'),
+  ot_amount_override: real('ot_amount_override'),
   remarks: text('remarks'),
   bank_cash: text('bank_cash'),
   created_at: timestamp('created_at').defaultNow(),
