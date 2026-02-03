@@ -113,6 +113,7 @@ export const employees = pgTable('employees', {
   date_of_enrolment: text('date_of_enrolment'),
   date_of_re_enrolment: text('date_of_re_enrolment'),
   served_in: text('served_in'),
+  person_status: text('person_status'),
   experience_in_security: text('experience_in_security'),
   cause_of_discharge: text('cause_of_discharge'),
   medical_category: text('medical_category'),

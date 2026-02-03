@@ -102,6 +102,8 @@ export class CreateEmployeeDto {
   @IsOptional()
   date_of_re_enrolment?: string;
   @ApiPropertyOptional() @IsString() @IsOptional() served_in?: string;
+  @ApiPropertyOptional() @IsString() @IsOptional() person_status?: string;
+
   @ApiPropertyOptional()
   @IsString()
   @IsOptional()
@@ -215,6 +217,8 @@ export class EmployeeQueryDto {
   @ApiPropertyOptional() @IsString() @IsOptional() unit?: string;
   @ApiPropertyOptional() @IsString() @IsOptional() rank?: string;
   @ApiPropertyOptional() @IsString() @IsOptional() served_in?: string;
+  @ApiPropertyOptional() @IsString() @IsOptional() person_status?: string;
+
   @ApiPropertyOptional() @IsString() @IsOptional() deployed_at?: string;
   @ApiPropertyOptional() @IsString() @IsOptional() fss_no?: string;
   @ApiPropertyOptional() @IsString() @IsOptional() full_name?: string;
@@ -230,7 +234,6 @@ export class EmployeeQueryDto {
   @ApiPropertyOptional() @IsString() @IsOptional() sort_order?: 'asc' | 'desc';
   @ApiPropertyOptional() @IsOptional() with_total?: boolean;
 }
-
 /**
  * FILE UPLOAD DTO
  */

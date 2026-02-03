@@ -4,7 +4,7 @@ import { Calendar } from 'react-native-calendars';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { CONFIG } from '../constants/config';
+import { CONFIG } from '../../constants/config';
 
 export default function AttendanceHistoryScreen() {
     const [history, setHistory] = useState<any[]>([]);
@@ -95,11 +95,7 @@ export default function AttendanceHistoryScreen() {
     return (
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                    <Ionicons name="arrow-back" size={24} color="#1e293b" />
-                </TouchableOpacity>
                 <Text style={styles.headerTitle}>Attendance History</Text>
-                <View style={{ width: 40 }} />
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>

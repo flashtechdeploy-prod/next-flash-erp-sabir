@@ -97,6 +97,33 @@ export class EmployeesController {
     return this.employeesService.getCategories();
   }
 
+  @Get('person-statuses/list')
+  @ApiOperation({ summary: 'Get all person statuses' })
+  async getPersonStatuses() {
+    return this.employeesService.getPersonStatuses();
+  }
+
+  @Post('person-statuses')
+  @ApiOperation({ summary: 'Create person status' })
+  async createPersonStatus(@Body() body: { name: string }) {
+    return this.employeesService.createPersonStatus(body.name);
+  }
+
+  @Put('person-statuses/:id')
+  @ApiOperation({ summary: 'Update person status' })
+  async updatePersonStatus(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: { name: string },
+  ) {
+    return this.employeesService.updatePersonStatus(id, body.name);
+  }
+
+  @Delete('person-statuses/:id')
+  @ApiOperation({ summary: 'Delete person status' })
+  async deletePersonStatus(@Param('id', ParseIntPipe) id: number) {
+    return this.employeesService.deletePersonStatus(id);
+  }
+
   @Get('bulk-delete-test')
   @ApiOperation({ summary: 'Test endpoint for bulk delete' })
   async bulkDeleteTest() {

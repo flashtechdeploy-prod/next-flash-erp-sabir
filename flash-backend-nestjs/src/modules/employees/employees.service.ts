@@ -33,7 +33,7 @@ export class EmployeesService {
   async findAll(query: EmployeeQueryDto) {
     const skip = Number(query.skip) || 0;
     const limit = Number(query.limit) || 100;
-    const { search, status, unit, rank, served_in, deployed_at, with_total, fss_no, full_name, cnic } = query;
+    const { search, status, unit, rank, served_in, person_status, deployed_at, with_total, fss_no, full_name, cnic } = query;
 
     const filters: SQL[] = [];
 
@@ -41,6 +41,8 @@ export class EmployeesService {
     if (unit) filters.push(eq(schema.employees.unit, unit));
     if (rank) filters.push(eq(schema.employees.rank, rank));
     if (served_in) filters.push(eq(schema.employees.served_in, served_in));
+    if (person_status) filters.push(eq(schema.employees.person_status, person_status));
+
     if (deployed_at)
       filters.push(eq(schema.employees.deployed_at, deployed_at));
     
@@ -835,5 +837,41 @@ export class EmployeesService {
     return this.db
       .update(schema.employees)
       .set({ status: 'Active' });
+  }
+
+  // Person Status Management
+  async getPersonStatuses() {
+    const result = await this.db
+      .select()
+      .from(schema.personStatuses)
+      .orderBy(schema.personStatuses.name);
+    return result;
+  }
+
+  async createPersonStatus(name: string) {
+    const [result] = await this.db
+      .insert(schema.personStatuses)
+      .values({ name })
+      .returning();
+    return result;
+  }
+
+  async updatePersonStatus(id: number, name: string) {
+    await this.db
+      .update(schema.personStatuses)
+      .set({ name })
+      .where(eq(schema.personStatuses.id, id));
+    const [result] = await this.db
+      .select()
+      .from(schema.personStatuses)
+      .where(eq(schema.personStatuses.id, id));
+    return result;
+  }
+
+  async deletePersonStatus(id: number) {
+    await this.db
+      .delete(schema.personStatuses)
+      .where(eq(schema.personStatuses.id, id));
+    return { message: 'Person status deleted' };
   }
 }

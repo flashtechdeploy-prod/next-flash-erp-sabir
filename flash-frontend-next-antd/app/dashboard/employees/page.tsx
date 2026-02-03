@@ -80,6 +80,7 @@ export default function EmployeesPage() {
     enrolled_as: '',
     date_of_enrolment: '',
     served_in: '',
+    person_status: '',
   });
   const [kpis, setKpis] = useState<{ total: number; by_status: Record<string, number> }>({
     total: 0,
@@ -119,6 +120,8 @@ export default function EmployeesPage() {
     if (filters.enrolled_as) params.enrolled_as = filters.enrolled_as;
     if (filters.date_of_enrolment) params.date_of_enrolment = filters.date_of_enrolment;
     if (filters.served_in) params.served_in = filters.served_in;
+    if (filters.person_status) params.person_status = filters.person_status;
+
 
     const response = await employeeApi.getAll(params);
     setLoading(false);
@@ -147,6 +150,8 @@ export default function EmployeesPage() {
     if (filters.full_name) params.full_name = filters.full_name;
     if (filters.cnic) params.cnic = filters.cnic;
     if (filters.served_in) params.served_in = filters.served_in;
+    if (filters.person_status) params.person_status = filters.person_status;
+
 
     const response = await employeeApi.getKpis(params);
     if (!response.error && response.data) {
@@ -158,7 +163,7 @@ export default function EmployeesPage() {
     fetchEmployees();
     fetchKpis();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.search, filters.status, filters.fss_no, filters.full_name, filters.cnic, filters.father_name, filters.date_of_birth, filters.mobile_number, filters.department, filters.designation, filters.enrolled_as, filters.date_of_enrolment, filters.served_in]);
+  }, [filters.search, filters.status, filters.fss_no, filters.full_name, filters.cnic, filters.father_name, filters.date_of_birth, filters.mobile_number, filters.department, filters.designation, filters.enrolled_as, filters.date_of_enrolment, filters.served_in, filters.person_status]);
 
   const handleCreate = () => {
     setEditingEmployee(null);
@@ -496,8 +501,8 @@ export default function EmployeesPage() {
     },
     {
       title: 'Person Status',
-      dataIndex: 'served_in',
-      key: 'served_in',
+      dataIndex: 'person_status',
+      key: 'person_status',
       width: 120,
     },
     {
@@ -688,7 +693,7 @@ export default function EmployeesPage() {
           placeholder="Filter by Person Status"
           allowClear
           style={{ width: 150 }}
-          onChange={(value) => setFilters({ ...filters, served_in: value || '' })}
+          onChange={(value) => setFilters({ ...filters, person_status: value || '' })}
           options={[
             { label: 'Army', value: 'Army' },
             { label: 'Navy', value: 'Navy' },

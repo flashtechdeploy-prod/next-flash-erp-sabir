@@ -172,6 +172,11 @@ export const employeeApi = {
   getDepartments: () => api.get("/api/employees/departments/list"),
   getDesignations: () => api.get("/api/employees/designations/list"),
   getCategories: () => api.get("/api/employees/categories/list"),
+  getPersonStatuses: () => api.get("/api/employees/person-statuses/list"),
+  createPersonStatus: (name: string) => api.post("/api/employees/person-statuses", { name }),
+  updatePersonStatus: (id: number, name: string) => api.put(`/api/employees/person-statuses/${id}`, { name }),
+  deletePersonStatus: (id: number) => api.delete(`/api/employees/person-statuses/${id}`),
+
 
   // Documents
   getDocuments: (dbId: number) =>

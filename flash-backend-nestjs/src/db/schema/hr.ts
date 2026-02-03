@@ -52,3 +52,9 @@ export const payrollPaymentStatus = pgTable('payroll_payment_status', {
   status: text('status').default('unpaid'),
   created_at: timestamp('created_at').defaultNow(),
 });
+
+export const personStatuses = pgTable('person_statuses', {
+  id: serial('id').primaryKey(),
+  name: text('name').unique().notNull(),
+  created_at: timestamp('created_at').defaultNow(),
+});

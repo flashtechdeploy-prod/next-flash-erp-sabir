@@ -25,6 +25,6 @@ export default function Page() {
     );
   }
 
-  // Redirect to dashboard if token exists, else login
-  return <Redirect href={hasToken ? "/dashboard" : "/login"} />;
+  // Redirect to Home tab if token exists, else login
+  return <Redirect href={hasToken ? "/(tabs)" : "/login"} />;
 }

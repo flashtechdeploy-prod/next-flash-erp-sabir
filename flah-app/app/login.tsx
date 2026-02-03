@@ -1,14 +1,17 @@
 
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, Image } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { CONFIG } from '../constants/config';
+import { SplashOverlay } from '../components/SplashOverlay';
 
 export default function LoginScreen() {
   const [fssNo, setFssNo] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showSplash, setShowSplash] = useState(false);
   const router = useRouter();
 
   const formatCNIC = (text: string) => {
@@ -49,7 +52,9 @@ export default function LoginScreen() {
         await AsyncStorage.setItem('employee_id', data.employee_id);
         await AsyncStorage.setItem('full_name', data.full_name || '');
         await AsyncStorage.setItem('fss_no', data.fss_no || '');
-        router.replace('/dashboard');
+
+        // Show splash and delay navigation
+        setShowSplash(true);
       } else {
         Alert.alert('Login Failed', data.message || 'Invalid credentials');
       }
@@ -65,73 +70,79 @@ export default function LoginScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.mainContainer}
     >
-      <View style={styles.backgroundGradient}>
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          <View style={styles.headerSection}>
-            <View style={styles.logoContainer}>
-              <Image
-                source={require('../assets/images/flash-logo.jpg')}
-                style={styles.logoImage}
-                resizeMode="contain"
-              />
-            </View>
-            <Text style={styles.welcomeTitle}>Flash Tech ERP</Text>
-            <Text style={styles.welcomeSubtitle}>Employee Portal</Text>
-          </View>
-
-          <View style={styles.loginCard}>
-            <Text style={styles.cardTitle}>Sign In</Text>
-            <Text style={styles.inputHint}>Enter your credentials to manage your attendance and tasks.</Text>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>FSS NUMBER / CNIC</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="000 or 1111-42347771-1"
-                placeholderTextColor="#94a3b8"
-                value={fssNo}
-                onChangeText={handleIdentifierChange}
-                autoCapitalize="none"
-                keyboardType="numeric"
-              />
+      <SplashOverlay
+        visible={showSplash}
+        onFinish={() => router.replace('/(tabs)')}
+      />
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#eff6ff' }} edges={['top', 'left', 'right']}>
+        <View style={styles.backgroundGradient}>
+          <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+            <View style={styles.headerSection}>
+              <View style={styles.logoContainer}>
+                <Image
+                  source={require('../assets/images/flash-logo.jpg')}
+                  style={styles.logoImage}
+                  resizeMode="contain"
+                />
+              </View>
+              <Text style={styles.welcomeTitle}>Flash Tech ERP</Text>
+              <Text style={styles.welcomeSubtitle}>Employee Portal</Text>
             </View>
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>PASSWORD</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="••••••••"
-                placeholderTextColor="#94a3b8"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-              />
+            <View style={styles.loginCard}>
+              <Text style={styles.cardTitle}>Sign In</Text>
+              <Text style={styles.inputHint}>Enter your credentials to manage your attendance and tasks.</Text>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>FSS NUMBER / CNIC</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="000 or 1111-42347771-1"
+                  placeholderTextColor="#94a3b8"
+                  value={fssNo}
+                  onChangeText={handleIdentifierChange}
+                  autoCapitalize="none"
+                  keyboardType="numeric"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>PASSWORD</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="••••••••"
+                  placeholderTextColor="#94a3b8"
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry
+                />
+              </View>
+
+              <TouchableOpacity
+                style={[styles.loginButton, loading && styles.buttonDisabled]}
+                onPress={handleLogin}
+                disabled={loading}
+                activeOpacity={0.8}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.loginButtonText}>CONTINUE</Text>
+                )}
+              </TouchableOpacity>
+
+
             </View>
 
-            <TouchableOpacity
-              style={[styles.loginButton, loading && styles.buttonDisabled]}
-              onPress={handleLogin}
-              disabled={loading}
-              activeOpacity={0.8}
-            >
-              {loading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.loginButtonText}>CONTINUE</Text>
-              )}
-            </TouchableOpacity>
-
-
-          </View>
-
-          <View style={styles.footerSection}>
-            <Text style={styles.footerText}>Authorized Personnel Only</Text>
-            <View style={styles.footerDivider} />
-            <Text style={styles.versionText}>v1.0.4 Premium</Text>
-          </View>
-        </ScrollView>
-      </View>
-    </KeyboardAvoidingView>
+            <View style={styles.footerSection}>
+              <Text style={styles.footerText}>Authorized Personnel Only</Text>
+              <View style={styles.footerDivider} />
+              <Text style={styles.versionText}>v1.0.4 Premium</Text>
+            </View>
+          </ScrollView>
+        </View>
+      </SafeAreaView>
+    </KeyboardAvoidingView >
   );
 }
 
