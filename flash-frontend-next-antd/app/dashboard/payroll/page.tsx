@@ -25,6 +25,7 @@ interface PayrollEmployee extends Record<string, unknown> {
   curDays: number;
   totalDays: number;
   totalOvertimeMinutes: number;
+  otDaysCount: number;
   totalFines: number;
   basicSalary: number;
   allowances: number;
@@ -96,9 +97,10 @@ function PayrollContent() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const prevMonth = month.subtract(1, 'month');
-      const fromDate = month.startOf('month').format('YYYY-MM-DD');
-      const toDate = month.endOf('month').format('YYYY-MM-DD');
+      const fromDate = month.subtract(1, 'month').date(26).format('YYYY-MM-DD');
+      const toDate = month.date(25).format('YYYY-MM-DD');
+      const prevFromDate = month.subtract(2, 'month').date(26).format('YYYY-MM-DD');
+      const prevToDate = month.subtract(1, 'month').date(25).format('YYYY-MM-DD');
 
       const [empRes, attRes, assignRes, clientRes, sheetRes, prevAttRes, prevSheetRes] = await Promise.all([
         employeeApi.getAll({ limit: '1000' }),
@@ -106,8 +108,8 @@ function PayrollContent() {
         clientApi.getActiveAssignments(),
         clientApi.getAll(),
         payrollApi.getSheetEntries(fromDate, toDate),
-        attendanceApi.getByRange(prevMonth.startOf('month').format('YYYY-MM-DD'), prevMonth.endOf('month').format('YYYY-MM-DD')),
-        payrollApi.getSheetEntries(prevMonth.startOf('month').format('YYYY-MM-DD'), prevMonth.endOf('month').format('YYYY-MM-DD')),
+        attendanceApi.getByRange(prevFromDate, prevToDate),
+        payrollApi.getSheetEntries(prevFromDate, prevToDate),
       ]);
 
       setRawEmployees(Array.isArray(empRes.data) ? empRes.data : (empRes.data as any)?.employees || []);
@@ -152,7 +154,9 @@ function PayrollContent() {
       attGroupMap.get(eid)?.push(a);
     });
 
-    const workingDays = month.daysInMonth();
+    const fromDateObj = month.subtract(1, 'month').date(26);
+    const toDateObj = month.date(25);
+    const workingDays = toDateObj.diff(fromDateObj, 'day') + 1;
 
     const calculated: PayrollEmployee[] = relevantEmployees.map((emp: any) => {
       const employeeId = String(emp.employee_id);
@@ -218,7 +222,7 @@ function PayrollContent() {
         client_name: assignment?.client_name || "Unassigned",
         site_name: assignment?.site_name || "N/A",
         presentDays, lateDays, absentDays, leaveDays, preDays, curDays,
-        totalDays: totalPaidDays, totalOvertimeMinutes, totalFines, basicSalary,
+        totalDays: totalPaidDays, totalOvertimeMinutes, otDaysCount, totalFines, basicSalary,
         allowances: parseFloat(String(emp.allowances || '0')),
         totalSalary,
         allow_other: allowOther, eobi, taxFineAdv,
@@ -259,8 +263,12 @@ function PayrollContent() {
       });
       const bSal = parseFloat(String(emp.basic_salary || '0')) || parseFloat(String(emp.salary || '0'));
       const tSal = parseFloat(String(emp.total_salary || 0)) || bSal;
+      const prevFromDateObj = month.subtract(2, 'month').date(26);
+      const prevToDateObj = month.subtract(1, 'month').date(25);
+      const prevWorkingDays = prevToDateObj.diff(prevFromDateObj, 'day') + 1;
       const totalPaid = (sheetEntry?.pre_days_override ?? 0) + (sheetEntry?.cur_days_override ?? pDays) + lDays;
-      const gSal = totalPaid * (tSal / month.subtract(1, 'month').daysInMonth());
+
+      const gSal = totalPaid * (tSal / prevWorkingDays);
       const asgn = empAssignmentMap.get(employeeId);
       return { ...emp, client_id: asgn?.client_id, site_name: asgn?.site_name, netSalary: Math.round(gSal) };
     });
@@ -547,9 +555,10 @@ function PayrollContent() {
     { title: 'Total', dataIndex: 'totalDays', key: 'totalDays', width: 70, render: (v: number) => <Tag color={v > 25 ? 'green' : 'orange'}>{v}</Tag> },
     {
       title: 'O.T',
-      key: 'ot_hours',
+      dataIndex: 'otDaysCount',
+      key: 'otDaysCount',
       width: 70,
-      render: (r: any) => <span style={{ fontWeight: 600 }}>{Math.floor(r.totalOvertimeMinutes / 60)}h</span>
+      render: (val: number) => <span style={{ fontWeight: 600 }}>{val}</span>
     },
     {
       title: 'O.T Rate',
@@ -603,6 +612,17 @@ function PayrollContent() {
           style={{ width: '100%', borderRadius: '6px' }}
           onBlur={(e) => handleUpdateEntry(record.id, 'eobi', Number(e.target.value))}
         />
+      )
+    },
+    {
+      title: 'Fine',
+      dataIndex: 'totalFines',
+      key: 'totalFines',
+      width: 100,
+      render: (val: number) => (
+        <span style={{ color: val > 0 ? '#ef4444' : 'inherit', fontWeight: val > 0 ? 600 : 'normal' }}>
+          {val.toLocaleString()}
+        </span>
       )
     },
     {
