@@ -948,6 +948,8 @@ export default function EmployeeDetailPage() {
               <Field label="Email" value={employee.email} />
               <Field label="Main Number" value={employee.main_number} />
               <Field label="EOBI Number" value={employee.eobi_no} />
+                   <Field label="Insurance" value={employee.insurance} />
+              <Field label="Social Security #" value={employee.social_security} />
             </div>
           </div>
 
@@ -1002,9 +1004,7 @@ export default function EmployeeDetailPage() {
               <Field label="Account Number" value={employee.account_number || employee.bank_account_number} />
               <Field label="IFSC Code" value={employee.ifsc_code} />
               <Field label="PAN Name" value={employee.pan_name} />
-              <Field label="Insurance" value={employee.insurance} />
-              <Field label="Social Security #" value={employee.social_security} />
-              <Field label="EOBI Number" value={employee.eobi_no} />
+         
             </div>
           </div>
 
