@@ -77,6 +77,7 @@ const DEFAULT_FIELDS: FieldConfig[] = [
     id: 'blood_group', label: 'Blood Group', name: 'blood_group', span: 6, component: 'select', section: 'Bio Data',
     options: [{ label: 'A+', value: 'A+' }, { label: 'A-', value: 'A-' }, { label: 'B+', value: 'B+' }, { label: 'B-', value: 'B-' }, { label: 'O+', value: 'O+' }, { label: 'O-', value: 'O-' }, { label: 'AB+', value: 'AB+' }, { label: 'AB-', value: 'AB-' }]
   },
+
   { id: 'father_name', label: 'Father Name', name: 'father_name', span: 6, component: 'input', placeholder: "Father's name", section: 'Bio Data' },
   { id: 'gender', label: 'Gender', name: 'gender', span: 6, component: 'select', section: 'Bio Data', options: [{ label: 'Male', value: 'Male' }, { label: 'Female', value: 'Female' }] },
 
@@ -90,7 +91,10 @@ const DEFAULT_FIELDS: FieldConfig[] = [
   { id: 'phone', label: 'Personal Mobile No', name: 'phone', span: 8, component: 'input', placeholder: '03001234567', section: 'Bio Data' },
   { id: 'email', label: 'Email', name: 'email', span: 12, component: 'input', placeholder: 'email@example.com', section: 'Bio Data' },
   { id: 'main_number', label: 'Main Number', name: 'main_number', span: 12, component: 'input', placeholder: '03001234567', section: 'Bio Data' },
-  { id: 'eobi_no', label: 'EOBI Number', name: 'eobi_no', span: 24, component: 'input', placeholder: 'EOBI account number', section: 'Bio Data' },
+  { id: 'eobi_no', label: 'EOBI Number', name: 'eobi_no', span: 50, component: 'input', placeholder: 'EOBI account number', section: 'Bio Data' },
+  { id: 'social_security', label: 'Social Security #', name: 'social_security', span: 50, component: 'input', placeholder: 'SSN or Social Security Number',section: 'Bio Data'  },
+  { id: 'insurance', label: 'Insurance', name: 'insurance', span: 24, component: 'textarea', placeholder: 'Insurance details, policy number, coverage...', section: 'Bio Data' },
+
 
   // Permanent Address
   { id: 'permanent_village', label: 'Village/Mohalla', name: 'permanent_village', span: 8, component: 'input', section: 'Permanent Address' },
@@ -120,9 +124,7 @@ const DEFAULT_FIELDS: FieldConfig[] = [
   { id: 'sho_verification_date', label: 'SHO Verification Date', name: 'sho_verification_date', span: 6, component: 'datepicker', section: 'Verification & Documents' },
   { id: 'ssp_verification_date', label: 'SSP Verification Date', name: 'ssp_verification_date', span: 6, component: 'datepicker', section: 'Verification & Documents' },
   { id: 'verified_by_khidmat_markaz', label: 'Al-Khidmat Verification Date', name: 'verified_by_khidmat_markaz', span: 6, component: 'datepicker', section: 'Verification & Documents' },
-  { id: 'social_security', label: 'Social Security #', name: 'social_security', span: 6, component: 'input', placeholder: 'SSN or Social Security Number', section: 'Verification & Documents' },
   { id: 'agreement_date', label: 'Agreement Date', name: 'agreement_date', span: 12, component: 'datepicker', section: 'Verification & Documents' },
-  { id: 'insurance', label: 'Insurance', name: 'insurance', span: 24, component: 'textarea', placeholder: 'Insurance details, policy number, coverage...', section: 'Verification & Documents' },
   { id: 'remarks', label: 'Remarks', name: 'remarks', span: 24, component: 'textarea', placeholder: 'Any additional notes...', section: 'Verification & Documents' },
 ];
 
