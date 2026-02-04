@@ -93,7 +93,7 @@ const DEFAULT_FIELDS: FieldConfig[] = [
   { id: 'main_number', label: 'Main Number', name: 'main_number', span: 12, component: 'input', placeholder: '03001234567', section: 'Bio Data' },
   { id: 'eobi_no', label: 'EOBI Number', name: 'eobi_no', span: 50, component: 'input', placeholder: 'EOBI account number', section: 'Bio Data' },
   { id: 'social_security', label: 'Social Security #', name: 'social_security', span: 50, component: 'input', placeholder: 'SSN or Social Security Number',section: 'Bio Data'  },
-  { id: 'insurance', label: 'Insurance', name: 'insurance', span: 12, component: 'textarea', placeholder: 'Insurance details, policy number, coverage...', section: 'Bio Data' },
+  { id: 'insurance', label: 'Insurance', name: 'insurance', span: 12, component: 'input', placeholder: 'Insurance details, policy number, coverage...', section: 'Bio Data' },
 
 
   // Permanent Address
