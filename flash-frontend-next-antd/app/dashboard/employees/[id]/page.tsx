@@ -888,42 +888,38 @@ export default function EmployeeDetailPage() {
       <Card className="mb-6">
         <div ref={printRef}>
           {/* Profile Photo Section */}
-          <div className="section">
-            <div className="section-title">Profile Photo</div>
-            <div className="field-grid">
-              {employee.profile_photo ? (
-                <Image src={getFullFileUrl(employee.profile_photo)} alt="Profile" width={150} />
-              ) : (
-                <div style={{ width: 150, height: 150, backgroundColor: '#f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  No Photo
-                </div>
-              )}
-            </div>
-          </div>
-
+    
           {/* Enrolment Details */}
           <div className="section">
             <div className="section-title">Enrolment Details</div>
             <div className="field-grid">
               <Field label="FSS Number" value={employee.fss_no} />
-              <Field label="Rank" value={employee.rank} />
-              <Field label="Unit" value={employee.unit} />
-              <Field label="Date of Enrolment" value={employee.date_of_enrolment} />
-              <Field label="Date of Re-Enrolment" value={employee.date_of_re_enrolment} />
-              <Field label="Status" value={employee.status} />
-              <Field label="Interviewed By" value={employee.interviewed_by} />
+                 <Field label="Interviewed By" value={employee.interviewed_by} />
               <Field label="Introduced By" value={employee.introduced_by} />
               <Field label="Enrolled As" value={employee.enrolled_as} />
-              <Field label="Deployed At" value={employee.deployed_at} />
-              <Field label="Pay (Rs)" value={employee.pay_rs} />
-              <Field label="BDM" value={employee.bdm} />
+                <Field label="Deployed At" value={employee.deployed_at} />
+
+                            <Field label="Pay (Rs)" value={employee.pay_rs} />
+                                          <Field label="BDM" value={employee.bdm} />
+
+
               <Field label="Person Status" value={employee.person_status} />
-              <Field label="Past Experience" value={employee.served_in} />
+                     <Field label="Past Experience" value={employee.served_in} />
+              {/* <Field label="Previous Employment" value={employee.previous_employment} /> */}
               <Field label="Experience in Security" value={employee.experience_in_security} />
+
+       <Field label="Unit" value={employee.unit} />
+                            <Field label="Rank" value={employee.rank} />
+
+              <Field label="Date of Enrolment" value={employee.date_of_enrolment} />
+              
+              <Field label="Date of Re-Enrolment" value={employee.date_of_re_enrolment} />
+              <Field label="Original Document Held" value={employee.original_document_held} />
+
+              <Field label="Status" value={employee.status} />
+           
               <Field label="Cause of Discharge" value={employee.cause_of_discharge} />
               <Field label="Medical Category" value={employee.medical_category} />
-              <Field label="Previous Employment" value={employee.previous_employment} />
-              <Field label="Original Document Held" value={employee.original_document_held} />
             </div>
           </div>
 
@@ -933,17 +929,21 @@ export default function EmployeeDetailPage() {
             <div className="field-grid">
               <Field label="Full Name" value={employee.full_name} />
               <Field label="Blood Group" value={employee.blood_group} />
-              <Field label="Gender" value={employee.gender} />
-              <Field label="Father Name" value={employee.father_name} />
-              <Field label="CNIC" value={employee.cnic || employee.cnic_no} />
+                            <Field label="Father Name" value={employee.father_name} />
+
+                            <Field label="CNIC" value={employee.cnic || employee.cnic_no} />
               <Field label="CNIC Expiry" value={employee.cnic_expiry_date || employee.cnic_expiry} />
-              <Field label="Date of Birth" value={employee.date_of_birth || employee.dob} />
+                       <Field label="Date of Birth" value={employee.date_of_birth || employee.dob} />
               <Field label="Height" value={employee.height} />
               <Field label="Civil Education" value={employee.education} />
-              <Field label="Bio Data" value={employee.bio_data} />
-              <Field label="Domicile" value={employee.domicile} />
-              <Field label="Languages Spoken" value={employee.languages_spoken} />
               <Field label="Medical Category" value={employee.medical_category} />
+
+              <Field label="Gender" value={employee.gender} />
+
+     
+              {/* <Field label="Bio Data" value={employee.bio_data} /> */}
+              <Field label="Domicile" value={employee.domicile} />
+              {/* <Field label="Languages Spoken" value={employee.languages_spoken} /> */}
               <Field label="Personal Mobile No" value={employee.phone || employee.mobile_no || employee.mobile_number} />
               <Field label="Email" value={employee.email} />
               <Field label="Main Number" value={employee.main_number} />
@@ -975,6 +975,22 @@ export default function EmployeeDetailPage() {
             </div>
           </div>
 
+       {/* Family & Next of Kin */}
+          <div className="section">
+            <div className="section-title">Family & Next of Kin</div>
+            <div className="field-grid">
+              <Field label="Sons" value={employee.sons} />
+              <Field label="Daughters" value={employee.daughters} />
+              <Field label="Brothers" value={employee.brothers} />
+              <Field label="Sisters" value={employee.sisters} />
+              <Field label="Emergency Contact Name" value={employee.emergency_contact_name} />
+              <Field label="Emergency Contact Number" value={employee.emergency_contact_number} />
+              <Field label="NOK Name" value={employee.nok_name || employee.next_of_kin_name} />
+              <Field label="NOK CNIC" value={employee.nok_cnic_no || employee.next_of_kin_cnic} />
+              <Field label="NOK Mobile" value={employee.nok_mobile_no || employee.next_of_kin_mobile_number} />
+            </div>
+          </div>
+
           {/* Banking & Salary Information */}
           <div className="section">
             <div className="section-title">Banking & Salary Information</div>
@@ -992,22 +1008,7 @@ export default function EmployeeDetailPage() {
             </div>
           </div>
 
-          {/* Family & Next of Kin */}
-          <div className="section">
-            <div className="section-title">Family & Next of Kin</div>
-            <div className="field-grid">
-              <Field label="Sons" value={employee.sons} />
-              <Field label="Daughters" value={employee.daughters} />
-              <Field label="Brothers" value={employee.brothers} />
-              <Field label="Sisters" value={employee.sisters} />
-              <Field label="Emergency Contact Name" value={employee.emergency_contact_name} />
-              <Field label="Emergency Contact Number" value={employee.emergency_contact_number} />
-              <Field label="NOK Name" value={employee.nok_name || employee.next_of_kin_name} />
-              <Field label="NOK CNIC" value={employee.nok_cnic_no || employee.next_of_kin_cnic} />
-              <Field label="NOK Mobile" value={employee.nok_mobile_no || employee.next_of_kin_mobile_number} />
-            </div>
-          </div>
-
+   
           {/* Verification & Documents */}
           <div className="section">
             <div className="section-title">Verification & Documents</div>
