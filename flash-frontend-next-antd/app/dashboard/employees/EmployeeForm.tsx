@@ -66,6 +66,7 @@ const DEFAULT_FIELDS: FieldConfig[] = [
   {
     id: 'served_in', label: ' Past Experince', name: 'served_in', span: 6, component: 'input', rules: [{ required: false, message: 'Person Experience' }], section: 'Enrolment Details',
   },
+  { id: 'experience_in_security', label: 'Experience in Security', name: 'experience_in_security', span: 6, component: 'input', section: 'Enrolment Details' },
 
   { id: 'unit', label: 'Unit', name: 'unit', span: 6, component: 'input', placeholder: 'Alpha/Bravo', section: 'Enrolment Details' },
   { id: 'rank', label: 'Rank', name: 'rank', span: 6, component: 'input', placeholder: 'Enter Rank', section: 'Enrolment Details' },
