@@ -903,10 +903,11 @@ export default function EmployeeDetailPage() {
                                           <Field label="BDM" value={employee.bdm} />
 
 
-              <Field label="Person Status" value={employee.person_status} />
                      <Field label="Past Experience" value={employee.served_in} />
               {/* <Field label="Previous Employment" value={employee.previous_employment} /> */}
               <Field label="Experience in Security" value={employee.experience_in_security} />
+                            <Field label="Person Status" value={employee.person_status} />
+
 
        <Field label="Unit" value={employee.unit} />
                             <Field label="Rank" value={employee.rank} />
@@ -917,9 +918,6 @@ export default function EmployeeDetailPage() {
               <Field label="Agreement Date" value={employee.agreement_date} />
 
               <Field label="Status" value={employee.status} />
-           
-              <Field label="Cause of Discharge" value={employee.cause_of_discharge} />
-              <Field label="Medical Category" value={employee.medical_category} />
             </div>
           </div>
 
@@ -936,7 +934,7 @@ export default function EmployeeDetailPage() {
                        <Field label="Date of Birth" value={employee.date_of_birth || employee.dob} />
               <Field label="Height" value={employee.height} />
               <Field label="Civil Education" value={employee.education} />
-              <Field label="Medical Category" value={employee.medical_category} />
+              <Field label="Medical Category & Case of Disch" value={employee.medical_category} />
 
               <Field label="Gender" value={employee.gender} />
 
