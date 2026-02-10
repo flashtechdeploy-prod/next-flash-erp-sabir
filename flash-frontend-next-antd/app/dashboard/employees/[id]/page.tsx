@@ -893,6 +893,8 @@ export default function EmployeeDetailPage() {
           <div className="section">
             <div className="section-title">Enrolment Details</div>
             <div className="field-grid">
+                            <Field label="Status" value={employee.status} />
+
               <Field label="FSS Number" value={employee.fss_no} />
                  <Field label="Interviewed By" value={employee.interviewed_by} />
               <Field label="Introduced By" value={employee.introduced_by} />
@@ -917,7 +919,6 @@ export default function EmployeeDetailPage() {
               <Field label="Date of Re-Enrolment" value={employee.date_of_re_enrolment} />
               <Field label="Agreement Date" value={employee.agreement_date} />
 
-              <Field label="Status" value={employee.status} />
             </div>
           </div>
 
@@ -944,9 +945,11 @@ export default function EmployeeDetailPage() {
               <Field label="Personal Mobile No" value={employee.phone || employee.mobile_no || employee.mobile_number} />
               <Field label="Email" value={employee.email} />
               <Field label="Main Number" value={employee.main_number} />
+
               <Field label="EOBI Number" value={employee.eobi_no} />
+                            <Field label="Social Security #" value={employee.social_security} />
+
                    <Field label="Insurance" value={employee.insurance} />
-              <Field label="Social Security #" value={employee.social_security} />
             </div>
           </div>
 
