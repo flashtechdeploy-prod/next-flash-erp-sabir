@@ -914,7 +914,7 @@ export default function EmployeeDetailPage() {
               <Field label="Date of Enrolment" value={employee.date_of_enrolment} />
               
               <Field label="Date of Re-Enrolment" value={employee.date_of_re_enrolment} />
-              <Field label="Original Document Held" value={employee.original_document_held} />
+              <Field label="Agreement Date" value={employee.agreement_date} />
 
               <Field label="Status" value={employee.status} />
            
@@ -979,13 +979,13 @@ export default function EmployeeDetailPage() {
 
        {/* Family & Next of Kin */}
           <div className="section">
-            <div className="section-title">Family & Next of Kin</div>
+            <div className="section-title">Family & Next of King</div>
             <div className="field-grid">
               <Field label="Sons" value={employee.sons} />
               <Field label="Daughters" value={employee.daughters} />
               <Field label="Brothers" value={employee.brothers} />
               <Field label="Sisters" value={employee.sisters} />
-              <Field label="Emergency Contact Name" value={employee.emergency_contact_name} />
+              {/* <Field label="Emergency Contact Name" value={employee.emergency_contact_name} /> */}
               <Field label="Emergency Contact Number" value={employee.emergency_contact_number} />
               <Field label="NOK Name" value={employee.nok_name || employee.next_of_kin_name} />
               <Field label="NOK CNIC" value={employee.nok_cnic_no || employee.next_of_kin_cnic} />
@@ -994,7 +994,7 @@ export default function EmployeeDetailPage() {
           </div>
 
           {/* Banking & Salary Information */}
-          <div className="section">
+          {/* <div className="section">
             <div className="section-title">Banking & Salary Information</div>
             <div className="field-grid">
               <Field label="Basic Salary" value={employee.basic_salary} />
@@ -1006,24 +1006,18 @@ export default function EmployeeDetailPage() {
               <Field label="PAN Name" value={employee.pan_name} />
          
             </div>
-          </div>
+          </div> */}
 
    
           {/* Verification & Documents */}
           <div className="section">
             <div className="section-title">Verification & Documents</div>
             <div className="field-grid">
-              <Field label="Documents Held" value={employee.documents_held || employee.original_document_held} />
-              <Field label="Documents Handed Over To" value={employee.documents_handed_over_to} />
-              <Field label="Photo on Document" value={employee.photo_on_doc} />
-              <Field label="Original Document Held" value={employee.original_document_held} />
-              <Field label="Agreement Date" value={employee.agreement_date} />
-              <Field label="Other Documents" value={employee.other_documents} />
               <Field label="SHO Verification Date" value={employee.sho_verification_date} />
               <Field label="SSP Verification Date" value={employee.ssp_verification_date} />
               <Field label="Verified by Khidmat Markaz" value={employee.verified_by_khidmat_markaz} />
-              <Field label="Verified by SHO" value={employee.verified_by_sho} />
-              <Field label="Verified by SSP" value={employee.verified_by_ssp} />
+              {/* <Field label="Verified by SHO" value={employee.verified_by_sho} /> */}
+              {/* <Field label="Verified by SSP" value={employee.verified_by_ssp} /> */}
             </div>
           </div>
 
@@ -1043,7 +1037,7 @@ export default function EmployeeDetailPage() {
           </div> */}
 
           {/* Additional Information */}
-          <div className="section">
+          {/* <div className="section">
             <div className="section-title">Additional Information</div>
             <div className="field-grid">
               <Field label="Government ID" value={employee.government_id} />
@@ -1052,7 +1046,7 @@ export default function EmployeeDetailPage() {
               <Field label="Left Reason" value={employee.left_reason} />
               <Field label="Remarks" value={employee.remarks} />
             </div>
-          </div>
+          </div> */}
         </div>
       </Card>
 
