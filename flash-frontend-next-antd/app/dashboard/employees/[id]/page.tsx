@@ -984,10 +984,11 @@ export default function EmployeeDetailPage() {
               <Field label="Brothers" value={employee.brothers} />
               <Field label="Sisters" value={employee.sisters} />
               {/* <Field label="Emergency Contact Name" value={employee.emergency_contact_name} /> */}
-              <Field label="Emergency Contact Number" value={employee.emergency_contact_number} />
               <Field label="NOK Name" value={employee.nok_name || employee.next_of_kin_name} />
               <Field label="NOK CNIC" value={employee.nok_cnic_no || employee.next_of_kin_cnic} />
               <Field label="NOK Mobile" value={employee.nok_mobile_no || employee.next_of_kin_mobile_number} />
+                            <Field label="Emergency Contact Number" value={employee.emergency_contact_number} />
+
             </div>
           </div>
 
