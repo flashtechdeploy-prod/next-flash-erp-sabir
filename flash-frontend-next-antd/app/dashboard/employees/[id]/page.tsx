@@ -899,9 +899,10 @@ export default function EmployeeDetailPage() {
                  <Field label="Interviewed By" value={employee.interviewed_by} />
               <Field label="Introduced By" value={employee.introduced_by} />
               <Field label="Enrolled As" value={employee.enrolled_as} />
-                <Field label="Deployed At" value={employee.deployed_at} />
+              <Field label="Deployed At" value={employee.deployed_at} />
+              <Field label="Domicile" value={employee.domicile} />
 
-                            <Field label="Pay (Rs)" value={employee.pay_rs} />
+              <Field label="Pay (Rs)" value={employee.pay_rs} />
                                           <Field label="BDM" value={employee.bdm} />
 
 
@@ -944,7 +945,6 @@ original_document_held
 
      
               {/* <Field label="Bio Data" value={employee.bio_data} /> */}
-              <Field label="Domicile" value={employee.domicile} />
               {/* <Field label="Languages Spoken" value={employee.languages_spoken} /> */}
               <Field label="Personal Mobile No" value={employee.phone || employee.mobile_no || employee.mobile_number} />
               <Field label="Email" value={employee.email} />

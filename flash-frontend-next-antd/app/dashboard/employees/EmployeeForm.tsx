@@ -56,6 +56,7 @@ const DEFAULT_FIELDS: FieldConfig[] = [
 
   { id: 'enrolled_as', label: 'Enrolled As', name: 'enrolled_as', span: 6, component: 'input', placeholder: 'Security Guard', section: 'Enrolment Details' },
   { id: 'deployed_at', label: 'Deployed At', name: 'deployed_at', span: 12, component: 'input', placeholder: 'Site/Location', section: 'Enrolment Details' },
+  { id: 'domicile', label: 'Domicile', name: 'domicile', span: 6, component: 'input', placeholder: 'Enter Domicile', section: 'Enrolment Details' },
 
   { id: 'pay_rs', label: 'Pay (Rs)', name: 'pay_rs', span: 6, component: 'inputnumber', placeholder: '25000', section: 'Enrolment Details' },
   { id: 'bdm', label: 'BDM', name: 'bdm', span: 6, component: 'input', section: 'Enrolment Details' },
