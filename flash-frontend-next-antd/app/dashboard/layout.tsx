@@ -148,9 +148,19 @@ export default function DashboardLayout({
       ],
     },
     {
-      key: '/dashboard/administration/roles',
+      key: 'administration',
       icon: <SettingOutlined />,
       label: 'Administration',
+      children: [
+        {
+          key: '/dashboard/administration/roles',
+          label: 'Roles & Permissions',
+        },
+        {
+          key: '/dashboard/administration/passwords',
+          label: 'Employee Passwords',
+        },
+      ],
     },
   ];
 

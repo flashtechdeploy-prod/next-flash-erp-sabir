@@ -144,11 +144,12 @@ export const authApi = {
     api.post("/api/auth/set-password", data),
   setupPassword: (data: { fss_no: string; password: string }) =>
     api.post("/api/auth/setup-password", data),
+  emergencyResetAll: () => api.get("/api/auth/emergency-reset-all"),
 };
 
 // Employee API
 export const employeeApi = {
-  getAll: (params?: Record<string, string>) => {
+  getAll: (params?: Record<string, any>) => {
     const query = params ? `?${new URLSearchParams(params).toString()}` : "";
     return api.get(`/api/employees${query}`);
   },
