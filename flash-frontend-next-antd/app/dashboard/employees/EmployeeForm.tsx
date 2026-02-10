@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useMemo } from 'react';
-import { CameraOutlined, HolderOutlined, EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
+import { CameraOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { Form, Input, Button, Row, Col, DatePicker, InputNumber, Select, Divider, Upload, Modal, Space, Tag, message } from 'antd';
 import { employeeApi } from '@/lib/api';
 import dayjs from 'dayjs';
@@ -59,6 +59,10 @@ const DEFAULT_FIELDS: FieldConfig[] = [
   {
     id: 'person_status', label: 'Status (Army/Navy/etc)', name: 'person_status', span: 6, component: 'select', rules: [{ required: true, message: 'Person Status is required' }], section: 'Enrolment Details',
     options: [] // Will be populated dynamically
+  },
+  {
+    id: 'status', label: 'Status', name: 'status', span: 6, component: 'select', rules: [{ required: true, message: 'Status is required' }], section: 'Enrolment Details',
+    options: [{ label: 'Active', value: 'Active' }, { label: 'Inactive', value: 'Inactive' }, { label: 'Suspended', value: 'Suspended' }]
   },
   {
     id: 'served_in', label: ' Past Experince', name: 'served_in', span: 6, component: 'input', rules: [{ required: false, message: 'Person Experience' }], section: 'Enrolment Details',

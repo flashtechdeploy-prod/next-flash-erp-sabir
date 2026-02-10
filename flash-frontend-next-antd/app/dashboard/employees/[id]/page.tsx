@@ -1028,7 +1028,7 @@ export default function EmployeeDetailPage() {
           </div>
 
           {/* Signatures & Biometrics */}
-          <div className="section">
+          {/* <div className="section">
             <div className="section-title">Signatures & Biometrics</div>
             <div className="field-grid">
               <Field label="Signature Recording Officer" value={employee.signature_recording_officer} />
@@ -1040,7 +1040,7 @@ export default function EmployeeDetailPage() {
               <Field label="Right Hand Thumb" value={employee.right_hand_thumb} />
               <Field label="Right Hand Index" value={employee.right_hand_index} />
             </div>
-          </div>
+          </div> */}
 
           {/* Additional Information */}
           <div className="section">

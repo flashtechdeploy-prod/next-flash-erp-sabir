@@ -87,7 +87,7 @@ function chunk<T>(items: T[], size: number): T[][] {
 
 async function main() {
   // Load CSV
-  const csvPath = path.resolve(__dirname, '../../../data - Sheet1.csv');
+  const csvPath = path.resolve(__dirname, '../../../daa.csv');
   console.log(`[INFO] Reading CSV from: ${csvPath}`);
   const csvContent = await fs.readFile(csvPath, 'utf8');
   console.log(`[INFO] CSV file loaded, parsing...`);
@@ -178,6 +178,14 @@ async function main() {
 
   console.log(`[INFO] Total valid records to insert: ${validRecords.length}`);
 
+  // Preview first 5 mapped records before inserting
+  const previewCount = Math.min(5, validRecords.length);
+  console.log('\n[PREVIEW] First ' + previewCount + ' mapped employee records:');
+  for (let i = 0; i < previewCount; i++) {
+    console.log(`Record #${i + 1}:`, validRecords[i]);
+  }
+  // No pause, proceed directly to insert
+
   // Batch insert for efficiency
   const BATCH_SIZE = 50;
   const batches = chunk(validRecords, BATCH_SIZE);
@@ -202,6 +210,28 @@ async function main() {
 
   console.log(`[SUMMARY] Successfully inserted: ${totalInserted}, Failed: ${totalFailed}`);
   await pool.end();
+
+  // Manual insert for missing FSS No 1 (Aamir Saleem Jan)
+  // This is a fallback in case the main import skips this row
+  const manualEmployee = {
+    employee_id: 'FSE-0001',
+    fss_no: '1',
+    full_name: 'Aamir Saleem Jan',
+    cnic: '61101-9946439-5',
+    status: 'Active',
+  };
+  try {
+    await drizzle(new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: { rejectUnauthorized: false },
+    }))
+      .insert(employees)
+      .values(manualEmployee)
+      .onConflictDoNothing();
+    console.log('[INFO] Manually inserted FSS No 1 (Aamir Saleem Jan) if not already present.');
+  } catch (err: any) {
+    console.error('[ERROR] Manual insert for FSS No 1 failed:', err.message);
+  }
 }
 
 main().catch(err => {
