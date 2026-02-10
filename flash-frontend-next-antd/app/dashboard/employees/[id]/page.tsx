@@ -913,11 +913,15 @@ export default function EmployeeDetailPage() {
 
        <Field label="Unit" value={employee.unit} />
                             <Field label="Rank" value={employee.rank} />
+                            <Field label="Medical Category & Case of Discharge" value={employee.medical_category} />
 
               <Field label="Date of Enrolment" value={employee.date_of_enrolment} />
               
               <Field label="Date of Re-Enrolment" value={employee.date_of_re_enrolment} />
               <Field label="Agreement Date" value={employee.agreement_date} />
+              <Field label="Orignal Document held" value={employee.
+original_document_held
+} />
 
             </div>
           </div>

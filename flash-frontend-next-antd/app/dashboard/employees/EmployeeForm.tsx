@@ -47,6 +47,9 @@ interface FieldConfig {
 const DEFAULT_FIELDS: FieldConfig[] = [
   // Enrolment Details (Top Section of Image)
   { id: 'profile_photo', label: 'Profile Picture', name: 'profile_photo', span: 24, component: 'upload', section: 'Enrolment Details' },
+    {
+    id: 'status', label: 'Status', name: 'status', span: 6, component: 'select', rules: [{ required: true, message: 'Status is required' }], section: 'Enrolment Details',
+    options: [{ label: 'Active', value: 'Active' }, { label: 'Inactive', value: 'Inactive' }, { label: 'Suspended', value: 'Suspended' }]  },
   { id: 'fss_no', label: 'FSS Number', name: 'fss_no', span: 6, component: 'input', placeholder: 'FSS-2024-001', section: 'Enrolment Details' },
   { id: 'interviewed_by', label: 'Interviewed By', name: 'interviewed_by', span: 6, component: 'input', section: 'Enrolment Details' },
   { id: 'introduced_by', label: 'Introduced By', name: 'introduced_by', span: 6, component: 'input', section: 'Enrolment Details' },
@@ -56,23 +59,22 @@ const DEFAULT_FIELDS: FieldConfig[] = [
 
   { id: 'pay_rs', label: 'Pay (Rs)', name: 'pay_rs', span: 6, component: 'inputnumber', placeholder: '25000', section: 'Enrolment Details' },
   { id: 'bdm', label: 'BDM', name: 'bdm', span: 6, component: 'input', section: 'Enrolment Details' },
-  {
-    id: 'person_status', label: 'Status (Army/Navy/etc)', name: 'person_status', span: 6, component: 'select', rules: [{ required: true, message: 'Person Status is required' }], section: 'Enrolment Details',
-    options: [] // Will be populated dynamically
-  },
-  {
-    id: 'status', label: 'Status', name: 'status', span: 6, component: 'select', rules: [{ required: true, message: 'Status is required' }], section: 'Enrolment Details',
-    options: [{ label: 'Active', value: 'Active' }, { label: 'Inactive', value: 'Inactive' }, { label: 'Suspended', value: 'Suspended' }]  },
+
+
   {
     id: 'served_in', label: ' Past Experince', name: 'served_in', span: 6, component: 'input', rules: [{ required: false, message: 'Person Experience' }], section: 'Enrolment Details',
   },
   { id: 'experience_in_security', label: 'Experience in Security', name: 'experience_in_security', span: 6, component: 'input', section: 'Enrolment Details' },
-
+  {
+    id: 'person_status', label: 'Status (Army/Navy/etc)', name: 'person_status', span: 6, component: 'select', rules: [{ required: true, message: 'Person Status is required' }], section: 'Enrolment Details',
+    options: [] // Will be populated dynamically
+  },
   { id: 'unit', label: 'Unit', name: 'unit', span: 6, component: 'input', placeholder: 'Alpha/Bravo', section: 'Enrolment Details' },
   { id: 'rank', label: 'Rank', name: 'rank', span: 6, component: 'input', placeholder: 'Enter Rank', section: 'Enrolment Details' },
 
   { id: 'date_of_enrolment', label: 'Date of Enrolment', name: 'date_of_enrolment', span: 8, component: 'datepicker', section: 'Enrolment Details' },
   { id: 'date_of_re_enrolment', label: 'Date of Re-Enrolment', name: 'date_of_re_enrolment', span: 8, component: 'datepicker', section: 'Enrolment Details' },
+  { id: 'agreement_date', label: 'Agreement Date', name: 'agreement_date', span: 12, component: 'datepicker', section: 'Verification & Documents' },
   { id: 'original_document_held', label: 'Original Doc Held', name: 'original_document_held', span: 8, component: 'input', placeholder: 'CNIC, Certificates', section: 'Enrolment Details' },
 
   // BIO DATA
@@ -128,7 +130,6 @@ const DEFAULT_FIELDS: FieldConfig[] = [
   { id: 'sho_verification_date', label: 'SHO Verification Date', name: 'sho_verification_date', span: 6, component: 'datepicker', section: 'Verification & Documents' },
   { id: 'ssp_verification_date', label: 'SSP Verification Date', name: 'ssp_verification_date', span: 6, component: 'datepicker', section: 'Verification & Documents' },
   { id: 'verified_by_khidmat_markaz', label: 'Al-Khidmat Verification Date', name: 'verified_by_khidmat_markaz', span: 6, component: 'datepicker', section: 'Verification & Documents' },
-  { id: 'agreement_date', label: 'Agreement Date', name: 'agreement_date', span: 12, component: 'datepicker', section: 'Verification & Documents' },
   { id: 'remarks', label: 'Remarks', name: 'remarks', span: 24, component: 'textarea', placeholder: 'Any additional notes...', section: 'Verification & Documents' },
 ];
 
