@@ -198,7 +198,7 @@ function PayrollContent() {
 
       const preDays = sheetEntry?.pre_days_override ?? preDaysCount;
       const curDays = sheetEntry?.cur_days_override ?? curDaysCount;
-      const totalPaidDays = preDays + curDays + leaveDays;
+      const totalPaidDays = preDays + curDays;
       const perDaySalary = totalSalary / workingDays;
       
       // Use edited OT Rate if available, otherwise use sheet entry or default
@@ -292,7 +292,7 @@ function PayrollContent() {
       const prevToDateObj = month.subtract(1, 'month').date(25);
       const prevWorkingDays = prevToDateObj.diff(prevFromDateObj, 'day') + 1;
 
-      const totalPaid = (sheetEntry?.pre_days_override ?? 0) + (sheetEntry?.cur_days_override ?? pDays) + lDays;
+      const totalPaid = (sheetEntry?.pre_days_override ?? 0) + (sheetEntry?.cur_days_override ?? pDays);
       const gSal = totalPaid * (tSal / prevWorkingDays);
 
       const assignment = (rawAssignments || []).find((a: any) => String(a.employee_id) === employeeId);
