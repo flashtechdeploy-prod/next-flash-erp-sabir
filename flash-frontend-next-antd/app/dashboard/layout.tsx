@@ -160,6 +160,10 @@ export default function DashboardLayout({
           key: '/dashboard/administration/passwords',
           label: 'Employee Passwords',
         },
+        {
+          key: '/dashboard/settings',
+          label: 'Company Settings',
+        },
       ],
     },
   ];

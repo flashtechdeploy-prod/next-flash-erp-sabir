@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useMemo } from 'react';
-import { CameraOutlined, HolderOutlined, EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
+import { CameraOutlined, EditOutlined, DeleteOutlined,  } from '@ant-design/icons';
 import { Form, Input, Button, Row, Col, DatePicker, InputNumber, Select, Divider, Upload, Modal, Space, Tag, message } from 'antd';
 import { employeeApi } from '@/lib/api';
 import dayjs from 'dayjs';
@@ -56,12 +56,9 @@ const DEFAULT_FIELDS: FieldConfig[] = [
 
   { id: 'enrolled_as', label: 'Enrolled As', name: 'enrolled_as', span: 6, component: 'input', placeholder: 'Security Guard', section: 'Enrolment Details' },
   { id: 'deployed_at', label: 'Deployed At', name: 'deployed_at', span: 12, component: 'input', placeholder: 'Site/Location', section: 'Enrolment Details' },
-  { id: 'domicile', label: 'Domicile', name: 'domicile', span: 6, component: 'input', placeholder: 'Enter Domicile', section: 'Enrolment Details' },
 
   { id: 'pay_rs', label: 'Pay (Rs)', name: 'pay_rs', span: 6, component: 'inputnumber', placeholder: '25000', section: 'Enrolment Details' },
   { id: 'bdm', label: 'BDM', name: 'bdm', span: 6, component: 'input', section: 'Enrolment Details' },
-
-
   {
     id: 'served_in', label: ' Past Experince', name: 'served_in', span: 6, component: 'input', rules: [{ required: false, message: 'Person Experience' }], section: 'Enrolment Details',
   },
@@ -75,7 +72,7 @@ const DEFAULT_FIELDS: FieldConfig[] = [
 
   { id: 'date_of_enrolment', label: 'Date of Enrolment', name: 'date_of_enrolment', span: 8, component: 'datepicker', section: 'Enrolment Details' },
   { id: 'date_of_re_enrolment', label: 'Date of Re-Enrolment', name: 'date_of_re_enrolment', span: 8, component: 'datepicker', section: 'Enrolment Details' },
-  { id: 'agreement_date', label: 'Agreement Date', name: 'agreement_date', span: 12, component: 'datepicker', section: 'Verification & Documents' },
+  { id: 'agreement_date', label: 'Agreement Date', name: 'agreement_date', span: 8, component: 'datepicker', section: 'Enrolment Details' },
   { id: 'original_document_held', label: 'Original Doc Held', name: 'original_document_held', span: 8, component: 'input', placeholder: 'CNIC, Certificates', section: 'Enrolment Details' },
 
   // BIO DATA
@@ -118,19 +115,21 @@ const DEFAULT_FIELDS: FieldConfig[] = [
   { id: 'present_district', label: 'District', name: 'present_district', span: 12, component: 'input', section: 'Present Address' },
 
   // Family & NOK
-  { id: 'sons', label: 'Sons', name: 'sons', span: 3, component: 'inputnumber', section: 'Family & Next of Kin' },
-  { id: 'daughters', label: 'Daughters', name: 'daughters', span: 3, component: 'inputnumber', section: 'Family & Next of Kin' },
-  { id: 'brothers', label: 'Brothers', name: 'brothers', span: 3, component: 'inputnumber', section: 'Family & Next of Kin' },
-  { id: 'sisters', label: 'Sisters', name: 'sisters', span: 3, component: 'inputnumber', section: 'Family & Next of Kin' },
-  { id: 'nok_name', label: 'NOK Name', name: 'nok_name', span: 8, component: 'input', placeholder: 'Next of Kin name', section: 'Family & Next of Kin' },
-  { id: 'nok_cnic_no', label: 'NOK CNIC', name: 'nok_cnic_no', span: 8, component: 'input', placeholder: '12345-1234567-1', section: 'Family & Next of Kin' },
-  { id: 'nok_mobile_no', label: 'NOK Mobile', name: 'nok_mobile_no', span: 8, component: 'input', placeholder: '03001234567', section: 'Family & Next of Kin' },
-  { id: 'emergency_contact_number', label: 'Emergency Contact', name: 'emergency_contact_number', span: 8, component: 'input', placeholder: '03001234567', section: 'Family & Next of Kin' },
+  { id: 'sons', label: 'Sons', name: 'sons', span: 3, component: 'inputnumber', section: 'Family & Next of King' },
+  { id: 'daughters', label: 'Daughters', name: 'daughters', span: 3, component: 'inputnumber', section: 'Family & Next of King' },
+  { id: 'brothers', label: 'Brothers', name: 'brothers', span: 3, component: 'inputnumber', section: 'Family & Next of King' },
+  { id: 'sisters', label: 'Sisters', name: 'sisters', span: 3, component: 'inputnumber', section: 'Family & Next of King' },
+  { id: 'nok_name', label: 'NOK Name', name: 'nok_name', span: 8, component: 'input', placeholder: 'Next of Kin name', section: 'Family & Next of King' },
+  { id: 'nok_cnic_no', label: 'NOK CNIC', name: 'nok_cnic_no', span: 8, component: 'input', placeholder: '12345-1234567-1', section: 'Family & Next of King' },
+  { id: 'nok_mobile_no', label: 'NOK Mobile', name: 'nok_mobile_no', span: 8, component: 'input', placeholder: '03001234567', section: 'Family & Next of King' },
+  { id: 'emergency_contact_number', label: 'Emergency Contact', name: 'emergency_contact_number', span: 8, component: 'input', placeholder: '03001234567', section: 'Family & Next of King' },
 
   // Verification & Documents
   { id: 'sho_verification_date', label: 'SHO Verification Date', name: 'sho_verification_date', span: 6, component: 'datepicker', section: 'Verification & Documents' },
   { id: 'ssp_verification_date', label: 'SSP Verification Date', name: 'ssp_verification_date', span: 6, component: 'datepicker', section: 'Verification & Documents' },
   { id: 'verified_by_khidmat_markaz', label: 'Al-Khidmat Verification Date', name: 'verified_by_khidmat_markaz', span: 6, component: 'datepicker', section: 'Verification & Documents' },
+  { id: 'domicile', label: 'Domicile', name: 'domicile', span: 6, component: 'input', placeholder: 'Enter Domicile', section: 'Verification & Documents' },
+
   { id: 'remarks', label: 'Remarks', name: 'remarks', span: 24, component: 'textarea', placeholder: 'Any additional notes...', section: 'Verification & Documents' },
 ];
 

@@ -383,6 +383,7 @@ export const clientApi = {
       data,
     ),
   getAvailableGuards: () => api.get("/api/client-management/guards/available"),
+  getAllActiveAndInActiveGuards: () => api.get("/api/employees"),
   getActiveAssignments: () => api.get("/api/client-management/assignments/active"),
 
   // Industries

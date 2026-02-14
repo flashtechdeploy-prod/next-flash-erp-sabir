@@ -435,7 +435,15 @@ export default function AttendancePage() {
       render: (_: unknown, record: AttendanceRecord) => {
         const emp = employees.find(e => e.employee_id === record.employee_id);
         const fssId = (record.fss_id || (emp as any)?.fss_no) as string;
-        return fssId || '-';
+        if (!fssId) return '-';
+        return (
+          <span
+            className="text-blue-600 font-semibold hover:underline cursor-pointer"
+            onClick={() => handleViewHistory(record.employee_id)}
+          >
+            {fssId}
+          </span>
+        );
       },
     },
     {
@@ -445,7 +453,8 @@ export default function AttendancePage() {
       width: 150,
       render: (_: unknown, record: AttendanceRecord) => {
         const emp = employees.find(e => e.employee_id === record.employee_id);
-        return (emp?.full_name || emp?.name || record.employee_name || '-') as string;
+        const name = (emp?.full_name || emp?.name || record.employee_name || '-') as string;
+        return name;
       },
     },
     {
@@ -1416,34 +1425,43 @@ export default function AttendancePage() {
               title: 'Date',
               dataIndex: 'date',
               key: 'date',
-              width: 120,
-              render: (date: string) => dayjs(date).format('MMM DD, YYYY'),
+              width: 110,
+              render: (date: string) => (
+                <div style={{ fontWeight: 600 }}>
+                  <div>{dayjs(date).format('MMM DD')}</div>
+                  <div style={{ fontSize: '10px', color: '#94a3b8' }}>{dayjs(date).format('dddd')}</div>
+                </div>
+              ),
               sorter: (a: AttendanceRecord, b: AttendanceRecord) =>
                 dayjs(a.date).unix() - dayjs(b.date).unix(),
               defaultSortOrder: 'descend',
             },
             {
-              title: 'Day',
-              dataIndex: 'date',
-              key: 'day',
-              width: 100,
-              render: (date: string) => dayjs(date).format('dddd'),
-            },
-            {
               title: 'Status',
               dataIndex: 'status',
               key: 'status',
-              width: 100,
+              width: 90,
               render: (status: string) => (
-                <Tag color={getStatusColor(status)} icon={getStatusIcon(status)}>
+                <Tag color={getStatusColor(status)} icon={getStatusIcon(status)} style={{ margin: 0 }}>
                   {status.toUpperCase()}
                 </Tag>
               ),
             },
             {
+              title: 'In / Out',
+              key: 'timings',
+              width: 130,
+              render: (_: unknown, record: AttendanceRecord) => (
+                <div style={{ fontSize: '11px' }}>
+                  <div style={{ color: '#22c55e', fontWeight: 600 }}>In: {record.check_in || '-'}</div>
+                  <div style={{ color: '#ef4444', fontWeight: 600 }}>Out: {record.check_out || '-'}</div>
+                </div>
+              ),
+            },
+            {
               title: 'Duration',
               key: 'duration',
-              width: 100,
+              width: 90,
               render: (_: unknown, record: AttendanceRecord) => {
                 if (!record.check_in || !record.check_out) return '-';
                 try {
@@ -1455,9 +1473,9 @@ export default function AttendancePage() {
                     const diff = end.diff(start, 'minute');
                     if (diff <= 0) return '-';
                     return (
-                      <Tooltip title={`In: ${record.check_in} | Out: ${record.check_out}`}>
-                        <Tag color="cyan">{Math.floor(diff / 60)}h {diff % 60}m</Tag>
-                      </Tooltip>
+                      <Tag color="cyan" style={{ border: 'none', borderRadius: '4px' }}>
+                        {Math.floor(diff / 60)}h {diff % 60}m
+                      </Tag>
                     );
                   }
                 } catch (e) { }
@@ -1465,66 +1483,82 @@ export default function AttendancePage() {
               },
             },
             {
-              title: 'Overtime',
+              title: 'OT Timings',
+              key: 'ot_timings',
+              width: 130,
+              render: (_: unknown, record: AttendanceRecord) => record.overtime_in || record.overtime_out ? (
+                <div style={{ fontSize: '11px' }}>
+                  <div style={{ color: '#f97316', fontWeight: 600 }}>In: {record.overtime_in || '-'}</div>
+                  <div style={{ color: '#a855f7', fontWeight: 600 }}>Out: {record.overtime_out || '-'}</div>
+                </div>
+              ) : '-',
+            },
+            {
+              title: 'OT Hours',
               key: 'overtime',
-              width: 100,
+              width: 90,
               render: (_: unknown, record: AttendanceRecord) => {
                 if (!record.overtime_minutes) return '-';
                 const h = Math.floor(record.overtime_minutes / 60);
                 const m = record.overtime_minutes % 60;
                 return (
-                  <Tooltip title={record.overtime_in ? `OT In: ${record.overtime_in} | OT Out: ${record.overtime_out}` : 'Manual Entry'}>
-                    <Tag color="orange">{h}h {m}m</Tag>
-                  </Tooltip>
+                  <Tag color="orange" style={{ border: 'none', borderRadius: '4px' }}>
+                    {h}h {m}m
+                  </Tag>
                 );
               },
             },
             {
-              title: 'Fine',
-              dataIndex: 'fine_amount',
-              key: 'fine_amount',
+              title: 'Pics',
+              key: 'pictures',
               width: 100,
-              render: (val: number) => val ? `Rs ${val}` : '-',
+              render: (_: unknown, record: AttendanceRecord) => (
+                <Space size={4}>
+                  {record.picture && (
+                    <Tooltip title="Check-In Pic">
+                      <img
+                        src={record.picture}
+                        style={{ width: 24, height: 24, borderRadius: 4, cursor: 'pointer', border: '1px solid #22c55e' }}
+                        onClick={() => Modal.info({ title: 'Check-In Pic', content: <img src={record.picture} style={{ width: '100%' }} />, width: 500, maskClosable: true })}
+                      />
+                    </Tooltip>
+                  )}
+                  {record.check_out_picture && (
+                    <Tooltip title="Check-Out Pic">
+                      <img
+                        src={record.check_out_picture}
+                        style={{ width: 24, height: 24, borderRadius: 4, cursor: 'pointer', border: '1px solid #ef4444' }}
+                        onClick={() => Modal.info({ title: 'Check-Out Pic', content: <img src={record.check_out_picture} style={{ width: '100%' }} />, width: 500, maskClosable: true })}
+                      />
+                    </Tooltip>
+                  )}
+                </Space>
+              ),
+            },
+            {
+              title: 'GPS',
+              key: 'locations',
+              width: 70,
+              align: 'center' as const,
+              render: (_: unknown, record: AttendanceRecord) => {
+                const initialCoords = parseGPS(record.initial_location || record.location);
+                return initialCoords ? (
+                  <Tooltip title="View Location">
+                    <EnvironmentOutlined
+                      style={{ color: '#1890ff', fontSize: 16, cursor: 'pointer' }}
+                      onClick={() => {
+                        window.open(`https://www.google.com/maps/search/?api=1&query=${initialCoords.lat},${initialCoords.lng}`, '_blank');
+                      }}
+                    />
+                  </Tooltip>
+                ) : '-';
+              },
             },
             {
               title: 'Note',
               dataIndex: 'note',
               key: 'note',
               ellipsis: true,
-            },
-            {
-              title: 'GPS',
-              key: 'locations',
-              width: 80,
-              align: 'center' as const,
-              render: (_: unknown, record: AttendanceRecord) => {
-                const initialCoords = parseGPS(record.initial_location);
-                const submissionCoords = parseGPS(record.location);
-                return (
-                  <Space size="small">
-                    {initialCoords ? (
-                      <Tooltip title="Selfie Capture">
-                        <CameraOutlined
-                          style={{ color: '#64748b', fontSize: 14, cursor: 'pointer' }}
-                          onClick={() => {
-                            window.open(`https://www.google.com/maps/search/?api=1&query=${initialCoords.lat},${initialCoords.lng}`, '_blank');
-                          }}
-                        />
-                      </Tooltip>
-                    ) : '-'}
-                    {submissionCoords ? (
-                      <Tooltip title="Submission">
-                        <EnvironmentOutlined
-                          style={{ color: '#1890ff', fontSize: 14, cursor: 'pointer' }}
-                          onClick={() => {
-                            window.open(`https://www.google.com/maps/search/?api=1&query=${submissionCoords.lat},${submissionCoords.lng}`, '_blank');
-                          }}
-                        />
-                      </Tooltip>
-                    ) : '-'}
-                  </Space>
-                );
-              },
             },
           ]}
           dataSource={employeeHistory}

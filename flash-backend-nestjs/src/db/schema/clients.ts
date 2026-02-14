@@ -103,7 +103,7 @@ export const site_guard_assignments = pgTable('site_guard_assignments', {
   employee_id: text('employee_id').notNull(), // Reference to employees
   assignment_date: text('assignment_date').notNull(),
   end_date: text('end_date'),
-  shift: text('shift'), // morning, evening, night
+  shift: text('shift'), 
   status: text('status').default('active'), // active, ejected, completed
   notes: text('notes'),
   created_at: timestamp('created_at').defaultNow(),

@@ -259,7 +259,7 @@ export default function ClientDetailPage() {
     setAssignGuardDrawerVisible(true);
     assignGuardForm.resetFields();
 
-    const response = await clientApi.getAvailableGuards();
+    const response = await clientApi.getAllActiveAndInActiveGuards();
     if (!response.error) {
       const data = (response.data as any)?.guards || (response.data as any)?.employees || (response.data as any) || [];
       setAvailableGuards(Array.isArray(data) ? data : []);

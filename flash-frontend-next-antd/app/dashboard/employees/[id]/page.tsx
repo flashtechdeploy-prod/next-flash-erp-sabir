@@ -460,9 +460,9 @@ export default function EmployeeDetailPage() {
             <td>
               <div class="header">
                 <div class="header-left">
-                  ${companySettings?.logo_url ? `
+                  ${(companySettings?.logo_url || companySettings?.logoUrl) ? `
                     <div class="logo">
-                      <img src="${getFullFileUrl(companySettings.logo_url)}" style="width: 100%; height: 100%; object-fit: contain;" />
+                      <img src="${getFullFileUrl(companySettings.logo_url || companySettings.logoUrl)}" style="width: 100%; height: 100%; object-fit: contain;" />
                     </div>
                   ` : `
                     <div class="logo" style="background: #1890ff; color: white;">FS</div>
@@ -900,7 +900,6 @@ export default function EmployeeDetailPage() {
               <Field label="Introduced By" value={employee.introduced_by} />
               <Field label="Enrolled As" value={employee.enrolled_as} />
               <Field label="Deployed At" value={employee.deployed_at} />
-              <Field label="Domicile" value={employee.domicile} />
 
               <Field label="Pay (Rs)" value={employee.pay_rs} />
                                           <Field label="BDM" value={employee.bdm} />
@@ -914,7 +913,7 @@ export default function EmployeeDetailPage() {
 
        <Field label="Unit" value={employee.unit} />
                             <Field label="Rank" value={employee.rank} />
-                            <Field label="Medical Category & Case of Discharge" value={employee.medical_category} />
+                            <Field label="Med Cat & Cause of Disch" value={employee.medical_category} />
 
               <Field label="Date of Enrolment" value={employee.date_of_enrolment} />
               
@@ -1021,6 +1020,8 @@ original_document_held
               <Field label="SHO Verification Date" value={employee.sho_verification_date} />
               <Field label="SSP Verification Date" value={employee.ssp_verification_date} />
               <Field label="Verified by Khidmat Markaz" value={employee.verified_by_khidmat_markaz} />
+                            <Field label="Domicile" value={employee.domicile} />
+
               {/* <Field label="Verified by SHO" value={employee.verified_by_sho} /> */}
               {/* <Field label="Verified by SSP" value={employee.verified_by_ssp} /> */}
             </div>

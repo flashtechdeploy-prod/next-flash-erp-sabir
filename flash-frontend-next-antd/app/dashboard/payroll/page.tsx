@@ -545,7 +545,7 @@ function PayrollContent() {
     { title: 'cnic', dataIndex: 'cnic', key: 'cnic', width: 120 },
     { title: 'mobile number', dataIndex: 'mobile_number', key: 'mobile_number', width: 120 },
     {
-      title: 'Main Number',
+      title: 'Vault A/C Number',
       dataIndex: 'main_number',
       key: 'main_number',
       width: 130,
@@ -559,7 +559,17 @@ function PayrollContent() {
       )
     },
 
-    { title: 'acccount number', dataIndex: 'account_number', key: 'account_number', width: 120 },
+    { title: 'Bank A/C Number', dataIndex: 'account_number', key: 'account_number', width: 120,
+render: (val: string, record: PayrollEmployee) => (
+        <Input
+          defaultValue={val}
+          placeholder="Enter Account number"
+          style={{ width: '100%', borderRadius: '6px' }}
+          onBlur={(e) => handleUpdateEmployee(record.employee_id, 'account_number', e.target.value)}
+        />
+      )
+
+     },
 
 
     { title: 'Basic Salary', dataIndex: 'totalSalary', key: 'totalSalary', width: 110, render: (v: number) => v.toLocaleString() },
@@ -1435,6 +1445,7 @@ function PayrollContent() {
           @media print {
             .print-only { display: block !important; }
             .ant-drawer-close, .ant-drawer-header-extra { display: none !important; }
+            tfoot { display: table-row-group !important; }
           }
           .print-only { display: none; }
         `}
