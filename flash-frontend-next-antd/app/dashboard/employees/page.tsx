@@ -500,7 +500,7 @@ export default function EmployeesPage() {
       ...getColumnSearchProps('mobile_number', 'Mobile Number'),
     },
     {
-      title: 'Wallet Number',
+      title: 'Wallet A/C Number',
       dataIndex: 'main_number',
       key: 'main_number',
       width: 130,

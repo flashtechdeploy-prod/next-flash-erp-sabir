@@ -94,7 +94,7 @@ const DEFAULT_FIELDS: FieldConfig[] = [
   { id: 'medical_category', label: 'Med Cat & Cause of Disch', name: 'medical_category', span: 8, component: 'input', placeholder: 'A/B/C', section: 'Bio Data' },
   { id: 'phone', label: 'Personal Mobile No', name: 'phone', span: 8, component: 'input', placeholder: '03001234567', section: 'Bio Data' },
   { id: 'email', label: 'Email', name: 'email', span: 12, component: 'input', placeholder: 'email@example.com', section: 'Bio Data' },
-  { id: 'main_number', label: 'Wallet Number', name: 'main_number', span: 12, component: 'input', placeholder: '03001234567', section: 'Bio Data' },
+  { id: 'main_number', label: 'Wallet A/C Number', name: 'main_number', span: 12, component: 'input', placeholder: '03001234567', section: 'Bio Data' },
   { id: 'eobi_no', label: 'EOBI Number', name: 'eobi_no', span: 12, component: 'input', placeholder: 'EOBI account number', section: 'Bio Data' },
   { id: 'social_security', label: 'Social Security #', name: 'social_security', span: 12, component: 'input', placeholder: 'SSN or Social Security Number', section: 'Bio Data' },
   { id: 'insurance', label: 'Insurance #', name: 'insurance', span: 24, component: 'input', placeholder: 'Insurance details, policy number...', section: 'Bio Data' },

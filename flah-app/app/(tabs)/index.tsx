@@ -272,12 +272,16 @@ export default function DashboardScreen() {
 
 
   const handleManualSubmit = async () => {
+    // Only require status selection for check_in phase
     if (attendancePhase === 'check_in' && !status) {
       setStatusError(true);
       Alert.alert('Selection Error', 'Please select your status (Present, Late, etc.) before submitting.');
       return;
     }
 
+    // For check_out, overtime_in, and overtime_out, status is not required
+    // They are continuation of the same day's attendance
+    
     setSubmitting(true);
     let { status: locStatus } = await Location.requestForegroundPermissionsAsync();
     if (locStatus !== 'granted') {
@@ -312,7 +316,10 @@ export default function DashboardScreen() {
     }
 
     setLocation(loc.coords);
-    await submitAttendance(attendancePhase, status || 'present', loc.coords, image);
+    // Always use 'present' status for check_out, overtime_in, and overtime_out phases
+    // The initial check_in status applies to the entire day
+    const attendanceStatus = attendancePhase === 'check_in' ? (status || 'present') : 'present';
+    await submitAttendance(attendancePhase, attendanceStatus, loc.coords, image);
   };
 
   const submitAttendance = async (phase: string, attendanceStatus: string, coords: any, imageUri: string) => {
@@ -374,18 +381,27 @@ export default function DashboardScreen() {
           const hasCheckIn = !!(data.check_in && data.check_in.trim() !== '');
           const hasCheckOut = !!(data.check_out && data.check_out.trim() !== '');
           const hasOTIn = !!(data.overtime_in && data.overtime_in.trim() !== '');
+          const hasOTOut = !!(data.overtime_out && data.overtime_out.trim() !== '');
 
-          // Proactive UI transition
+          // Proactive UI transition - handles long shifts (no 12-hour restriction)
           if (!hasCheckIn) {
             setAttendancePhase('check_in');
             setActiveTab('standard');
           } else if (!hasCheckOut) {
+            // Allow checkout at ANY time after check-in, supporting long shifts
             setAttendancePhase('check_out');
             setActiveTab('standard');
           } else {
+            // After checkout, enable overtime phases
             setActiveTab('overtime');
-            if (!hasOTIn) setAttendancePhase('overtime_in');
-            else setAttendancePhase('overtime_out');
+            if (!hasOTIn) {
+              setAttendancePhase('overtime_in');
+            } else if (!hasOTOut) {
+              setAttendancePhase('overtime_out');
+            } else {
+              // All phases complete
+              setAttendancePhase('check_in');
+            }
           }
         }
 
@@ -396,7 +412,14 @@ export default function DashboardScreen() {
         setNote('');
         setStatus(''); // Reset status selection
       } else {
-        Alert.alert('Submission Error', data.message || 'Verification failed.');
+        const errorMsg = data?.message || 'Verification failed. Please try again.';
+        console.error(`Attendance submission error (${phase}):`, { 
+          statusCode: res.status, 
+          error: errorMsg,
+          phase,
+          timestamp: new Date().toISOString()
+        });
+        Alert.alert('Submission Error', errorMsg);
       }
     } catch (e) {
       Alert.alert('System Error', 'Could not reach the server. Please try again.');

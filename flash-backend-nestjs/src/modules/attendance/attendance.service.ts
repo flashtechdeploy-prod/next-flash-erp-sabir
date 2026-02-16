@@ -479,6 +479,9 @@ export class AttendanceService {
   }
 
   /**
+   * Mark attendance for an employee (check-in, check-out, overtime, etc.)
+   * Supports long shifts: Users can check out at ANY time after check-in (no 12-hour restriction)
+   * This allows employees to work extended shifts without requiring re-check-in
    */
   async markSelf(employeeId: string, date: string, record: AttendanceRecord, file?: Express.Multer.File, type: string = 'check_in') {
     try {
