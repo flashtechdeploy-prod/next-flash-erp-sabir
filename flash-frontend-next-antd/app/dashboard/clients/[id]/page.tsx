@@ -261,8 +261,12 @@ export default function ClientDetailPage() {
 
     const response = await clientApi.getAllActiveAndInActiveGuards();
     if (!response.error) {
-      const data = (response.data as any)?.guards || (response.data as any)?.employees || (response.data as any) || [];
-      setAvailableGuards(Array.isArray(data) ? data : []);
+      const data = (response.data as any)?.guards || (response.data as any)?.employees || (response.data as any)?.data || (response.data as any) || [];
+      const guardsArray = Array.isArray(data) ? data : [];
+      console.log('Available guards fetched:', guardsArray.length, guardsArray);
+      setAvailableGuards(guardsArray);
+    } else {
+      message.error('Failed to fetch guards: ' + response.error);
     }
   };
 
