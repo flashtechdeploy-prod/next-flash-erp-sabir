@@ -545,7 +545,7 @@ function PayrollContent() {
     { title: 'cnic', dataIndex: 'cnic', key: 'cnic', width: 120 },
     { title: 'mobile number', dataIndex: 'mobile_number', key: 'mobile_number', width: 120 },
     {
-      title: 'Vault A/C Number',
+      title: 'Wallet A/C Number',
       dataIndex: 'main_number',
       key: 'main_number',
       width: 130,
