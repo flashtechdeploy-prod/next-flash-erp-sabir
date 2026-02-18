@@ -4,7 +4,6 @@ import { View, Text, StyleSheet, Alert, Image, TextInput, ActivityIndicator, Pla
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
-import * as FaceDetector from 'expo-face-detector';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { Picker } from '@react-native-picker/picker';
@@ -221,7 +220,9 @@ export default function DashboardScreen() {
     if (!result.canceled && result.assets && result.assets.length > 0) {
       const imageUri = result.assets[0].uri;
 
-      if (Platform.OS !== 'web' && typeof FaceDetector.detectFacesAsync === 'function') {
+      // FaceDetector logic temporarily disabled to prevent crash on current build
+      /*
+      if (Platform.OS !== 'web' && typeof FaceDetector !== 'undefined' && typeof FaceDetector.detectFacesAsync === 'function') {
         try {
           const detection = await FaceDetector.detectFacesAsync(imageUri, {
             mode: FaceDetector.FaceDetectorMode.fast,
@@ -240,12 +241,10 @@ export default function DashboardScreen() {
           setImage(null);
           return;
         }
-      } else if (Platform.OS !== 'web') {
-        Alert.alert(
-          'Face detector unavailable',
-          'Please run the app in a development build. Expo Go does not include expo-face-detector.'
-        );
+      } else if (Platform.OS !== 'web' && typeof FaceDetector !== 'undefined') {
+         // removed alert to avoid confusion if module is missing
       }
+      */
 
       setImage(imageUri);
 
@@ -281,7 +280,7 @@ export default function DashboardScreen() {
 
     // For check_out, overtime_in, and overtime_out, status is not required
     // They are continuation of the same day's attendance
-    
+
     setSubmitting(true);
     let { status: locStatus } = await Location.requestForegroundPermissionsAsync();
     if (locStatus !== 'granted') {
@@ -319,6 +318,13 @@ export default function DashboardScreen() {
     // Always use 'present' status for check_out, overtime_in, and overtime_out phases
     // The initial check_in status applies to the entire day
     const attendanceStatus = attendancePhase === 'check_in' ? (status || 'present') : 'present';
+    
+    if (!image) {
+        setSubmitting(false);
+        Alert.alert('Error', 'No selfie captured. Please take a selfie first.');
+        return;
+    }
+
     await submitAttendance(attendancePhase, attendanceStatus, loc.coords, image);
   };
 
@@ -413,8 +419,8 @@ export default function DashboardScreen() {
         setStatus(''); // Reset status selection
       } else {
         const errorMsg = data?.message || 'Verification failed. Please try again.';
-        console.error(`Attendance submission error (${phase}):`, { 
-          statusCode: res.status, 
+        console.error(`Attendance submission error (${phase}):`, {
+          statusCode: res.status,
           error: errorMsg,
           phase,
           timestamp: new Date().toISOString()
@@ -951,7 +957,7 @@ const styles = StyleSheet.create({
   liveBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f0fdf4', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, gap: 4 },
   liveDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: '#10b981' },
   liveBadgeText: { fontSize: 9, fontWeight: '800', color: '#10b981', letterSpacing: 0.5 },
-  profileFullName: { fontSize: 22, fontWeight: '800', color: '#1e293b', marginTop: -2 },
+  profileFullName: { fontSize: 22, fontWeight: '800', color: '#1e293b', marginTop: -2, flexWrap: 'wrap' },
   profileFssNo: { fontSize: 12, fontWeight: '700', color: '#94a3b8', marginTop: 2 },
   endSessionBtn: { alignItems: 'center' },
   endSessionText: { fontSize: 9, fontWeight: '800', color: '#64748b', marginTop: 4 },
@@ -1062,8 +1068,8 @@ const styles = StyleSheet.create({
   assignmentCard: { backgroundColor: '#fff', padding: 20, borderRadius: 24, marginBottom: 24, shadowColor: '#3b82f6', shadowOpacity: 0.1, shadowRadius: 15, elevation: 3, borderLeftWidth: 4, borderLeftColor: '#3b82f6' },
   assignmentHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
   assignmentTitle: { fontSize: 13, fontWeight: '700', color: '#3b82f6', textTransform: 'uppercase', letterSpacing: 0.5 },
-  siteName: { fontSize: 20, fontWeight: '800', color: '#1e293b', marginBottom: 4 },
-  clientName: { fontSize: 14, fontWeight: '600', color: '#64748b', marginBottom: 12 },
+  siteName: { fontSize: 20, fontWeight: '800', color: '#1e293b', marginBottom: 4, flexWrap: 'wrap' },
+  clientName: { fontSize: 14, fontWeight: '600', color: '#64748b', marginBottom: 12, flexWrap: 'wrap' },
   assignmentDetails: { gap: 6 },
   detailRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   detailText: { fontSize: 13, color: '#64748b', fontWeight: '500' },

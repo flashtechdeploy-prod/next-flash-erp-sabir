@@ -947,7 +947,7 @@ original_document_held
               {/* <Field label="Languages Spoken" value={employee.languages_spoken} /> */}
               <Field label="Personal Mobile No" value={employee.phone || employee.mobile_no || employee.mobile_number} />
               <Field label="Email" value={employee.email} />
-              <Field label="Main Number" value={employee.main_number} />
+              <Field label="Wallet A/C Number" value={employee.main_number} />
 
               <Field label="EOBI Number" value={employee.eobi_no} />
                             <Field label="Social Security #" value={employee.social_security} />

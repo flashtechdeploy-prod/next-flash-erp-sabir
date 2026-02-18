@@ -40,13 +40,18 @@ export default function LoginScreen() {
     }
 
     setLoading(true);
+    const url = `${CONFIG.API_BASE_URL}/auth/employee-login`;
+    console.log("Attempting login to:", url);
     try {
-      const res = await fetch(`${CONFIG.API_BASE_URL}/auth/employee-login`, {
+      const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fss_no: fssNo, password }),
       });
+      console.log("Login response status:", res.status);
       const data = await res.json();
+      console.log("Login response data:", data);
+
       if (res.ok && data.token && data.employee_id) {
         await AsyncStorage.setItem('token', data.token);
         await AsyncStorage.setItem('employee_id', data.employee_id);
@@ -59,7 +64,8 @@ export default function LoginScreen() {
         Alert.alert('Login Failed', data.message || 'Invalid credentials');
       }
     } catch (e: any) {
-      Alert.alert('Error', `Could not connect to server: ${e.message || 'Unknown error'}`);
+      console.error("Login Error Details:", e);
+      Alert.alert('Error', `Connection failed to ${url}. Details: ${e.message}`);
     } finally {
       setLoading(false);
     }
