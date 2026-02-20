@@ -31,6 +31,8 @@ import { GeneralInventoryModule } from './modules/general-inventory/general-inve
 import { RestrictedInventoryModule } from './modules/restricted-inventory/restricted-inventory.module';
 import { UploadsModule } from './modules/uploads/uploads.module';
 import { CompanySettingsModule } from './modules/company-settings/company-settings.module';
+import { ScheduleModule } from '@nestjs/schedule';
+import { BackupModule } from './modules/backup/backup.module';
 
 @Module({
   imports: [
@@ -40,6 +42,7 @@ import { CompanySettingsModule } from './modules/company-settings/company-settin
       // Note: .env file only used in local development
       // In production, env vars come from the platform (Coolify, etc.)
     }),
+    ScheduleModule.forRoot(),
     ServeStaticModule.forRoot({
       rootPath: join(__dirname, '..', 'uploads'),
       serveRoot: '/uploads',
@@ -74,6 +77,7 @@ import { CompanySettingsModule } from './modules/company-settings/company-settin
     RestrictedInventoryModule,
     UploadsModule,
     CompanySettingsModule,
+    BackupModule,
   ],
 })
 export class AppModule {}
