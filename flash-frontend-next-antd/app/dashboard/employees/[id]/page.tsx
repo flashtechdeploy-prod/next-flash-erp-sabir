@@ -844,10 +844,10 @@ export default function EmployeeDetailPage() {
                 <div style={{ opacity: 0.8, fontSize: '12px' }}>Designation / Rank</div>
                 <div style={{ fontWeight: 'bold' }}>{String(employee?.enrolled_as || employee.designation || 'Guard')} {employee.rank ? `/ ${employee.rank}` : ''}</div>
               </div>
-              <div>
+              {/* <div>
                 <div style={{ opacity: 0.8, fontSize: '12px' }}>Person Status</div>
                 <div style={{ fontWeight: 'bold' }}>{String(employee.served_in || '-')}</div>
-              </div>
+              </div> */}
               <div>
                 <div style={{ opacity: 0.8, fontSize: '12px' }}>Mobile</div>
                 <div style={{ fontWeight: 'bold' }}>{String(employee.phone || employee.mobile_no || employee.mobile_number || '-')}</div>
