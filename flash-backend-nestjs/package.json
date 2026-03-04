@@ -20,7 +20,8 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "seed": "ts-node src/db/seed.ts",
     "seed:employees": "ts-node src/db/seed-employees.ts",
-    "seed:employees:all": "ts-node src/db/seed-employees-all.ts"
+    "seed:employees:all": "ts-node src/db/seed-employees-all.ts",
+    "seed:inactive-guards": "ts-node src/db/seed-inactive-guards.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.969.0",

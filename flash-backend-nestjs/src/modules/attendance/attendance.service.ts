@@ -1,5 +1,5 @@
 import { HttpException, HttpStatus, Inject, Injectable } from '@nestjs/common';
-import { and, asc, between, desc, eq, sql } from 'drizzle-orm';
+import { and, asc, between, desc, eq, isNotNull, isNull, sql } from 'drizzle-orm';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { CloudStorageService } from '../../common/storage/cloud-storage.service';
 import { DRIZZLE } from '../../db/drizzle.module';
@@ -73,6 +73,23 @@ export class AttendanceService {
     } catch (e) {
       return null;
     }
+  }
+
+  private async getLatestOpenSession(employeeId: string) {
+    const [openSession] = await this.db
+      .select()
+      .from(schema.attendance)
+      .where(
+        and(
+          eq(schema.attendance.employee_id, employeeId),
+          isNotNull(schema.attendance.check_in),
+          isNull(schema.attendance.check_out),
+        ),
+      )
+      .orderBy(desc(schema.attendance.date), desc(schema.attendance.id))
+      .limit(1);
+
+    return openSession || null;
   }
 
   async findByDate(date: string) {
@@ -523,29 +540,18 @@ export class AttendanceService {
 
       let existing = todayRecord;
 
-      // CROSS-DAY LOGIC: Look for an unclosed session (check-in present, check-out missing) from yesterday.
+      // CROSS-DAY LOGIC: Look for the latest unclosed session (check-in present, check-out missing).
       // This applies if:
       // 1. We are checking out today but no record exists today.
       // 2. We are checking in today but need to see if we should block it due to an unclosed shift.
-      if (!existing) {
-        const yesterday = new Date(now);
-        yesterday.setDate(now.getDate() - 1);
-        const yesterdayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Karachi' }).format(yesterday);
-        
-        const [yesterdayRecord] = await this.db
-          .select()
-          .from(schema.attendance)
-          .where(
-            and(
-              eq(schema.attendance.employee_id, employeeId),
-              eq(schema.attendance.date, yesterdayStr),
-            ),
-          );
-        
-        // Link to yesterday ONLY if it is unclosed
-        if (yesterdayRecord && yesterdayRecord.check_in && !yesterdayRecord.check_out) {
-          existing = yesterdayRecord;
-          console.log(`[markSelf] Found unclosed session from yesterday (${yesterdayStr}) to link or block.`);
+      let openSession: any = null;
+      if (!existing && (normalizedType === 'check_in' || normalizedType === 'check_out')) {
+        openSession = await this.getLatestOpenSession(employeeId);
+        if (openSession) {
+          console.log(`[markSelf] Found unclosed session (${openSession.date}) to link or block.`);
+          if (normalizedType === 'check_out') {
+            existing = openSession;
+          }
         }
       }
 
@@ -564,13 +570,14 @@ export class AttendanceService {
       const submissionLoc = record.location;
       const selfieLoc = record.initial_location || submissionLoc;
 
-      if (normalizedType === 'check_in') {
-          // ENFORCEMENT: If they are trying to check in, make sure they don't have an unclosed session (Today or Yesterday)
-          if (existing && existing.check_in && !existing.check_out) {
-              const sessionDate = existing.date === dateStr ? "today" : `yesterday (${existing.date})`;
-              const errorMsg = `Active session found for ${sessionDate}. Please check out before checking in again.`;
-              console.warn(`[markSelf] Blocked check-in for ID=${employeeId}: ${errorMsg}`);
-              throw new HttpException(errorMsg, HttpStatus.BAD_REQUEST);
+        if (normalizedType === 'check_in') {
+          // ENFORCEMENT: If they are trying to check in, make sure they don't have any unclosed session
+          if ((existing && existing.check_in && !existing.check_out) || (openSession && openSession.check_in && !openSession.check_out)) {
+            const sessionRecord = (existing && existing.check_in && !existing.check_out) ? existing : openSession;
+            const sessionDate = sessionRecord?.date === dateStr ? 'today' : `${sessionRecord?.date}`;
+            const errorMsg = `Active session found for ${sessionDate}. Please check out before checking in again.`;
+            console.warn(`[markSelf] Blocked check-in for ID=${employeeId}: ${errorMsg}`);
+            throw new HttpException(errorMsg, HttpStatus.BAD_REQUEST);
           }
 
           data.check_in = timeStr;
@@ -688,52 +695,11 @@ export class AttendanceService {
     
     if (record) return record;
 
-    // 2. If no record today, check for an unclosed session (check-in present, check-out missing) from yesterday
-    // This allows the mobile app to show "Check Out" instead of "Check In" after midnight
+    // 2. If no record today, check for the latest unclosed session
+    // This allows the mobile app to show "Check Out" instead of "Check In" after midnight or missed check-out
     try {
-        const today = new Date(date);
-        const yesterday = new Date(today);
-        yesterday.setDate(today.getDate() - 1);
-        const yesterdayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Karachi' }).format(yesterday);
-
-        const [yesterdayRecord] = await this.db
-          .select({
-            id: schema.attendance.id,
-            employee_id: schema.attendance.employee_id,
-            date: schema.attendance.date,
-            status: schema.attendance.status,
-            note: schema.attendance.note,
-            location: schema.attendance.location,
-            initial_location: schema.attendance.initial_location,
-            picture: schema.attendance.picture,
-            check_in: schema.attendance.check_in,
-            check_in_date: schema.attendance.check_in_date,
-            check_out: schema.attendance.check_out,
-            check_out_date: schema.attendance.check_out_date,
-            check_out_picture: schema.attendance.check_out_picture,
-            check_out_location: schema.attendance.check_out_location,
-            overtime_in: schema.attendance.overtime_in,
-            overtime_in_date: schema.attendance.overtime_in_date,
-            overtime_in_picture: schema.attendance.overtime_in_picture,
-            overtime_in_location: schema.attendance.overtime_in_location,
-            overtime_out: schema.attendance.overtime_out,
-            overtime_out_date: schema.attendance.overtime_out_date,
-            overtime_out_picture: schema.attendance.overtime_out_picture,
-            overtime_out_location: schema.attendance.overtime_out_location,
-            created_at: schema.attendance.created_at,
-          })
-          .from(schema.attendance)
-          .where(
-            and(
-              eq(schema.attendance.employee_id, employeeId),
-              eq(schema.attendance.date, yesterdayStr),
-            ),
-          );
-        
-        // Return yesterday's record ONLY if it hasn't been closed yet
-        if (yesterdayRecord && yesterdayRecord.check_in && !yesterdayRecord.check_out) {
-            return yesterdayRecord;
-        }
+        const openSession = await this.getLatestOpenSession(employeeId);
+        if (openSession) return openSession;
     } catch (e) {
         console.error(`[getEmployeeStatus] Cross-day check failed:`, e);
     }
